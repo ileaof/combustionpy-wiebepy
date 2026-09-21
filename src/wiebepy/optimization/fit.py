@@ -282,6 +282,7 @@ def fit(data: FitData, s: FitSettings,
     obj = make_objective(s.backend, data, param, spec, s.precision,
                          s.workers, s.particles)
     backend_desc = obj.describe()
+    log.info("Execution backend : %s", backend_desc)
     workers = s.workers or max(1, (os.cpu_count() or 2) - 1)
     paralelo = (s.parallel_runs == "yes" or (
         s.parallel_runs == "auto" and s.runs >= 2 and workers >= 2

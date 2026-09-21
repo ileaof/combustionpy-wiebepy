@@ -1,0 +1,10 @@
+# Núcleo (obrigatório)
+numpy>=1.24
+scipy>=1.10
+matplotlib>=3.7
+PyYAML>=6.0
+# Opcionais — o programa funciona sem eles
+numba>=0.59          # backend numba (o mais rápido em CPU)
+pytest>=7.0          # testes
+# GPU NVIDIA (opcional; descomente se tiver placa e driver CUDA 12+):
+# cupy-cuda12x>=13.0

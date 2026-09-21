@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wiebepy — Guia passo a passo</title>
+<style>
+  :root { --fg:#1d2330; --muted:#5b6475; --bg:#fbfbfd; --card:#fff; --line:#e3e6ee;
+          --accent:#b4432f; --ok:#1f7a4d; --warn:#9a6500; --code:#f3f4f8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+         color:var(--fg); background:var(--bg); }
+  header { background:#1d2330; color:#fff; padding:28px 24px; }
+  header h1 { margin:0 0 4px; font-size:26px; }
+  header p { margin:0; color:#c9cfdb; }
+  main { max-width:980px; margin:0 auto; padding:24px 16px 64px; }
+  nav { background:var(--card); border:1px solid var(--line); border-radius:10px;
+        padding:12px 18px; margin-bottom:24px; }
+  nav ol { margin:6px 0; padding-left:22px; columns:2; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px;
+            padding:6px 22px 18px; margin-bottom:20px; }
+  h2 { font-size:20px; border-bottom:2px solid var(--accent); padding-bottom:4px; }
+  h3 { font-size:16px; margin-top:22px; }
+  code { background:var(--code); padding:1px 5px; border-radius:4px; font-size:13.5px; }
+  pre { background:#1f2430; color:#e6e9ef; padding:12px 14px; border-radius:8px;
+        overflow-x:auto; font-size:13.5px; line-height:1.5; }
+  pre code { background:none; padding:0; color:inherit; }
+  pre em { color:#9aa3b0; font-style:normal; }
+  table { border-collapse:collapse; width:100%; margin:8px 0; font-size:14px; }
+  th, td { border:1px solid var(--line); padding:6px 9px; text-align:left; vertical-align:top; }
+  th { background:#f1f3f8; }
+  .box { border-left:4px solid; padding:8px 12px; border-radius:6px; margin:12px 0; }
+  .ok { border-color:var(--ok); background:#eef8f2; }
+  .warn { border-color:var(--warn); background:#fdf6e7; }
+  .formula { font-family:"Cambria Math","STIX Two Math",serif; font-size:17px;
+             background:#f7f8fb; padding:10px 14px; border-radius:8px; overflow-x:auto; }
+  @media (max-width:640px) { nav ol { columns:1; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>wiebepy — Guia passo a passo</h1>
+  <p>Funções Wiebe de 1 a 5 estágios: avaliação, ajuste, comparação e execução em CPU/GPU</p>
+</header>
+<main>
+
+<nav>
+  <b>Sumário</b>
+  <ol>
+    <li><a href="#instalar">Instalação (.venv)</a></li>
+    <li><a href="#primeira">Primeira análise</a></li>
+    <li><a href="#modelo">O modelo e seus parâmetros</a></li>
+    <li><a href="#dados">Preparar os dados</a></li>
+    <li><a href="#ajuste">Ajustar N estágios</a></li>
+    <li><a href="#escolher">Escolher o número de estágios</a></li>
+    <li><a href="#runs">Runs e avisos</a></li>
+    <li><a href="#desempenho">CPU paralela e GPU</a></li>
+    <li><a href="#saidas">Arquivos gerados</a></li>
+    <li><a href="#api">Uso em Python</a></li>
+    <li><a href="#problemas">Solução de problemas</a></li>
+  </ol>
+</nav>
+
+<section id="instalar">
+  <h2>1. Instalação</h2>
+  <p>Requer Python 3.11 ou superior (Windows, Linux ou WSL2). Crie um ambiente
+  virtual <b>antes</b> de instalar, dentro da pasta do projeto:</p>
+<pre><code>cd wiebepy
+python -m venv .venv
+.venv\Scripts\activate            <em># Windows (Linux/WSL2: source .venv/bin/activate)</em>
+python -m pip install --upgrade pip
+pip install -e ".[numba,dev]"     <em># núcleo + Numba (rápido em CPU) + pytest</em>
+pip install cupy-cuda12x          <em># opcional: só com placa NVIDIA</em></code></pre>
+  <p>Confira:</p>
+<pre><code>wiebepy --devices                 <em># hardware e backends disponíveis</em>
+python -m pytest -m "not slow"    <em># testes rápidos (~20 s)</em></code></pre>
+  <div class="box ok"><b>Sem instalar:</b> dentro da pasta do projeto,
+  <code>python main.py …</code> faz o mesmo que <code>wiebepy …</code>.</div>
+  <div class="box warn"><b>“wiebepy não é reconhecido”</b>: o pacote não está
+  instalado no Python que o terminal usa. Ative o <code>.venv</code> (o prompt
+  mostra <code>(.venv)</code>) e rode <code>pip install -e .</code> de novo, ou use
+  <code>python main.py</code>. Se o PowerShell bloquear a ativação, rode uma vez
+  <code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>.</div>
+</section>
+
+<section id="primeira">
+  <h2>2. Primeira análise</h2>
+  <p>Avalie um modelo sem dados, numa grade de −20° a 100°:</p>
+<pre><code>wiebepy --stages 3 --theta-min -20 --theta-max 100 --theta-step 0.1 --plot</code></pre>
+  <p>Ajuste um modelo aos dados sintéticos que acompanham o projeto:</p>
+<pre><code>wiebepy --stages 2 --optimize --input examples\data\synthetic_2stage.csv ^
+        --fit-target xb --save-plots --output results\primeiro</code></pre>
+  <p>Na tela aparecem os parâmetros de cada estágio, o objetivo de cada run e as
+  métricas (RMSE, R², AIC, BIC, Durbin-Watson). Os parâmetros verdadeiros dos
+  dados sintéticos estão em <code>examples\data\true_parameters.json</code> — compare.</p>
+  <p>Comandos prontos para todos os casos: <code>wiebepy --help-examples</code>.</p>
+</section>
+
+<section id="modelo">
+  <h2>3. O modelo e seus parâmetros</h2>
+  <div class="formula">
+    z<sub>j</sub> = (θ − θ<sub>0,j</sub>) / Δθ<sub>j</sub><br>
+    x<sub>b</sub>(θ) = Σ<sub>j</sub> β<sub>j</sub> [1 − exp(−a<sub>j</sub> z<sub>j</sub><sup>m<sub>j</sub>+1</sup>)] &nbsp; (termo = 0 se θ &lt; θ<sub>0,j</sub>)<br>
+    dx<sub>b</sub>/dθ = Σ<sub>j</sub> β<sub>j</sub> a<sub>j</sub>(m<sub>j</sub>+1)/Δθ<sub>j</sub> · z<sub>j</sub><sup>m<sub>j</sub></sup> · exp(−a<sub>j</sub> z<sub>j</sub><sup>m<sub>j</sub>+1</sup>)
+  </div>
+  <table>
+    <tr><th>Parâmetro</th><th>Significado</th><th>Unidade</th><th>Restrição</th></tr>
+    <tr><td>β (beta)</td><td>fração da massa queimada no estágio</td><td>–</td><td>0 ≤ β ≤ 1, Σβ = 1</td></tr>
+    <tr><td>θ<sub>0</sub> (theta0)</td><td>início do estágio</td><td>° (ou rad)</td><td>ordenados no ajuste</td></tr>
+    <tr><td>Δθ (duration)</td><td>duração do estágio</td><td>° (ou rad)</td><td>&gt; 0</td></tr>
+    <tr><td>m</td><td>forma (pequeno = início abrupto)</td><td>–</td><td>&gt; 0</td></tr>
+    <tr><td>a</td><td>eficiência (6.908 ⇒ 99.9 % em Δθ)</td><td>–</td><td>fixo, ou ajustado com <code>--fit-a</code></td></tr>
+  </table>
+  <p>1 estágio = single-Wiebe; 2 = double-Wiebe (pré-misturada + difusão);
+  3 a 5 estágios representam fases adicionais (ex.: queima tardia). Formulação
+  completa: <code>wiebepy --help-model</code>.</p>
+</section>
+
+<section id="dados">
+  <h2>4. Preparar os dados</h2>
+  <p>Arquivo <code>.csv</code>, <code>.txt</code>, <code>.dat</code> ou <code>.json</code> com o
+  ângulo e a fração queimada e/ou a taxa de queima:</p>
+<pre><code>theta,xb                theta,dxb_dtheta           theta,xb,dxb_dtheta,sigma
+-20,0.000               -20,0.0000                 ...
+-19,0.000               -19,0.0000</code></pre>
+  <ul>
+    <li>Separador detectado automaticamente; linhas com <code>#</code> são ignoradas.</li>
+    <li>Sem cabeçalho: 2 colunas = θ, x<sub>b</sub>; 3 colunas = θ, x<sub>b</sub>, dx<sub>b</sub>/dθ.</li>
+    <li>Coluna <code>weight</code> (ou <code>sigma</code>, com peso = 1/σ²) opcional, para <code>--objective wrmse</code>.</li>
+    <li>θ em graus por padrão; use <code>--angle-unit rad</code> se estiver em radianos.</li>
+    <li>x<sub>b</sub> deve estar normalizado entre 0 e 1 (o programa avisa se não estiver).</li>
+  </ul>
+</section>
+
+<section id="ajuste">
+  <h2>5. Ajustar N estágios</h2>
+<pre><code>wiebepy --stages 3 --optimize --input dados.csv --runs 10 --save-plots --output results\fit3</code></pre>
+  <table>
+    <tr><th>Opção</th><th>Para quê</th></tr>
+    <tr><td><code>--fit-target xb | dxb | both</code></td><td>série ajustada; <code>both</code> usa as duas, normalizadas (padrão: as disponíveis)</td></tr>
+    <tr><td><code>--objective rmse | mse | mae | see | wrmse</code></td><td>função objetivo</td></tr>
+    <tr><td><code>--fit-a</code></td><td>ajusta também a<sub>j</sub></td></tr>
+    <tr><td><code>--population</code>, <code>--iterations</code></td><td>tamanho do PSO (padrão 100 × 1000)</td></tr>
+    <tr><td><code>--runs</code>, <code>--seed</code></td><td>runs independentes e semente (reprodutível)</td></tr>
+    <tr><td><code>--config arquivo.yaml</code></td><td>todas as opções num arquivo (ver <code>examples\</code>)</td></tr>
+  </table>
+  <p>Cada run faz PSO seguido de refinamento local a partir dos 5 melhores pontos
+  distintos do enxame. O resultado final é o melhor run.</p>
+</section>
+
+<section id="escolher">
+  <h2>6. Escolher o número de estágios</h2>
+<pre><code>wiebepy --compare-stages 1 2 3 4 5 --input dados.csv --runs 10 --save-plots --output results\comparacao</code></pre>
+  <p>O programa ajusta cada N e mostra uma tabela com RMSE, MAE, SEE, R², ΔAIC, ΔBIC,
+  Durbin-Watson, <b>erro de validação cruzada</b> e número de avisos, seguida de
+  uma recomendação.</p>
+  <div class="box warn"><b>Não escolha pelo menor RMSE.</b> Mais estágios sempre
+  reduzem o erro de treino. A recomendação usa o <b>menor N cujo erro de validação
+  cruzada fica a até 5 % do melhor</b> e que não tem estágios desprezíveis ou
+  coincidentes. AIC/BIC são indicativos: supõem resíduos independentes, o que não
+  vale para curvas de x<sub>b</sub>. Um Durbin-Watson ≈ 2 indica que o modelo já
+  captura a estrutura dos dados (resíduo ≈ ruído).</div>
+  <p>Exemplo com dados de 3 estágios verdadeiros: o RMSE continua caindo até N = 5,
+  mas a validação cruzada estabiliza em N = 3, o BIC é mínimo em 3 e os modelos 4 e 5
+  geram avisos de estágios coincidentes — recomendação: 3-Wiebe.</p>
+</section>
+
+<section id="runs">
+  <h2>7. Runs e avisos</h2>
+  <p>O ajuste de vários estágios tem ótimos locais. Por isso cada ajuste roda vários
+  runs (padrão 5; para N ≥ 3 prefira 10 ou mais). O arquivo
+  <code>run_statistics.csv</code> mostra best, mean, std, median e worst do objetivo;
+  <code>parameters.csv</code> traz média e desvio de cada parâmetro entre runs.</p>
+  <p>Avisos de identificabilidade (lista completa em <code>warnings.txt</code>):</p>
+  <table>
+    <tr><th>Aviso</th><th>O que significa</th></tr>
+    <tr><td><code>Stage 4 contributes less than 0.5%</code></td><td>estágio sobrando — use menos estágios</td></tr>
+    <tr><td><code>theta0_2 and theta0_3 are nearly identical</code></td><td>dois estágios começam juntos; se “redundant”, são praticamente o mesmo</td></tr>
+    <tr><td><code>parameter m_5 reached upper bound</code></td><td>o ótimo pode estar fora dos limites — revise-os (seção <code>bounds</code>)</td></tr>
+    <tr><td><code>varies strongly between runs</code></td><td>parâmetro mal determinado pelos dados</td></tr>
+    <tr><td><code>strongly correlated (rho = …)</code></td><td>dois parâmetros se compensam; não interprete-os isoladamente</td></tr>
+  </table>
+</section>
+
+<section id="desempenho">
+  <h2>8. CPU paralela e GPU</h2>
+  <table>
+    <tr><th><code>--backend</code></th><th>Descrição</th></tr>
+    <tr><td><code>auto</code> (padrão)</td><td>mede os disponíveis com o seu problema e usa o mais rápido</td></tr>
+    <tr><td><code>numba</code></td><td>compilado, com <code>--workers</code> threads — o mais rápido em CPU nas medições</td></tr>
+    <tr><td><code>numpy</code></td><td>vetorizado, 1 núcleo; com <code>--runs</code> e <code>--workers</code>, os runs rodam em processos paralelos</td></tr>
+    <tr><td><code>multiprocessing</code></td><td>divide o enxame entre processos; só compensa em problemas muito grandes</td></tr>
+    <tr><td><code>cupy</code> ou <code>--gpu</code></td><td>GPU NVIDIA; compensa com enxames × pontos grandes</td></tr>
+  </table>
+  <p>Sem GPU (ou sem CuPy/Numba) o programa avisa e usa o próximo backend disponível —
+  nunca para por isso. Meça na sua máquina: <code>wiebepy --benchmark --workers 8</code>.</p>
+  <div class="box warn"><code>--precision float32</code> acelera a GPU, mas torna a
+  busca menos precisa; use float64 (padrão) para resultados finais.</div>
+</section>
+
+<section id="saidas">
+  <h2>9. Arquivos gerados</h2>
+  <table>
+    <tr><th>Arquivo</th><th>Conteúdo</th></tr>
+    <tr><td><code>results.csv</code></td><td>θ, x<sub>b</sub> e dx<sub>b</sub>/dθ ajustados, dados, resíduos e contribuição de cada estágio</td></tr>
+    <tr><td><code>parameters.csv</code></td><td>parâmetros (com unidades) e média/desvio entre runs</td></tr>
+    <tr><td><code>metrics.csv</code></td><td>RMSE, MAE, SEE, R², AIC, BIC, Durbin-Watson…</td></tr>
+    <tr><td><code>run_statistics.csv</code></td><td>objetivo de cada run e estatísticas</td></tr>
+    <tr><td><code>warnings.txt</code></td><td>avisos de identificabilidade</td></tr>
+    <tr><td><code>model.json</code></td><td>modelo para reutilizar: <code>wiebepy --model model.json --plot</code></td></tr>
+    <tr><td><code>configuration_used.yaml</code></td><td>configuração exata usada (reprodutibilidade)</td></tr>
+    <tr><td><code>plots\</code></td><td>7 figuras: x<sub>b</sub>, contribuições, taxa de queima, ajuste, resíduos, convergência</td></tr>
+    <tr><td><code>comparison.csv</code>, <code>N1\…N5\</code></td><td>modo de comparação</td></tr>
+  </table>
+</section>
+
+<section id="api">
+  <h2>10. Uso em Python</h2>
+<pre><code>import numpy as np
+from wiebepy import MultiStageWiebe
+
+theta = np.linspace(-20, 100, 1201)
+model = MultiStageWiebe(n_stages=3)
+xb, dxb = model.evaluate(theta), model.derivative(theta)
+
+resultado = model.fit(theta_exp, xb_exp, backend="auto", runs=10)
+print(resultado.stages, resultado.metrics["xb"]["rmse"], resultado.warnings)
+model.save("model.json")</code></pre>
+</section>
+
+<section id="problemas">
+  <h2>11. Solução de problemas</h2>
+  <table>
+    <tr><th>Sintoma</th><th>Solução</th></tr>
+    <tr><td><code>wiebepy</code> não é reconhecido</td><td>ative o <code>.venv</code> e rode <code>pip install -e .</code>, ou use <code>python main.py</code></td></tr>
+    <tr><td>“θ deve ser estritamente crescente”</td><td>remova ângulos repetidos do arquivo</td></tr>
+    <tr><td>“O alvo exige a coluna dxb_dtheta”</td><td>o arquivo não tem essa coluna: use <code>--fit-target xb</code></td></tr>
+    <tr><td>Ajuste ruim / runs muito diferentes</td><td>aumente <code>--runs</code> e <code>--population</code>; confira os avisos; talvez N seja grande demais</td></tr>
+    <tr><td>Estágios coincidentes ou com β ≈ 0</td><td>o modelo tem estágios demais para os dados: rode <code>--compare-stages</code></td></tr>
+    <tr><td>WARNING: backend indisponível</td><td>normal sem GPU/Numba; <code>wiebepy --devices</code> mostra o que há</td></tr>
+    <tr><td>Muito lento</td><td>instale Numba (<code>pip install numba</code>) e use <code>--backend numba --workers 8</code></td></tr>
+    <tr><td>Erro inesperado</td><td>repita com <code>--debug</code> para ver o detalhe</td></tr>
+  </table>
+  <p>Documentação técnica completa: <code>README.md</code>.</p>
+</section>
+
+</main>
+</body>
+</html>
