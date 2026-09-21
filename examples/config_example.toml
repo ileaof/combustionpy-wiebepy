@@ -1,0 +1,12 @@
+[model]
+stages = 4
+beta_mode = "softmax"
+
+[optimization]
+particles = 80
+iterations = 600
+runs = 8
+
+[parallel]
+backend = "numba"
+workers = 8

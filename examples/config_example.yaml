@@ -1,0 +1,32 @@
+# Configuração de exemplo do wiebepy (a CLI sobrescreve estes valores)
+model:
+  stages: 3
+  a_fixed: 6.908
+  fit_a: false
+  beta_mode: stick          # stick | softmax | explicit
+  angle_unit: deg
+
+optimization:
+  method: pso
+  particles: 100
+  iterations: 500
+  runs: 10
+  seed: 42
+  objective: rmse           # rmse | mse | mae | see | wrmse
+  fit_target: xb            # xb | dxb | both
+
+bounds:                     # opcional: sobrescreve os limites padrão
+  m: [0.05, 5.0]
+
+comparison:
+  stages: [1, 2, 3, 4, 5]
+  cv_folds: 5
+
+parallel:
+  backend: auto             # auto | numpy | numba | multiprocessing | cupy
+  workers: 8
+  precision: float64
+
+output:
+  directory: results
+  save_plots: true

@@ -1,0 +1,6 @@
+{
+  "model": {"stages": 2, "a_fixed": 6.908},
+  "optimization": {"particles": 60, "iterations": 400, "runs": 5, "seed": 7},
+  "parallel": {"backend": "auto"},
+  "output": {"directory": "results/json_config", "save_plots": false}
+}

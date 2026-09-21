@@ -1,0 +1,10 @@
+{
+  "format": "wiebepy-model",
+  "n_stages": 2,
+  "angle_unit": "deg",
+  "a_fixed": 6.908,
+  "stages": [
+    {"beta": 0.35, "theta0": -5.0, "duration": 12.0, "m": 2.0, "a": 6.908},
+    {"beta": 0.65, "theta0": 2.0, "duration": 45.0, "m": 1.3, "a": 6.908}
+  ]
+}

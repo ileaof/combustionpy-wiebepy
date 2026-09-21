@@ -15,3 +15,8 @@ __version__ = "1.0.0"
 
 from .core import (A_DEFAULT, MAX_STAGES, Stage,  # noqa: F401,E402
                    multistage_wiebe, multistage_wiebe_derivative)
+from .model import MultiStageWiebe  # noqa: F401,E402
+
+__all__ = ["MultiStageWiebe", "Stage", "multistage_wiebe",
+           "multistage_wiebe_derivative", "A_DEFAULT", "MAX_STAGES",
+           "__version__"]
