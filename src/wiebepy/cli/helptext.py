@@ -154,7 +154,7 @@ wiebepy --compare-stages 1 2 3 4 5 --input examples/data/synthetic_3stage.csv \\
 
 # Curva de PRESSÃO do ensaio (θ em rad, P em bar): modelo 0-D do Double
 # Wiebe com N estágios de liberação de calor; Rc ajustado
-wiebepy --stages 2 --optimize --input examples/data/ensaio_P_exp_carga3_45.txt \
+wiebepy --stages 2 --optimize --input examples/data/ensaio_P_exp_carga3_45.txt \\
         --input-type pressure --pressure-unit bar --runs 5 --save-plots
 wiebepy --compare-stages 1 2 3 --input ensaio.txt --input-type pressure
 
