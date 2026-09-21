@@ -39,8 +39,8 @@ Backends (--backend)
   multiprocessing  enxame dividido entre --workers processos (NumPy)
   cupy             GPU NVIDIA (requer cupy-cuda12x); --gpu é atalho
   Backend indisponível ⇒ WARNING e fallback (cupy → numba → numpy).
-  Runs independentes (--runs) rodam em processos paralelos nos backends
-  de CPU.
+  Runs independentes (--runs) rodam em processos paralelos com o backend
+  numpy; com numba/cupy rodam em sequência (já paralelos por dentro).
 
 Formatos de entrada (--input)
   .csv/.txt/.dat com cabeçalho: theta,xb  |  theta,dxb_dtheta  |
@@ -106,9 +106,12 @@ COMPARAÇÃO DE MODELOS
   AIC = n ln(SSE/n) + 2k      BIC = n ln(SSE/n) + k ln(n)
   Supõem resíduos independentes; em curvas de x_b os resíduos são
   autocorrelacionados (Durbin-Watson reportado), o que favorece modelos
-  maiores. A recomendação usa validação cruzada por blocos contíguos de θ
-  e a regra: menor N com erro de CV a até 5 % do melhor e sem estágios
-  desprezíveis (β < 0.5 %) ou coincidentes.
+  maiores. A recomendação usa validação cruzada por blocos contíguos curtos
+  de θ intercalados entre os folds (sem extrapolação) e a regra: menor N
+  com erro de CV a até 5 % do melhor e sem estágios desprezíveis
+  (β < 0.5 %) ou coincidentes. Antes, cada N é refinado a partir do ótimo
+  de N+1 sem um estágio (modelos aninhados), o que corrige falhas pontuais
+  do otimizador.
 """
 
 HELP_EXAMPLES = """
@@ -133,11 +136,16 @@ wiebepy --stages 3 --optimize --input examples/data/synthetic_3stage.csv \\
 # Ajuste usando x_b e dx_b/dθ juntos, com a_j ajustado
 wiebepy --stages 2 --optimize --input dados.csv --fit-target both --fit-a
 
-# Execução paralela em CPU (runs em 8 processos; enxame em Numba)
+# Execução paralela em CPU
 wiebepy --stages 4 --optimize --input dados.csv --runs 16 --backend numba --workers 8
+        # enxame em Numba com 8 threads (runs em sequência) — o mais rápido
+        # em CPU nas medições deste projeto
+wiebepy --stages 4 --optimize --input dados.csv --runs 16 --backend numpy --workers 8
+        # 16 runs distribuídos em 8 processos (NumPy em cada um)
 
-# GPU NVIDIA (CuPy); float32 é muito mais rápido em GPUs de consumo
-wiebepy --stages 5 --optimize --input dados.csv --gpu --precision float32
+# GPU NVIDIA (CuPy). Só compensa em problemas grandes (enxame × pontos
+# ≳ 1e6); float32 acelera ainda mais, mas a busca fica menos precisa
+wiebepy --stages 5 --optimize --input dados_grandes.csv --gpu --population 1000
 
 # Comparar 1 a 5 estágios (AIC/BIC + validação cruzada por blocos)
 wiebepy --compare-stages 1 2 3 4 5 --input examples/data/synthetic_3stage.csv \\

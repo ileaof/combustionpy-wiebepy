@@ -8,10 +8,12 @@ do enxame: mínimos quadrados (scipy least_squares, TRF) para métricas
 quadráticas (rmse, mse, see, wrmse) e L-BFGS-B para mae. O problema é mal
 condicionado (vales estreitos): o PSO localiza a região e o refinamento
 converge com precisão; aceita-se o refinamento só se o objetivo (calculado
-pelo próprio backend) diminuir. Runs independentes usam sementes seed + i e
-rodam em processos paralelos quando isso compensa (backends de CPU,
-runs >= 2, workers >= 2); com GPU ou multiprocessing de enxame, rodam em
-sequência no processo principal (o paralelismo já está na avaliação).
+pelo próprio backend) diminuir. Runs independentes usam sementes seed + i.
+Em "auto", rodam em processos paralelos só com o backend NumPy (de 1 núcleo):
+medido nesta máquina, com Numba (já multithread) ou GPU os runs sequenciais
+são mais rápidos que processos (custo de criação e 1 thread por processo).
+Com --precision float32 a busca é feita em float32, mas os objetivos
+reportados são recalculados em float64.
 
 Resultado: melhor run, estatísticas do objetivo (best/mean/std/median/worst),
 média e desvio dos parâmetros entre runs, métricas completas e avisos de
@@ -283,7 +285,7 @@ def fit(data: FitData, s: FitSettings,
     workers = s.workers or max(1, (os.cpu_count() or 2) - 1)
     paralelo = (s.parallel_runs == "yes" or (
         s.parallel_runs == "auto" and s.runs >= 2 and workers >= 2
-        and obj.name in ("numpy", "numba")))
+        and obj.name == "numpy"))
     seeds = _seeds(s)
     runs: List[RunResult] = []
     try:
@@ -319,6 +321,12 @@ def fit(data: FitData, s: FitSettings,
 
 def summarize(data, s, param, spec, runs, backend_desc, elapsed) -> FitResult:
     """Estatísticas, métricas e identificabilidade a partir dos runs."""
+    if s.precision != "float64":
+        from ..parallel.cpu import ArrayObjective
+        ref = ArrayObjective(data, param, spec, "float64")
+        f64 = ref(np.array([r.x for r in runs]))
+        for r, v in zip(runs, f64):
+            r.objective = float(v)
     vals = np.array([r.objective for r in runs])
     best = runs[int(np.argmin(vals))]
     stages = param.to_stages(best.x)
