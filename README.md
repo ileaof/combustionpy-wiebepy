@@ -249,6 +249,43 @@ Na interface os runs rodam em sequência (para permitir progresso por
 iteração e cancelamento); o paralelismo vem do backend (Numba multithread
 ou GPU). Runs em processos paralelos continuam disponíveis na CLI.
 
+### Modo pressão (curva de pressão do cilindro)
+
+Com dados de ensaio θ × P, o wiebepy ajusta a **pressão** exatamente como o
+Double Wiebe, mas com **1 a 5 estágios** de liberação de calor: mesmo modelo
+0-D de zona única (geometria biela-manivela, Hohenberg, EDOs em P e T_g),
+com $dQ/d	heta = Q_{total}\sum_j eta_j\,dx_j/d	heta$. Rc é ajustado
+por padrão (`--fixed-rc` para fixá-lo). **Com N = 2 o modelo reproduz o
+Double Wiebe** (diferença ≤ 1e-6 relativa, testada).
+
+```bash
+wiebepy --stages 2 --optimize --input examples/data/ensaio_P_exp_carga3_45.txt         --input-type pressure --pressure-unit bar --runs 5 --save-plots
+wiebepy --compare-stages 1 2 3 --input ensaio.txt --input-type pressure
+```
+
+Busca: PSO com o enxame integrado em lote por RK4 (Numba/CUDA/NumPy); cada
+run é refinado por mínimos quadrados e **revalidado com solve_ivp**
+(DOP853, 1e-9) — esse é o RMSE relatado. Motor e janela angular na
+configuração (`engine:` aceita as chaves do YAML do Double Wiebe;
+`pressure: {angle_unit, pressure_unit, theta_min_rad, theta_max_rad}`).
+Na GUI: página Dados → Tipo de dado = **Pressão do cilindro**.
+
+Ensaio real `P_exp-Carga-3_45%` (459 pontos, −2 a 2 rad), 4 runs:
+
+| Modelo | RMSE [kPa] | R² | Rc |
+|---|---:|---:|---:|
+| 2 estágios (wiebepy) | 44.51 | 0.999195 | 15.63 |
+| 3 estágios (wiebepy) | 42.82 | 0.999255 | 15.52 |
+| Double Wiebe (melhor de 18 runs) | 47.68 | — | 15.51 |
+
+Os domínios diferem: o Double Wiebe limita δ₁ ≤ 40° e penaliza a
+sobreposição das fases; aqui cada estágio pode durar até 90° e a ordem é
+imposta pelos incrementos. Com N = 3 surge o aviso θ0₂ ≈ θ0₃ (estágio
+provavelmente supérfluo).
+
+Arquivos de x_b com valores acima de 1.5 são recusados com a indicação de
+usar o modo pressão.
+
 ## 6. Otimização
 
 **Parametrização do espaço de busca** (caixa, adequada ao PSO; $k = 4N-1$,

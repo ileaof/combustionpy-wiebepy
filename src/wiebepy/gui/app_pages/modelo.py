@@ -14,6 +14,12 @@ from wiebepy.model import MultiStageWiebe
 from wiebepy.optimization.objective import fit_metrics
 
 st.header("Modelo", anchor=False)
+if st.session_state.mode == "pressure":
+    from wiebepy.gui import pressure_ui
+    st.caption("Modo pressão: ajuste da curva de pressão do cilindro (modelo "
+               "0-D do Double Wiebe com N estágios de liberação de calor).")
+    pressure_ui.modelo()
+    st.stop()
 u = S.unidade()
 d = st.session_state.data
 

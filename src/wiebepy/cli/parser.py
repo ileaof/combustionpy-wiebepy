@@ -63,6 +63,14 @@ def build_parser() -> argparse.ArgumentParser:
     g = p.add_argument_group("dados e saída")
     g.add_argument("--input", metavar="ARQ",
                    help="dados experimentais (.csv .txt .dat .json)")
+    g.add_argument("--input-type", choices=["mfb", "pressure"],
+                   help="mfb = fração queimada x_b/dx_b (padrão); pressure = "
+                        "curva de pressão do cilindro θ, P — ajuste pelo "
+                        "modelo 0-D do Double Wiebe com N estágios")
+    g.add_argument("--pressure-unit", choices=["bar", "kPa", "MPa", "Pa"],
+                   help="unidade da pressão no arquivo (padrão bar)")
+    g.add_argument("--fixed-rc", action="store_true",
+                   help="modo pressão: não ajusta Rc (usa engine.Rc)")
     g.add_argument("--output", metavar="DIR",
                    help="diretório de resultados (padrão results)")
     g.add_argument("--config", metavar="ARQ",
@@ -365,6 +373,8 @@ def _dispatch(a, cfg: Dict) -> int:
         return EXIT_OK
 
     compare = cfg["comparison"]["stages"] if a.compare_stages else None
+    if (a.input_type or cfg.get("pressure", {}).get("input_type")) == "pressure":
+        return _dispatch_pressao(a, cfg, outdir, compare)
     u = cfg["model"]["angle_unit"]
     data = read_data(a.input, u) if a.input else None
     if data is not None:
@@ -479,6 +489,59 @@ def _dispatch(a, cfg: Dict) -> int:
             plt.show()
         else:
             close_all(figs)
+    log.info("Resultados em %s", outdir.resolve())
+    return EXIT_OK
+
+
+def _dispatch_pressao(a, cfg: Dict, outdir: Path, compare) -> int:
+    """Modo pressão: ajuste/comparação da curva de pressão do cilindro."""
+    from ..pressure.engine import EngineConfig
+    from ..pressure.fit import (PressureSettings, compare_pressure,
+                                fit_pressure, read_pressure)
+    from ..pressure.report import write_outputs
+    if not a.input:
+        raise ValueError("--input-type pressure requer --input.")
+    pc = cfg.get("pressure", {})
+    angle = a.angle_unit or pc.get("angle_unit", "rad")
+    d = read_pressure(a.input, angle, a.pressure_unit or pc.get("pressure_unit", "bar"),
+                      pc.get("theta_min_rad", -2.0), pc.get("theta_max_rad", 2.0))
+    for w in d.warnings:
+        log.warning("WARNING: %s", w)
+    o, par = cfg["optimization"], cfg["parallel"]
+    backend = par["backend"] if par["backend"] in ("auto", "numba", "cupy",
+                                                   "numpy") else "auto"
+    s = PressureSettings(
+        n_stages=int(cfg["model"]["stages"]),
+        engine=EngineConfig.from_dict(cfg.get("engine", {})),
+        fit_rc=not a.fixed_rc, runs=int(o["runs"]),
+        particles=int(a.population or pc.get("particles", 60)),
+        iterations=int(a.iterations or pc.get("iterations", 400)),
+        seed=None if o["seed"] is None else int(o["seed"]), backend=backend,
+        precision=par["precision"], workers=par["workers"])
+    log.info("Modo pressão: %d pontos (θ %.1f° a %.1f°), P máx %.0f kPa",
+             d.n, np.degrees(d.theta[0]), np.degrees(d.theta[-1]), d.P.max())
+    comp = None
+    if compare:
+        comp = compare_pressure(d, compare, s, int(cfg["comparison"]["cv_folds"]),
+                                float(cfg["comparison"]["cv_tol"]))
+        _print_comparison(comp)
+        r = comp["results"][comp["recommended"]]
+    elif a.optimize:
+        r = fit_pressure(d, s)
+    else:
+        raise ValueError("No modo pressão use --optimize ou --compare-stages.")
+    write_outputs(outdir, r, d, comp, plots=bool(cfg["output"]["save_plots"]))
+    from ..io.writers import write_configuration
+    write_configuration(outdir, dict(cfg, resolved={"mode": "pressure",
+                                                    "backend": r.backend}))
+    log.info("")
+    log.info("Melhor ajuste de pressão (%d-Wiebe) — RMSE %.3f kPa, R² %.6f, "
+             "Rc %.4f", r.settings.n_stages, r.metrics.get("rmse", np.nan),
+             r.metrics.get("r2", np.nan), r.Rc)
+    for j, st_ in enumerate(r.stages, start=1):
+        log.info("  estágio %d: β=%.4f θ0=%.3f° Δθ=%.3f° m=%.4f", j, st_.beta,
+                 np.degrees(st_.theta0), np.degrees(st_.duration), st_.m)
+    _resumo_avisos(r.warnings)
     log.info("Resultados em %s", outdir.resolve())
     return EXIT_OK
 

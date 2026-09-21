@@ -9,8 +9,20 @@ from wiebepy.gui import state as S
 from wiebepy.io.readers import read_data
 
 st.header("Dados experimentais", anchor=False)
+TIPOS = {"xb": "Fração queimada (x_b, dx_b/dθ)",
+         "pressure": "Pressão do cilindro (ensaio)"}
+tipo = st.segmented_control("Tipo de dado", list(TIPOS), format_func=TIPOS.get,
+                            default=st.session_state.mode, key="tipo_dado")
+tipo = tipo or st.session_state.mode
+if tipo != st.session_state.mode:
+    st.session_state.mode = tipo
+if tipo == "pressure":
+    from wiebepy.gui import pressure_ui
+    pressure_ui.dados()
+    st.stop()
 st.caption("Arquivo .csv, .txt, .dat ou .json com θ e x_b e/ou dx_b/dθ "
-           "(colunas theta, xb, dxb_dtheta; weight ou sigma opcionais).")
+           "(colunas theta, xb, dxb_dtheta; weight ou sigma opcionais). "
+           "Para ajustar a curva de pressão, escolha “Pressão do cilindro”.")
 
 with st.container(border=True):
     unidade = st.segmented_control(
@@ -47,6 +59,7 @@ if carregar:
         st.error(f"Não foi possível ler os dados: {e}")
     else:
         st.session_state.data = dados
+        st.session_state.mode = "xb"
         st.session_state.data_name = dados.source
         st.session_state.angle_unit = u
         st.session_state.model_stages = None      # refaz padrões na nova faixa

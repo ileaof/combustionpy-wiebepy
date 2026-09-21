@@ -48,6 +48,14 @@ def init_state() -> None:
     st.session_state.setdefault("compare_result", None)  # dict
     st.session_state.setdefault("job", None)             # tarefa em andamento
     st.session_state.setdefault("bench", None)           # DataFrame
+    # modo pressão (ajuste da curva de pressão do cilindro)
+    from ..pressure.engine import EngineConfig
+    st.session_state.setdefault("mode", "xb")            # xb | pressure
+    st.session_state.setdefault("pdata", None)           # PressureData
+    st.session_state.setdefault("engine", EngineConfig())
+    st.session_state.setdefault("pmodel", None)          # {"Rc", "stages"}
+    st.session_state.setdefault("pfit_result", None)
+    st.session_state.setdefault("pcompare_result", None)
 
 
 def unidade() -> str:

@@ -45,6 +45,12 @@ def validate_data(theta, xb=None, dxb=None, weights=None,
         raise DataError("Pesos devem ser positivos.")
     if xb is not None:
         xb = np.asarray(xb, dtype=float)
+        if xb.max() > 1.5:
+            raise DataError(
+                f"A coluna de x_b vai até {xb.max():.4g}: isso não é fração "
+                "queimada (0 a 1). Se o arquivo é PRESSÃO do cilindro, use o "
+                "modo pressão (GUI: Tipo de dado = Pressão do cilindro; CLI: "
+                "--input-type pressure).")
         if xb.min() < -0.05 or xb.max() > 1.05:
             avisos.append(f"xb fora de [0, 1] (min {xb.min():.3g}, "
                           f"max {xb.max():.3g}) — verifique a normalização.")

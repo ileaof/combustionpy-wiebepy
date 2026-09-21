@@ -105,3 +105,41 @@ def test_comparacao():
     res = at.session_state["compare_result"]
     assert res is not None and {1, 2} == set(res["results"])
     assert res["recommended"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Modo pressão
+# ---------------------------------------------------------------------------
+def _carrega_ensaio(at):
+    at.switch_page("app_pages/dados.py").run()
+    at.segmented_control(key="tipo_dado").set_value("pressure").run()
+    at.segmented_control(key="p_origem").set_value("Ensaio de exemplo").run()
+    [b for b in at.button if b.label == "Carregar pressão"][0].click().run()
+    _sem_erros(at)
+    assert at.session_state["pdata"].n == 459
+
+
+def test_modo_pressao_ajuste_e_paginas():
+    at = _app()
+    _carrega_ensaio(at)
+    at.switch_page("app_pages/modelo.py").run()
+    _sem_erros(at)
+    at.switch_page("app_pages/ajuste.py").run()
+    [w for w in at.number_input if w.label == "Runs"][0].set_value(1)
+    [w for w in at.number_input if w.label == "Partículas"][0].set_value(30)
+    [w for w in at.number_input if w.label == "Iterações"][0].set_value(60)
+    [b for b in at.button if "Iniciar" in b.label][0].click().run()
+    _espera_job(at)
+    r = at.session_state["pfit_result"]
+    assert r is not None and r.metrics["r2"] > 0.99
+    [b for b in at.button if b.key == "pa_aplicar"][0].click().run()
+    for p in ("app_pages/modelo.py", "app_pages/exportar.py",
+              "app_pages/comparacao.py"):
+        at.switch_page(p).run()
+        _sem_erros(at)
+
+
+def test_pressao_no_modo_xb_da_erro_claro():
+    at = _app()
+    at.switch_page("app_pages/dados.py").run()
+    assert at.session_state["mode"] == "xb"

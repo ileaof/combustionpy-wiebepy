@@ -50,6 +50,7 @@
     <li><a href="#instalar">Instalação (.venv)</a></li>
     <li><a href="#primeira">Primeira análise</a></li>
     <li><a href="#gui">Interface gráfica</a></li>
+    <li><a href="#pressao">Ajustar a curva de pressão</a></li>
     <li><a href="#modelo">O modelo e seus parâmetros</a></li>
     <li><a href="#dados">Preparar os dados</a></li>
     <li><a href="#ajuste">Ajustar N estágios</a></li>
@@ -113,6 +114,24 @@ wiebepy --gui               <em># abre no navegador</em></code></pre>
     <li><b>Exportar</b>: baixe tudo num .zip.</li>
   </ol>
   <p>O botão <b>Ajuda</b>, no topo da interface, abre este guia.</p>
+</section>
+
+<section id="pressao">
+  <h2>2c. Ajustar a curva de PRESSÃO (dados de ensaio)</h2>
+  <p>Se o seu arquivo tem <b>ângulo × pressão do cilindro</b> (como o ensaio do
+  Double Wiebe), use o modo pressão: o wiebepy ajusta a pressão com o mesmo
+  modelo 0-D do Double Wiebe, com 1 a 5 estágios de liberação de calor.</p>
+  <ol>
+    <li>GUI: página <b>Dados</b> → <b>Tipo de dado = Pressão do cilindro</b>;
+    escolha a unidade do ângulo (radianos no ensaio) e da pressão (bar);
+    confira o motor em “Motor (geometria e combustível)”.</li>
+    <li>Página <b>Ajuste</b>: escolha N e clique em <i>Iniciar ajuste</i>.
+    O RMSE mostrado é o da referência solve_ivp.</li>
+    <li>Página <b>Comparação</b>: compare 1, 2 e 3 estágios.</li>
+  </ol>
+<pre><code>wiebepy --stages 2 --optimize --input ensaio.txt --input-type pressure --pressure-unit bar</code></pre>
+  <div class="box warn">Carregar um arquivo de pressão como “Fração queimada”
+  dá erro: x<sub>b</sub> precisa estar entre 0 e 1.</div>
 </section>
 
 <section id="modelo">

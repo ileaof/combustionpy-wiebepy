@@ -8,6 +8,12 @@ from wiebepy.gui import state as S
 from wiebepy.model import MultiStageWiebe
 
 st.header("Exportar", anchor=False)
+if st.session_state.mode == "pressure":
+    from wiebepy.gui import pressure_ui
+    st.caption("Modo pressão: ajuste da curva de pressão do cilindro (modelo "
+               "0-D do Double Wiebe com N estágios de liberação de calor).")
+    pressure_ui.exportar()
+    st.stop()
 d = st.session_state.data
 fit = st.session_state.fit_result
 comp = st.session_state.compare_result

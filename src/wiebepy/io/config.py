@@ -57,6 +57,11 @@ DEFAULTS: Dict[str, Any] = {
     "comparison": {"stages": [1, 2, 3, 4, 5], "cv_folds": 5, "cv_tol": 0.05},
     "parallel": {"backend": "auto", "workers": None, "precision": "float64"},
     "output": {"directory": "results", "save_plots": False, "json": False},
+    # modo pressão (--input-type pressure)
+    "pressure": {"input_type": None, "angle_unit": "rad", "pressure_unit": "bar",
+                 "theta_min_rad": -2.0, "theta_max_rad": 2.0,
+                 "particles": 60, "iterations": 400},
+    "engine": {},     # motor (chaves do Double Wiebe ou de EngineConfig)
 }
 
 SECOES = tuple(DEFAULTS)

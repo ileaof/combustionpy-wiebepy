@@ -57,8 +57,14 @@ d = st.session_state.data
 job = st.session_state.job
 with st.container(horizontal=True):
     st.caption(f"Versão {__version__}")
-    st.caption(f"Dados: **{st.session_state.data_name}** ({d.n} pontos)"
-               if d is not None else "Dados: nenhum carregado")
+    pd_ = st.session_state.pdata
+    if st.session_state.mode == "pressure":
+        st.caption(f"Modo pressão · **{st.session_state.data_name}** "
+                   f"({pd_.n} pontos)" if pd_ is not None
+                   else "Modo pressão · nenhuma curva carregada")
+    else:
+        st.caption(f"Dados: **{st.session_state.data_name}** ({d.n} pontos)"
+                   if d is not None else "Dados: nenhum carregado")
     if job is not None and not job["done"]:
         st.caption(f":orange[Tarefa em andamento: {job['tipo']}]")
 
