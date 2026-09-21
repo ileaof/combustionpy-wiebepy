@@ -148,7 +148,13 @@ def test_cli_modo_pressao(tmp_path):
                   "--output", str(tmp_path)]) == 0
     for f in ("results.csv", "parameters.csv", "metrics.csv", "results.json",
               "run_statistics.csv", "plots/pressure.png",
-              "plots/pv_diagram.png", "plots/pv_diagram_loglog.png"):
+              "plots/pv_diagram.png", "plots/pv_diagram_loglog.png",
+              "plots/heat_release.png", "plots/temperature.png",
+              "plots/heat_loss.png", "plots/volume.png"):
         assert (tmp_path / f).exists(), f
+    import csv
+    cab = next(csv.reader(open(tmp_path / "results.csv", encoding="utf-8")))
+    for col in ("dQ_dtheta_kJ_per_rad", "Q_released_kJ", "Q_wall_J", "Tg_K"):
+        assert col in cab
     assert _main(["--input", str(ENSAIO), "--input-type", "pressure",
                   "--quiet", "--output", str(tmp_path / "x")]) == 2

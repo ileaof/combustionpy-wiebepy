@@ -282,17 +282,69 @@ def _graus(stages):
             for s in as_stages(stages)]
 
 
-def graficos_queima(d, stages_rad):
-    """x_b e dx_b/dθ (por grau) dos estágios, com contribuições."""
-    st_deg = _graus(stages_rad)
-    th = np.linspace(math.degrees(d.theta[0]), math.degrees(d.theta[-1]), 1500)
-    antes = st.session_state.angle_unit
-    st.session_state.angle_unit = "deg"
-    try:
-        return (S.grafico_curvas(th, st_deg, None, "xb", True),
-                S.grafico_curvas(th, st_deg, None, "dxb", True))
-    finally:
-        st.session_state.angle_unit = antes
+def _linhas(df, titulo, titulo_y, cores=None, altura=300):
+    enc = {"x": alt.X("θ:Q", title="θ [°]"),
+           "y": alt.Y("valor:Q", title=titulo_y),
+           "tooltip": ["curva:N", alt.Tooltip("θ:Q", format=".1f"),
+                       alt.Tooltip("valor:Q", format=".4g")]}
+    if df["curva"].nunique() > 1:
+        dom = list(dict.fromkeys(df["curva"]))
+        enc["color"] = alt.Color("curva:N", title=None,
+                                 scale=alt.Scale(domain=dom, range=cores)
+                                 if cores else alt.Undefined)
+    return alt.Chart(df).mark_line().encode(**enc).properties(
+        title=titulo, height=altura).interactive()
+
+
+def painel_termico(d, stages_rad, Rc, engine, Tg, Qw) -> None:
+    """Mesmos gráficos do Single/Double Wiebe: fração queimada, taxa de
+    liberação de calor por estágio [kJ/rad], calor liberado acumulado,
+    temperatura do gás, calor perdido às paredes e volume."""
+    from ..core.core import stage_contributions
+    from ..pressure.engine import volume
+    st_ = as_stages(stages_rad)
+    N = len(st_)
+    Qt = engine.Q_total
+    th = np.linspace(d.theta[0], d.theta[-1], 1500)
+    thd = np.degrees(th)
+    cx, cd = stage_contributions(th, st_)
+    cores = S.CORES[:N] + ["#1d2330"]
+    nomes = [f"estágio {j + 1}" for j in range(N)]
+
+    xb = pd.concat([pd.DataFrame({"θ": thd, "valor": cx[j], "curva": nomes[j]})
+                    for j in range(N)] + [pd.DataFrame(
+                        {"θ": thd, "valor": cx.sum(axis=0), "curva": "total"})])
+    hrr = pd.concat([pd.DataFrame({"θ": thd, "valor": Qt * cd[j],
+                                   "curva": f"dQ{j + 1}/dθ"}) for j in range(N)]
+                    + [pd.DataFrame({"θ": thd, "valor": Qt * cd.sum(axis=0),
+                                     "curva": "dQ/dθ total"})])
+    qc = pd.concat([pd.DataFrame({"θ": thd, "valor": Qt * cx[j],
+                                  "curva": nomes[j]}) for j in range(N)]
+                   + [pd.DataFrame({"θ": thd, "valor": Qt * cx.sum(axis=0),
+                                    "curva": "total"})])
+    g1, g2 = st.columns(2)
+    g1.altair_chart(_linhas(xb, "Fração de massa queimada", "x_b [-]", cores))
+    g2.altair_chart(_linhas(hrr, "Taxa de liberação de calor por estágio e total",
+                            "dQ/dθ [kJ/rad]", cores))
+    tde = np.degrees(d.theta)
+    g3, g4 = st.columns(2)
+    if Tg is not None and np.all(np.isfinite(Tg)):
+        g3.altair_chart(_linhas(pd.DataFrame({"θ": tde, "valor": Tg,
+                                              "curva": "T_gás"}),
+                                "Temperatura do gás", "T [K]"))
+    if Qw is not None and np.all(np.isfinite(Qw)):
+        g4.altair_chart(_linhas(pd.DataFrame({"θ": tde, "valor": Qw,
+                                              "curva": "Q_parede"}),
+                                "Calor perdido para as paredes (Hohenberg)",
+                                "calor perdido acumulado [J]"))
+    g5, g6 = st.columns(2)
+    g5.altair_chart(_linhas(qc, f"Calor liberado acumulado (Q_total = "
+                                f"{Qt:.4f} kJ)", "Q [kJ]", cores))
+    V = volume(d.theta, Rc, engine)[0] * 1e6
+    g6.altair_chart(_linhas(pd.DataFrame({"θ": tde, "valor": V,
+                                          "curva": "V(θ)"}),
+                            f"Volume do cilindro (Rc = {Rc:.3f})",
+                            "V [cm³]"))
 
 
 def tabela(Rc, stages_rad):
@@ -359,7 +411,7 @@ def modelo() -> None:
         st.info("Carregue uma curva de pressão (página Dados) para simular.")
     else:
         try:
-            P_sim, _, _ = simulate(d.theta, float(d.P[0]), stages, e, rc)
+            P_sim, Tg_m, Qw_m = simulate(d.theta, float(d.P[0]), stages, e, rc)
         except ODEFailure as ex:
             st.error(f"A simulação falhou com estes parâmetros: {ex}")
         else:
@@ -372,11 +424,7 @@ def modelo() -> None:
                           border=True)
             st.altair_chart(grafico_pressao(d, P_sim))
             st.altair_chart(grafico_pv(d, P_sim, rc, e, "pv_modelo"))
-    g1, g2 = st.columns(2)
-    if d is not None:
-        a, b = graficos_queima(d, stages)
-        g1.altair_chart(a)
-        g2.altair_chart(b)
+            painel_termico(d, stages, rc, e, Tg_m, Qw_m)
 
 
 def aplicar(Rc, stages_rad) -> None:
@@ -485,10 +533,7 @@ def ajuste() -> None:
         st.altair_chart(grafico_pv(d, r.P_sim, r.Rc, r.settings.engine,
                                    "pv_ajuste"))
     g00.altair_chart(grafico_residuo(d, r.P_sim))
-    a, b = graficos_queima(d, r.stages)
-    g1, g2 = st.columns(2)
-    g1.altair_chart(a)
-    g2.altair_chart(b)
+    painel_termico(d, r.stages, r.Rc, r.settings.engine, r.Tg, r.Q_wall)
 
 
 def painel(tipo: str, destino: str) -> None:
@@ -591,6 +636,7 @@ def comparacao() -> None:
         st.altair_chart(grafico_pressao(d, r.P_sim))
         st.altair_chart(grafico_pv(d, r.P_sim, r.Rc, r.settings.engine,
                                    "pv_comp"))
+        painel_termico(d, r.stages, r.Rc, r.settings.engine, r.Tg, r.Q_wall)
 
 
 # =============================================================================

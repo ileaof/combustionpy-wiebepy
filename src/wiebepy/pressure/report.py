@@ -11,7 +11,9 @@ report.py — Arquivos de saída do modo pressão (usados pela CLI e pela GUI).
     results.json     tudo acima
     comparison.csv   (comparação 1..5)
     plots/*.png      pressão medida × simulada, diagrama P–V (modelo ×
-                     experimental), resíduo, x_b e taxa de queima
+                     experimental), resíduo, fração queimada, taxa de
+                     liberação de calor [kJ/rad] por estágio, temperatura
+                     do gás, calor perdido às paredes e volume
 """
 from __future__ import annotations
 
@@ -52,10 +54,16 @@ def write_outputs(outdir, r, d, comp: Optional[Dict] = None,
     dxb = multistage_wiebe_derivative(thd, st_deg)
     from .engine import volume
     V = volume(d.theta, r.Rc, r.settings.engine)[0]
+    Qt = r.settings.engine.Q_total
+    hrr = Qt * multistage_wiebe_derivative(d.theta, r.stages)     # kJ/rad
+    qcum = Qt * multistage_wiebe(d.theta, r.stages)               # kJ
+    qw = r.Q_wall if r.Q_wall is not None else np.full(d.n, np.nan)
     _csv(out / "results.csv",
          ["theta_rad", "theta_deg", "V_m3", "P_exp_kPa", "P_sim_kPa",
-          "residual_kPa", "Tg_K", "xb", "dxb_dtheta_per_deg"],
-         zip(d.theta, thd, V, d.P, r.P_sim, r.P_sim - d.P, r.Tg, xb, dxb))
+          "residual_kPa", "Tg_K", "xb", "dxb_dtheta_per_deg",
+          "dQ_dtheta_kJ_per_rad", "Q_released_kJ", "Q_wall_J"],
+         zip(d.theta, thd, V, d.P, r.P_sim, r.P_sim - d.P, r.Tg, xb, dxb,
+             hrr, qcum, qw))
     _csv(out / "parameters.csv",
          ["stage", "beta", "theta0_rad", "theta0_deg", "duration_rad",
           "duration_deg", "m", "a"],
@@ -115,6 +123,31 @@ def _plots(pasta: Path, r, d, st_deg):
     ax.set(xlabel="θ [°]", ylabel="P sim − P med [kPa]", title="Resíduo")
     ax.grid(alpha=0.3); f.tight_layout()
     f.savefig(pasta / "residual.png", dpi=150); plt.close(f)
+    Qt = r.settings.engine.Q_total
+    th_r = np.linspace(d.theta[0], d.theta[-1], 2000)
+    cxr, cdr = stage_contributions(th_r, r.stages)
+    f, ax = plt.subplots(figsize=(7, 4.2))
+    for j in range(len(r.stages)):
+        ax.plot(np.degrees(th_r), Qt * cdr[j], label=f"dQ{j + 1}/dθ")
+    ax.plot(np.degrees(th_r), Qt * cdr.sum(axis=0), "k-", lw=2.2,
+            label="dQ/dθ total")
+    ax.set(xlabel="θ [°]", ylabel="Taxa de liberação de calor [kJ/rad]",
+           title="Taxa de liberação de calor por estágio e total")
+    ax.grid(alpha=0.3); ax.legend(); f.tight_layout()
+    f.savefig(pasta / "heat_release.png", dpi=150); plt.close(f)
+    for nome, y, rot, tit in (
+            ("temperature", r.Tg, "Temperatura do gás [K]", "Temperatura do gás"),
+            ("heat_loss", r.Q_wall, "Calor perdido acumulado [J]",
+             "Calor perdido para as paredes (Hohenberg)"),
+            ("volume", volume(d.theta, r.Rc, r.settings.engine)[0] * 1e6,
+             "Volume [cm³]", "Volume do cilindro")):
+        if y is None:
+            continue
+        f, ax = plt.subplots(figsize=(7, 3.8))
+        ax.plot(thd, y, lw=1.8)
+        ax.set(xlabel="θ [°]", ylabel=rot, title=tit)
+        ax.grid(alpha=0.3); f.tight_layout()
+        f.savefig(pasta / f"{nome}.png", dpi=150); plt.close(f)
     th = np.linspace(thd[0], thd[-1], 2000)
     cx, cd = stage_contributions(th, st_deg)
     for nome, total, contrib, rot in (

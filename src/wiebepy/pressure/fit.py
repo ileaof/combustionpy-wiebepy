@@ -382,6 +382,7 @@ class PressureFitResult:
     warnings: List[str]
     backend: str
     elapsed_s: float
+    Q_wall: Optional[np.ndarray] = None      # calor perdido acumulado [J]
 
     def to_dict(self) -> Dict:
         return {"mode": "pressure", "n_stages": self.settings.n_stages,
@@ -435,9 +436,10 @@ def summarize_pressure(data, s, param, runs, backend, elapsed) -> PressureFitRes
     Rc, stages = param.to_model(best.x)
     avisos = []
     try:
-        P_sim, Tg, _ = simulate(data.theta, float(data.P[0]), stages, s.engine, Rc)
+        P_sim, Tg, Qw = simulate(data.theta, float(data.P[0]), stages,
+                                 s.engine, Rc)
     except ODEFailure:
-        P_sim = Tg = np.full(data.n, np.nan)
+        P_sim = Tg = Qw = np.full(data.n, np.nan)
         avisos.append("WARNING: a referência solve_ivp falhou em todos os runs; "
                       "resultado inválido.")
     metrics = pressure_metrics(data.P, P_sim, param.size) if np.all(
@@ -454,6 +456,7 @@ def summarize_pressure(data, s, param, runs, backend, elapsed) -> PressureFitRes
     avisos += dispersion_warnings(np.array([r.x for r in runs]), param)
     return PressureFitResult(settings=s, param=param, runs=runs, best=best,
                              Rc=Rc, stages=stages, P_sim=P_sim, Tg=Tg,
+                             Q_wall=Qw,
                              metrics=metrics, objective_stats=ostats,
                              warnings=avisos, backend=backend,
                              elapsed_s=elapsed)
