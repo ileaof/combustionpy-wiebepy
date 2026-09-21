@@ -21,6 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 numba = ["numba>=0.59"]            # kernels compilados (CPU)
 gpu = ["cupy-cuda12x>=13.0"]       # GPU NVIDIA (opcional)
+gui = ["streamlit>=1.52", "altair>=5.0", "pandas>=2.0"]   # interface gráfica
 dev = ["pytest>=7.0"]
 
 [project.scripts]
@@ -28,6 +29,9 @@ wiebepy = "wiebepy.cli.parser:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"wiebepy.gui" = ["app_pages/*.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

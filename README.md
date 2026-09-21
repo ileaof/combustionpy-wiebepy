@@ -21,7 +21,7 @@ Wiebe e com dados $(\theta, x_b)$ e/ou $(\theta, dx_b/d\theta)$.
 2. [Formulação matemática](#2-formulação-matemática)
 3. [Parâmetros](#3-parâmetros)
 4. [Linha de comando](#4-linha-de-comando)
-5. [API Python](#5-api-python)
+5. [API Python](#5-api-python) · [Interface gráfica](#interface-gráfica)
 6. [Otimização](#6-otimização)
 7. [Comparação entre números de estágios](#7-comparação-entre-números-de-estágios)
 8. [Execução paralela e GPU](#8-execução-paralela-e-gpu)
@@ -45,7 +45,7 @@ python -m venv .venv
 # Windows:            .venv\Scripts\activate
 # Linux/macOS/WSL2:   source .venv/bin/activate
 python -m pip install --upgrade pip
-pip install -e ".[numba,dev]"         # núcleo + Numba + pytest
+pip install -e ".[numba,gui,dev]"     # núcleo + Numba + interface + pytest
 ```
 
 Extras opcionais — o programa funciona **sem nenhum deles**:
@@ -54,6 +54,7 @@ Extras opcionais — o programa funciona **sem nenhum deles**:
 |---|---|---|
 | `numba` | `numba` | kernels compilados em CPU (o backend mais rápido em CPU) |
 | `gpu` | `cupy-cuda12x` | GPU NVIDIA (requer driver CUDA 12+) |
+| `gui` | `streamlit`, `altair`, `pandas` | interface gráfica (`wiebepy --gui`) |
 | `dev` | `pytest` | testes |
 
 Sem instalar o pacote, use `python main.py` no lugar de `wiebepy`.
@@ -225,6 +226,28 @@ stages = [{"beta": 0.35, "theta0": -5.0, "duration": 12.0, "m": 2.0, "a": 6.908}
           {"beta": 0.65, "theta0": 2.0, "duration": 45.0, "m": 1.3, "a": 6.908}]
 xb = multistage_wiebe(theta, stages)
 ```
+
+### Interface gráfica
+
+```bash
+wiebepy --gui                          # abre no navegador (localhost:8501)
+streamlit run src/wiebepy/gui/app.py   # equivalente
+```
+
+Páginas (menu no topo) e botão **Ajuda** (abre este guia, `Help.html`):
+
+| Página | O que faz |
+|---|---|
+| Dados | carrega .csv/.txt/.dat/.json ou um exemplo sintético; métricas e gráficos dos dados |
+| Modelo | escolhe N (1–5), edita β, θ0, Δθ, m, a numa tabela; x_b e dx_b/dθ com contribuições por estágio sobre os dados; baixa `model.json` |
+| Ajuste | PSO + refinamento em segundo plano com **progresso ao vivo e cancelamento**; parâmetros, estatística dos runs, métricas, avisos, ajuste, resíduos e convergência; "aplicar ao modelo" |
+| Comparação | ajusta vários N; tabela com CV, ΔAIC/ΔBIC, Durbin-Watson; recomendação; detalhe de cada N |
+| Exportar | os mesmos arquivos da CLI num `.zip` (com gráficos PNG) |
+| Desempenho | hardware detectado e benchmark rápido dos backends |
+
+Na interface os runs rodam em sequência (para permitir progresso por
+iteração e cancelamento); o paralelismo vem do backend (Numba multithread
+ou GPU). Runs em processos paralelos continuam disponíveis na CLI.
 
 ## 6. Otimização
 
@@ -412,6 +435,7 @@ python -m pytest -m "not slow"    # só os rápidos
 | `test_core.py` | para N = 1…5: $x_b(-\infty)=0$, $x_b(+\infty)\approx1$, $0\le x_b\le1$, monotonicidade, soma das contribuições, invariância à ordem, estágio com β = 0 inerte, derivada analítica × diferenças finitas (inclui $m<1$, com janela excluída em $\theta_0$), validação, encode/decode nos 3 modos de β, simplex, ordenação, penalidade cumulativa; **N = 1 ≡ Single Wiebe** e **N = 2 ≡ Double Wiebe** dos projetos irmãos (≤ 1e-13 relativo) |
 | `test_backends.py` | Numba ≡ NumPy (5 métricas × 3 alvos × N = 1…5, ≤ 1e-12), CuPy ≡ NumPy, CuPy float32 próximo, multiprocessing idêntico, blocos, fallback com WARNING, `auto`, pontos em Numba/CuPy |
 | `test_optimization.py` | PSO (esfera, limites, reprodutibilidade, cancelamento, topologias), recuperação de parâmetros N = 1 e N = 2, estatísticas dos runs, reprodutibilidade por semente, runs paralelos ≡ sequenciais, modos de β, `--fit-a` + alvo `both`, métricas, avisos, folds da CV, regra de recomendação, comparação que identifica N = 2 |
+| `test_gui.py` | interface (AppTest, sem navegador): todas as páginas sem dados, botão Ajuda, edição do modelo, carga de exemplo → ajuste em segundo plano → aplicar ao modelo → .zip, comparação completa |
 | `test_io_cli.py` | leitura CSV/TXT/DAT/JSON (cabeçalho, aliases, σ → peso, ordenação, erros), configs JSON/YAML/TOML e precedência, API (avaliação, `save`/`load`, `fit`), CLI (`--help`, `--help-model`, `--help-examples`, avaliação N = 1…5, modelo salvo, ajuste com todos os arquivos, erros de uso, `--devices`, comparação) |
 
 Testes de GPU são pulados sem CuPy/GPU; testes de Numba, sem Numba.
@@ -479,6 +503,7 @@ wiebepy/
 │   │                            # hardware, procs (pools sem sobreinscrição)
 │   ├── io/                      # readers, writers, config
 │   ├── plotting/plots.py
+│   ├── gui/                     # Streamlit: app.py, state.py, app_pages/
 │   └── cli/                     # parser (argparse), helptext
 ├── tests/                       # 280 testes
 ├── examples/                    # dados sintéticos N = 1…5, configs, modelo
@@ -496,8 +521,8 @@ wiebepy/
   existem para isso; não interprete fisicamente estágios sinalizados.
 - **AIC/BIC** supõem resíduos independentes (ver §7).
 - **GPU**: ganho só em problemas grandes; float32 reduz a precisão da busca.
-- **GUI**: ainda não implementada (a arquitetura separa física,
-  otimização, paralelismo e E/S para permiti-la).
+- **GUI**: runs em processos paralelos só na CLI (na interface, sequenciais
+  com Numba/GPU).
 
 ## 14. Referências
 

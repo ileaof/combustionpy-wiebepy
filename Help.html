@@ -49,6 +49,7 @@
   <ol>
     <li><a href="#instalar">Instalação (.venv)</a></li>
     <li><a href="#primeira">Primeira análise</a></li>
+    <li><a href="#gui">Interface gráfica</a></li>
     <li><a href="#modelo">O modelo e seus parâmetros</a></li>
     <li><a href="#dados">Preparar os dados</a></li>
     <li><a href="#ajuste">Ajustar N estágios</a></li>
@@ -94,6 +95,24 @@ python -m pytest -m "not slow"    <em># testes rápidos (~20 s)</em></code></pre
   métricas (RMSE, R², AIC, BIC, Durbin-Watson). Os parâmetros verdadeiros dos
   dados sintéticos estão em <code>examples\data\true_parameters.json</code> — compare.</p>
   <p>Comandos prontos para todos os casos: <code>wiebepy --help-examples</code>.</p>
+</section>
+
+<section id="gui">
+  <h2>2b. Interface gráfica</h2>
+<pre><code>pip install -e ".[gui]"     <em># uma vez: Streamlit</em>
+wiebepy --gui               <em># abre no navegador</em></code></pre>
+  <ol>
+    <li><b>Dados</b>: carregue seu arquivo ou um exemplo sintético.</li>
+    <li><b>Modelo</b>: escolha N e edite os parâmetros na tabela; os gráficos
+    mostram x<sub>b</sub>, dx<sub>b</sub>/dθ e cada estágio sobre os dados.</li>
+    <li><b>Ajuste</b>: escolha N, a série e o número de runs e clique em
+    <i>Iniciar ajuste</i>. O progresso aparece ao vivo; <i>Cancelar</i> interrompe.
+    Depois, <i>Aplicar ao modelo</i> leva o resultado para a página Modelo.</li>
+    <li><b>Comparação</b>: escolha os N e clique em <i>Comparar</i> para ver a
+    tabela e a recomendação.</li>
+    <li><b>Exportar</b>: baixe tudo num .zip.</li>
+  </ol>
+  <p>O botão <b>Ajuda</b>, no topo da interface, abre este guia.</p>
 </section>
 
 <section id="modelo">

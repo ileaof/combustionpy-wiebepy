@@ -125,7 +125,8 @@ def bench_points(n_stages=3, sizes=POINTS_SIZES, reps=3, workers=None,
 
 
 def bench_objective(n_stages=3, S_list=OBJ_S, n_list=OBJ_N_QUICK, reps=3,
-                    workers=None, log=print) -> List[Dict]:
+                    workers=None, log=print,
+                    multiprocessing: bool = True) -> List[Dict]:
     stages = default_stages(n_stages, -20.0, 100.0)
     linhas = []
     for n in n_list:
@@ -140,7 +141,7 @@ def bench_objective(n_stages=3, S_list=OBJ_S, n_list=OBJ_N_QUICK, reps=3,
         if numba_available():
             avaliadores["numba"] = lambda: NumbaObjective(data, param, spec,
                                                           workers=workers)
-        if workers and workers > 1:
+        if multiprocessing and workers and workers > 1:
             avaliadores[f"multiprocessing ({workers})"] = (
                 lambda: MultiprocessingObjective(data, param, spec,
                                                  workers=workers))

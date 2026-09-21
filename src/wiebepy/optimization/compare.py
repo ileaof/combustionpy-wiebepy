@@ -67,7 +67,7 @@ def block_folds(n: int, k: int, block_frac: float = 0.02) -> List[np.ndarray]:
 
 
 def block_cv(data: FitData, s: FitSettings, x_full: np.ndarray,
-             folds: int) -> Dict:
+             folds: int, progress=None) -> Dict:
     """RMSE de previsão por blocos (série principal)."""
     from ..parallel.backend import make_objective
     serie = _serie_principal(data, s.fit_target or data.default_target())
@@ -80,10 +80,14 @@ def block_cv(data: FitData, s: FitSettings, x_full: np.ndarray,
         param, spec = build_problem(treino, s1)
         obj = make_objective(s1.backend, treino, param, spec, s1.precision,
                              s1.workers, s1.particles)
+        cb = None
+        if progress is not None:
+            def cb(it, fb, xb, _i=i):
+                return progress("cv", _i, it, fb)
         try:
             r = single_run(obj, param, s1, 0,
                            None if s.seed is None else s.seed + 1000 + i,
-                           data=treino, spec=spec, x0=x_full)
+                           cb, data=treino, spec=spec, x0=x_full)
         finally:
             obj.close()
         st = param.to_stages(r.x)
@@ -126,15 +130,23 @@ def nested_candidate(maior: FitResult, N: int, data: FitData,
 
 def compare_stages(data: FitData, ns: Sequence[int], base: FitSettings,
                    cv_folds: int = 5, cv_tol: float = 0.05,
-                   nested: bool = True) -> Dict:
-    """Ajusta cada N e devolve tabela, resultados e recomendação."""
+                   nested: bool = True, progress=None) -> Dict:
+    """Ajusta cada N e devolve tabela, resultados e recomendação.
+
+    progress(fase, N_ou_fold, iteração, melhor) -> True cancela (fase "fit"
+    ou "cv"; só com runs sequenciais). Cancelado, as etapas restantes
+    terminam na primeira iteração e ``result["cancelled"]`` é True."""
     ns = sorted(set(int(n) for n in ns))
     resultados: Dict[int, FitResult] = {}
     tempos: Dict[int, float] = {}
     for N in ns:
         log.info("=== Modelo %d-Wiebe ===", N)
         t0 = time.perf_counter()
-        resultados[N] = fit(data, replace(base, n_stages=N))
+        cb = None
+        if progress is not None:
+            def cb(run, it, fb, xb, _N=N):
+                return progress("fit", _N, it, fb)
+        resultados[N] = fit(data, replace(base, n_stages=N), progress=cb)
         tempos[N] = time.perf_counter() - t0
     if nested:
         for N in sorted(ns, reverse=True):
@@ -157,7 +169,8 @@ def compare_stages(data: FitData, ns: Sequence[int], base: FitSettings,
         t0 = time.perf_counter()
         s = replace(base, n_stages=N)
         r = resultados[N]
-        cv = block_cv(data, s, r.best.x, cv_folds) if cv_folds >= 2 else {}
+        cv = (block_cv(data, s, r.best.x, cv_folds, progress)
+              if cv_folds >= 2 else {})
         serie = _serie_principal(data, r.spec.fit_target)
         m = r.metrics[serie]
         estruturais = [w for w in r.warnings
@@ -184,8 +197,11 @@ def compare_stages(data: FitData, ns: Sequence[int], base: FitSettings,
         l["delta_aic"] = l["aic"] - aic_min
         l["delta_bic"] = l["bic"] - bic_min
     rec, motivo = recommend(linhas, cv_tol)
+    cancelado = any(x.stopped_by == "cancel" for r in resultados.values()
+                    for x in r.runs)
     return {"table": linhas, "results": resultados, "recommended": rec,
-            "reason": motivo, "cv_folds": cv_folds, "cv_tol": cv_tol}
+            "reason": motivo, "cv_folds": cv_folds, "cv_tol": cv_tol,
+            "cancelled": cancelado}
 
 
 def recommend(linhas: List[Dict], cv_tol: float = 0.05):

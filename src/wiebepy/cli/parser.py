@@ -124,6 +124,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="benchmark incluindo n = 1e5 no cenário do PSO")
     g.add_argument("--devices", action="store_true",
                    help="mostra o hardware detectado e sai")
+    g.add_argument("--gui", action="store_true",
+                   help="abre a interface gráfica no navegador (requer "
+                        "pip install -e \".[gui]\")")
     g.add_argument("--help-model", action="store_true",
                    help="mostra a formulação matemática e sai")
     g.add_argument("--help-examples", action="store_true",
@@ -290,6 +293,18 @@ def _resumo_avisos(avisos, prefixo: str = "", maximo: int = 5) -> None:
                     prefixo, len(avisos) - maximo)
 
 
+def _abrir_gui() -> int:
+    """Inicia `streamlit run` com o app da GUI (bloqueia até fechar)."""
+    import importlib.util
+    import subprocess
+    if importlib.util.find_spec("streamlit") is None:
+        print("ERRO: a GUI requer Streamlit: pip install -e \".[gui]\"",
+              file=sys.stderr)
+        return EXIT_USO
+    app = Path(__file__).resolve().parents[1] / "gui" / "app.py"
+    return subprocess.call([sys.executable, "-m", "streamlit", "run", str(app)])
+
+
 def main(argv: Optional[List[str]] = None) -> None:
     sys.exit(_main(argv))
 
@@ -303,6 +318,8 @@ def _main(argv: Optional[List[str]] = None) -> int:
     if a.help_examples:
         print(HELP_EXAMPLES)
         return EXIT_OK
+    if a.gui:
+        return _abrir_gui()
     _setup_logging(a)
     from ..core.validation import DataError
     from ..io.config import ConfigError, resolve

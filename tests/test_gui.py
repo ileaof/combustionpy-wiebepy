@@ -1,0 +1,107 @@
+# -*- coding: utf-8 -*-
+"""GUI Streamlit (AppTest, sem navegador): páginas, carga de dados, ajuste e
+comparação em segundo plano. Pulado se Streamlit não estiver instalado."""
+from __future__ import annotations
+
+import time
+from pathlib import Path
+
+import pytest
+
+pytest.importorskip("streamlit")
+from streamlit.testing.v1 import AppTest  # noqa: E402
+
+APP = str(Path(__file__).resolve().parents[1] / "src" / "wiebepy" / "gui" / "app.py")
+PAGINAS = ["app_pages/dados.py", "app_pages/modelo.py", "app_pages/ajuste.py",
+           "app_pages/comparacao.py", "app_pages/exportar.py",
+           "app_pages/desempenho.py"]
+
+
+def _app():
+    return AppTest.from_file(APP, default_timeout=60).run()
+
+
+def _sem_erros(at):
+    assert not at.exception, [e.value for e in at.exception]
+
+
+def _carrega_exemplo(at, nome="synthetic_2stage"):
+    at.switch_page("app_pages/dados.py").run()
+    at.segmented_control(key="fonte_dados").set_value("Exemplo sintético").run()
+    at.selectbox[0].set_value(nome).run()
+    [b for b in at.button if b.label == "Carregar exemplo"][0].click().run()
+    _sem_erros(at)
+    assert at.session_state["data"] is not None
+
+
+def _espera_job(at, limite=180):
+    t0 = time.time()
+    while at.session_state["job"] is not None:
+        assert time.time() - t0 < limite, "tarefa não terminou"
+        time.sleep(0.5)
+        at.run()
+    _sem_erros(at)
+
+
+@pytest.mark.parametrize("pagina", PAGINAS)
+def test_paginas_sem_dados(pagina):
+    at = _app()
+    at.switch_page(pagina).run()
+    _sem_erros(at)
+
+
+def test_botao_ajuda_abre_help():
+    at = _app()
+    [b for b in at.button if b.key == "botao_ajuda"][0].click().run()
+    _sem_erros(at)
+    assert len(at.get("iframe")) == 1
+
+
+def test_modelo_edita_e_valida():
+    at = _app()
+    at.switch_page("app_pages/modelo.py").run()
+    at.segmented_control(key="modelo_n").set_value(4).run()
+    _sem_erros(at)
+    assert len(at.session_state["model_stages"]) == 4
+    assert len(at.get("vega_lite_chart")) >= 2
+
+
+def test_dados_ajuste_e_exportacao():
+    at = _app()
+    _carrega_exemplo(at)
+    at.switch_page("app_pages/ajuste.py").run()
+    at.number_input[0].set_value(1).run()                     # runs
+    for rotulo, valor in (("Partículas", 40), ("Iterações", 150),
+                          ("Paciência", 50)):
+        [w for w in at.number_input if w.label == rotulo][0].set_value(valor)
+    [s for s in at.selectbox if s.label == "Backend"][0].set_value("numpy")
+    [b for b in at.button if "Iniciar" in b.label][0].click().run()
+    _espera_job(at)
+    r = at.session_state["fit_result"]
+    assert r is not None and r.settings.n_stages == 2
+    assert r.metrics["xb"]["rmse"] < 1e-2
+    [b for b in at.button if b.label == "Aplicar ao modelo"][0].click().run()
+    _sem_erros(at)
+    at.switch_page("app_pages/modelo.py").run()
+    _sem_erros(at)
+    at.switch_page("app_pages/exportar.py").run()
+    [b for b in at.button if b.label == "Preparar .zip"][0].click().run()
+    _sem_erros(at)
+    assert len(at.session_state["exp_zip"]) > 10_000
+
+
+def test_comparacao():
+    at = _app()
+    _carrega_exemplo(at, "synthetic_1stage")
+    at.switch_page("app_pages/comparacao.py").run()
+    at.pills[0].set_value([1, 2]).run()
+    [w for w in at.number_input if w.label == "Runs por N"][0].set_value(1)
+    [w for w in at.number_input if w.label == "Folds da validação cruzada"][0].set_value(3)
+    [w for w in at.number_input if w.label == "Partículas"][0].set_value(40)
+    [w for w in at.number_input if w.label == "Iterações"][0].set_value(150)
+    [s for s in at.selectbox if s.label == "Backend"][0].set_value("numpy")
+    [b for b in at.button if b.label == "Comparar"][0].click().run()
+    _espera_job(at)
+    res = at.session_state["compare_result"]
+    assert res is not None and {1, 2} == set(res["results"])
+    assert res["recommended"] == 1
