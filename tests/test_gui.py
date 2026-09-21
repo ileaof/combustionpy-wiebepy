@@ -27,6 +27,7 @@ def _sem_erros(at):
 
 def _carrega_exemplo(at, nome="synthetic_2stage"):
     at.switch_page("app_pages/dados.py").run()
+    at.segmented_control(key="tipo_dado").set_value("xb").run()
     at.segmented_control(key="fonte_dados").set_value("Exemplo sintético").run()
     at.selectbox[0].set_value(nome).run()
     [b for b in at.button if b.label == "Carregar exemplo"][0].click().run()
@@ -59,6 +60,7 @@ def test_botao_ajuda_abre_help():
 
 def test_modelo_edita_e_valida():
     at = _app()
+    at.session_state["mode"] = "xb"
     at.switch_page("app_pages/modelo.py").run()
     at.segmented_control(key="modelo_n").set_value(4).run()
     _sem_erros(at)
@@ -112,11 +114,14 @@ def test_comparacao():
 # ---------------------------------------------------------------------------
 def _carrega_ensaio(at):
     at.switch_page("app_pages/dados.py").run()
-    at.segmented_control(key="tipo_dado").set_value("pressure").run()
-    at.segmented_control(key="p_origem").set_value("Ensaio de exemplo").run()
-    [b for b in at.button if b.label == "Carregar pressão"][0].click().run()
+    assert at.session_state["mode"] == "pressure"         # tipo padrão
+    at.button(key="p_exemplo").click().run()
     _sem_erros(at)
     assert at.session_state["pdata"].n == 459
+    labels = [w.label for w in at.selectbox] + [w.label for w in at.number_input]
+    for rotulo in ("Separador", "Cabeçalho", "Unidade do ângulo",
+                   "Unidade da pressão", "θ mín [rad]", "θ máx [rad]"):
+        assert rotulo in labels, rotulo
 
 
 def test_modo_pressao_ajuste_e_paginas():
@@ -139,7 +144,25 @@ def test_modo_pressao_ajuste_e_paginas():
         _sem_erros(at)
 
 
-def test_pressao_no_modo_xb_da_erro_claro():
+@pytest.mark.parametrize("texto, sep, cab", [
+    ("-2.0\t1.2\n-1.9\t1.3\n-1.8\t1.5\n", "auto", "auto"),
+    ("theta;P\n-2.0;1.2\n-1.9;1.3\n-1.8;1.5\n", "auto", "auto"),
+    ("ang,p,t\n-2.0,1.2,300\n-1.9,1.3,301\n-1.8,1.5,302\n", ",", "sim"),
+    ("# comentario\n-2.0 1.2\n-1.9 1.3\n-1.8 1.5\n", "espaços/tab", "não"),
+])
+def test_leitura_pressao_formatos(texto, sep, cab):
+    from wiebepy.gui.pressure_ui import _ler_tabela
+    df = _ler_tabela(texto.encode(), sep, cab)
+    assert df.shape[0] == 3 and df.shape[1] >= 2
+    assert float(df.iloc[0, 0]) == -2.0 and float(df.iloc[2, 1]) == 1.5
+
+
+def test_modelo_modo_pressao_simula():
     at = _app()
-    at.switch_page("app_pages/dados.py").run()
-    assert at.session_state["mode"] == "xb"
+    _carrega_ensaio(at)
+    at.switch_page("app_pages/modelo.py").run()
+    _sem_erros(at)
+    at.segmented_control(key="pmodelo_n").set_value(3).run()
+    _sem_erros(at)
+    assert len(at.session_state["pmodel"]["stages"]) == 3
+    assert any(m.label == "RMSE [kPa]" for m in at.metric)

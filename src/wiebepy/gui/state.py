@@ -50,7 +50,7 @@ def init_state() -> None:
     st.session_state.setdefault("bench", None)           # DataFrame
     # modo pressão (ajuste da curva de pressão do cilindro)
     from ..pressure.engine import EngineConfig
-    st.session_state.setdefault("mode", "xb")            # xb | pressure
+    st.session_state.setdefault("mode", "pressure")      # pressure | xb
     st.session_state.setdefault("pdata", None)           # PressureData
     st.session_state.setdefault("engine", EngineConfig())
     st.session_state.setdefault("pmodel", None)          # {"Rc", "stages"}

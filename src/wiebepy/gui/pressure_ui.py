@@ -43,84 +43,152 @@ def _exemplo_path():
 # =============================================================================
 # Dados
 # =============================================================================
-def dados() -> None:
-    st.caption("Arquivo com duas colunas: ângulo do virabrequim e pressão do "
-               "cilindro (θ = 0 no PMS de combustão). O ajuste segue a mesma "
-               "abordagem do Double Wiebe, com 1 a 5 estágios de liberação de "
-               "calor.")
-    with st.container(border=True):
-        with st.container(horizontal=True):
-            ang = st.segmented_control("Unidade do ângulo no arquivo",
-                                       ["rad", "deg"], default="rad",
-                                       key="p_ang",
-                                       format_func=lambda u: "radianos" if u == "rad" else "graus")
-            pun = st.segmented_control("Unidade da pressão",
-                                       list(PRESSURE_FACTORS_KPA), default="bar",
-                                       key="p_un")
-        with st.container(horizontal=True):
-            tmin = st.number_input("θ mínimo usado [°]", value=-114.59,
-                                   format="%.2f", key="p_tmin",
-                                   help="Janela do ajuste (padrão = −2 a 2 rad, "
-                                        "a mesma do Double Wiebe).")
-            tmax = st.number_input("θ máximo usado [°]", value=114.59,
-                                   format="%.2f", key="p_tmax")
-        origem = st.segmented_control("Origem", ["Arquivo", "Ensaio de exemplo"],
-                                      default="Arquivo", key="p_origem")
-        arq = None
-        if origem == "Arquivo":
-            arq = st.file_uploader("Arquivo de pressão",
-                                   type=["txt", "csv", "dat", "tsv"], key="p_upl")
-        else:
-            st.caption("Ensaio real P_exp-Carga-3_45% (θ em rad, P em bar), o "
-                       "mesmo usado no Double Wiebe.")
-        carregar = st.button("Carregar pressão", type="primary",
-                             icon=":material/upload:",
-                             disabled=(origem == "Arquivo" and arq is None)
-                             or (origem != "Arquivo" and _exemplo_path() is None))
-    motor()
-    if carregar:
+SEPARADORES = {"auto": None, "espaços/tab": r"\s+", ",": ",", ";": ";",
+               "tab": "\t"}
+
+
+def _ler_tabela(conteudo: bytes, sep: str, cabecalho: str) -> pd.DataFrame:
+    """Lê θ, P (e outras colunas) como o Double Wiebe: separador e cabeçalho
+    configuráveis; linhas iniciadas por # são comentários."""
+    texto = conteudo.decode("utf-8-sig", errors="replace")
+    linhas = [l for l in texto.splitlines()
+              if l.strip() and not l.lstrip().startswith("#")]
+    if not linhas:
+        raise ValueError("arquivo vazio")
+    if cabecalho == "auto":
+        primeira = linhas[0].replace(",", " ").replace(";", " ").split()
         try:
-            if origem == "Arquivo":
-                bruto = arq.getvalue().decode("utf-8-sig")
-                nome = arq.name
+            [float(v) for v in primeira]
+            tem = False
+        except ValueError:
+            tem = True
+    else:
+        tem = cabecalho == "sim"
+    sep_real = SEPARADORES[sep]
+    if sep_real is None:                      # auto: vírgula, ; , tab ou espaços
+        amostra = linhas[min(1, len(linhas) - 1)]
+        sep_real = next((c for c in (";", "\t", ",") if c in amostra), r"\s+")
+    df = pd.read_csv(io.StringIO("\n".join(linhas)), sep=sep_real,
+                     engine="python", header=0 if tem else None)
+    if not tem:
+        df.columns = [f"coluna {i}" for i in range(df.shape[1])]
+    if df.shape[1] < 2:
+        raise ValueError("são necessárias ao menos 2 colunas (ângulo e "
+                         "pressão); confira o separador")
+    return df
+
+
+def dados() -> None:
+    st.subheader("Pressão × ângulo (ensaio)", anchor=False)
+    st.caption("Mesma entrada do Single/Double Wiebe: arquivo .txt/.csv/.tsv "
+               "com o ângulo do virabrequim (θ = 0 no PMS de combustão) e a "
+               "pressão do cilindro. Convertido internamente para rad e kPa.")
+    c1, c2, c3 = st.columns([2, 1, 1])
+    arq = c1.file_uploader("Arquivo de pressão",
+                           type=["txt", "csv", "tsv", "dat"], key="p_upl")
+    sep = c2.selectbox("Separador", list(SEPARADORES), key="p_sep")
+    cab = c3.selectbox("Cabeçalho", ["auto", "sim", "não"], key="p_cab")
+    c4, c5, c6, c7 = st.columns(4)
+    ang = c4.selectbox("Unidade do ângulo", ["radianos", "graus"], key="p_ang")
+    pun = c5.selectbox("Unidade da pressão", ["bar", "kPa", "Pa", "MPa"],
+                       key="p_un")
+    tmin = c6.number_input("θ mín [rad]", value=-2.0, key="p_tmin")
+    tmax = c7.number_input("θ máx [rad]", value=2.0, key="p_tmax")
+    with st.container(horizontal=True, vertical_alignment="center"):
+        exemplo = st.button("Carregar dados de exemplo", key="p_exemplo",
+                            icon=":material/science:",
+                            disabled=_exemplo_path() is None,
+                            help="Ensaio real P_exp-Carga-3_45% (θ em rad, P "
+                                 "em bar), o mesmo do Single/Double Wiebe.")
+        st.caption("Sem arquivo? Use o ensaio de exemplo.")
+
+    fonte = None
+    if exemplo:
+        fonte = (_exemplo_path().name, _exemplo_path().read_bytes(),
+                 "radianos", "bar")
+    elif arq is not None:
+        fonte = (arq.name, arq.getvalue(), ang, pun)
+
+    if fonte is not None:
+        nome, conteudo, u_ang, u_p = fonte
+        try:
+            df = _ler_tabela(conteudo, "auto" if exemplo else sep,
+                             "auto" if exemplo else cab)
+            n_cols = df.shape[1]
+            if exemplo:
+                col_a, col_p = 0, 1
             else:
-                bruto = _exemplo_path().read_text(encoding="utf-8")
-                nome = _exemplo_path().name
-                ang, pun = "rad", "bar"
-            from ..io.readers import _parse_table
-            cols = _parse_table(bruto, nome)
-            chaves = list(cols)
-            th = cols.get("theta", cols[chaves[0]])
-            P = cols[[k for k in chaves if k != "theta"][0]]
-            d = pressure_from_arrays(th, P, ang or "rad", pun or "bar",
-                                     (tmin or -114.59) * G, (tmax or 114.59) * G,
-                                     nome)
+                ca, cp = st.columns(2)
+                col_a = ca.number_input("Coluna do ângulo (0 = primeira)", 0,
+                                        n_cols - 1, 0, key="p_col_a")
+                col_p = cp.number_input("Coluna da pressão", 0, n_cols - 1,
+                                        min(1, n_cols - 1), key="p_col_p")
+            bruto = df.iloc[:, [int(col_a), int(col_p)]].apply(
+                pd.to_numeric, errors="coerce")
+            validos = bruto.dropna()
+            th = validos.iloc[:, 0].to_numpy(float)
+            P = validos.iloc[:, 1].to_numpy(float)
+            fator = 1.0 if u_ang == "radianos" else G
+            dentro = (th * fator >= tmin) & (th * fator <= tmax)
+            d = pressure_from_arrays(th, P, "rad" if u_ang == "radianos"
+                                     else "deg", u_p, tmin, tmax, nome)
         except (ValueError, IndexError, KeyError) as e:
-            st.error(f"Não foi possível ler a pressão: {e}")
+            st.error(f"Erro nos dados: {e}")
         else:
+            anterior = st.session_state.pdata
+            nova = (anterior is None or nome != st.session_state.data_name
+                    or d.n != anterior.n or not np.allclose(d.P, anterior.P))
             st.session_state.pdata = d
             st.session_state.mode = "pressure"
             st.session_state.data_name = nome
-            st.session_state.pmodel = None
-            st.rerun()
+            st.session_state.p_resumo = {
+                "descartadas": int(len(bruto) - len(validos)),
+                "fora": int((~dentro).sum()), "preview": df.head(15)}
+            if nova:
+                st.session_state.pmodel = None
+                st.session_state.pfit_result = None
+                st.session_state.pcompare_result = None
+            if exemplo:
+                st.success(f"Dados de exemplo carregados: {nome} "
+                           f"({d.n} observações).")
 
+    motor()
     d = st.session_state.pdata
     if d is None:
-        st.info("Nenhuma curva de pressão carregada.", icon=":material/info:")
+        st.info("Envie um arquivo de pressão ou clique em **Carregar dados de "
+                "exemplo**.", icon=":material/info:")
         return
+    res = st.session_state.get("p_resumo") or {}
+    st.info(f"Dados ativos: **{st.session_state.data_name}** — "
+            f"{d.n} observações.")
     with st.container(horizontal=True):
-        st.metric("Pontos", d.n, border=True)
-        st.metric("θ [°]", f"{math.degrees(d.theta[0]):.1f} … "
-                           f"{math.degrees(d.theta[-1]):.1f}", border=True)
-        st.metric("P máx [kPa]", f"{d.P.max():.0f}", border=True)
-        st.metric("θ de P máx [°]", f"{math.degrees(d.theta[np.argmax(d.P)]):.2f}",
+        st.metric("Observações", d.n, border=True)
+        st.metric("Descartadas (inválidas)", res.get("descartadas", 0),
+                  border=True)
+        st.metric("Fora do intervalo", res.get("fora", 0), border=True)
+        st.metric("P no IVC", f"{d.P[0]:.1f} kPa", border=True)
+        st.metric("P máx", f"{d.P.max():.0f} kPa @ "
+                           f"{math.degrees(d.theta[np.argmax(d.P)]):.1f}°",
                   border=True)
     for w in d.warnings:
         st.warning(w, icon=":material/warning:")
-    df = pd.DataFrame({"θ": np.degrees(d.theta), "P": d.P})
-    st.altair_chart(alt.Chart(df).mark_line().encode(
-        x=alt.X("θ:Q", title="θ [°]"), y=alt.Y("P:Q", title="P [kPa]")
-    ).properties(title="Pressão medida", height=320).interactive())
+    if d.P[0] < 5.0:
+        st.warning(f"P no IVC = {d.P[0]:.3g} kPa — muito baixa. Confira a "
+                   "**Unidade da pressão**.")
+    elif d.P[0] > 20000.0:
+        st.warning(f"P no IVC = {d.P[0]:.3g} kPa — muito alta. Confira a "
+                   "**Unidade da pressão**.")
+    df = pd.DataFrame({"θ [rad]": d.theta, "P [kPa]": d.P})
+    st.altair_chart(alt.Chart(df).mark_line(
+        point=alt.OverlayMarkDef(size=12)).encode(
+        x=alt.X("θ [rad]:Q"), y=alt.Y("P [kPa]:Q"),
+        tooltip=[alt.Tooltip("θ [rad]:Q", format=".4f"),
+                 alt.Tooltip("P [kPa]:Q", format=".1f")]
+    ).properties(title="Prévia: pressão × ângulo (após conversão e filtro)",
+                 height=360).interactive())
+    if res.get("preview") is not None:
+        with st.expander("Prévia do arquivo (15 primeiras linhas)"):
+            st.dataframe(res["preview"])
 
 
 def motor() -> EngineConfig:

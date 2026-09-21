@@ -9,8 +9,8 @@ from wiebepy.gui import state as S
 from wiebepy.io.readers import read_data
 
 st.header("Dados experimentais", anchor=False)
-TIPOS = {"xb": "Fração queimada (x_b, dx_b/dθ)",
-         "pressure": "Pressão do cilindro (ensaio)"}
+TIPOS = {"pressure": "Pressão × ângulo (ensaio)",
+         "xb": "Fração queimada x_b(θ)"}
 tipo = st.segmented_control("Tipo de dado", list(TIPOS), format_func=TIPOS.get,
                             default=st.session_state.mode, key="tipo_dado")
 tipo = tipo or st.session_state.mode
