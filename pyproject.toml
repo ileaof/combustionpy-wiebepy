@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wiebepy"
+version = "1.0.0"
+description = "Funções Wiebe de 1 a 5 estágios: avaliação, derivada analítica, ajuste (PSO), comparação de modelos e execução serial/paralela/GPU"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "L. Queiroz / I. L. Ferreira" }]
+keywords = ["wiebe", "combustion", "mass fraction burned", "pso", "gpu"]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+numba = ["numba>=0.59"]            # kernels compilados (CPU)
+gpu = ["cupy-cuda12x>=13.0"]       # GPU NVIDIA (opcional)
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+wiebepy = "wiebepy.cli.parser:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: testes longos (ajustes completos, multiprocessing)",
+    "gpu: requer CuPy e GPU NVIDIA",
+]
