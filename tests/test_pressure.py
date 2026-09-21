@@ -147,7 +147,7 @@ def test_cli_modo_pressao(tmp_path):
                   "30", "--iterations", "80", "--quiet", "--save-plots",
                   "--output", str(tmp_path)]) == 0
     for f in ("results.csv", "parameters.csv", "metrics.csv", "results.json",
-              "run_statistics.csv", "plots/pressure.png",
+              "run_statistics.csv", "report.html", "plots/pressure.png",
               "plots/pv_diagram.png", "plots/pv_diagram_loglog.png",
               "plots/heat_release.png", "plots/temperature.png",
               "plots/heat_loss.png", "plots/volume.png"):
@@ -158,3 +158,30 @@ def test_cli_modo_pressao(tmp_path):
         assert col in cab
     assert _main(["--input", str(ENSAIO), "--input-type", "pressure",
                   "--quiet", "--output", str(tmp_path / "x")]) == 2
+
+
+def test_relatorio_html_completo(ensaio):
+    from wiebepy.pressure.html_report import indicators, report_html
+    r = fit_pressure(ensaio, PressureSettings(n_stages=2, runs=1, particles=30,
+                                              iterations=80, seed=2))
+    h = report_html(r, ensaio)
+    for secao in ("Motor e constantes", "Modelo ajustado",
+                  "Coeficientes do modelo",
+                  "Configuração do ajuste", "Métricas de ajuste",
+                  "Indicadores termodinâmicos", "Runs", "Avisos", "Gráficos"):
+        assert f"<h2>{secao}" in h, secao
+    for constante in ("diâmetro", "curso", "biela", "Vd", "Rc", "rotação",
+                      "PCI", "Q_total", "κ", "T1", "Tw", "Hohenberg"):
+        assert constante in h, constante
+    assert h.count("data:image/png;base64,") == 10
+    for coef in ("constante de Hohenberg", "expoente do volume",
+                 "expoente da pressão", "expoente da temperatura",
+                 "acréscimo à velocidade do pistão", "rtol / atol",
+                 "Vetor de parâmetros ajustados", "limite inferior"):
+        assert coef in h, coef
+    for nome in r.param.names:
+        assert f"<td>{nome}</td>" in h, nome
+    ind = indicators(r, ensaio)
+    assert 1000 < ind["T_max [K]"] < 3000
+    assert ind["CA10 [°]"] < ind["CA50 [°]"] < ind["CA90 [°]"]
+    assert ind["x_b em θ_final [-]"] == pytest.approx(1.0, abs=1e-6)

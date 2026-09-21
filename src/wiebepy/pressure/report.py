@@ -10,6 +10,8 @@ report.py — Arquivos de saída do modo pressão (usados pela CLI e pela GUI).
     warnings.txt     avisos
     results.json     tudo acima
     comparison.csv   (comparação 1..5)
+    report.html      relatório completo autocontido (constantes, modelo,
+                     métricas, indicadores, runs, avisos e todos os gráficos)
     plots/*.png      pressão medida × simulada, diagrama P–V (modelo ×
                      experimental), resíduo, fração queimada, taxa de
                      liberação de calor [kJ/rad] por estágio, temperatura
@@ -88,6 +90,10 @@ def write_outputs(outdir, r, d, comp: Optional[Dict] = None,
              ([l[c] for c in cab] for l in comp["table"]))
     if plots:
         _plots(out / "plots", r, d, st_deg)
+    from .html_report import report_html
+    (out / "report.html").write_text(
+        report_html(r, d, comp, out / "plots" if plots else None),
+        encoding="utf-8")
     return out
 
 

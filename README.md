@@ -286,6 +286,17 @@ provavelmente supérfluo).
 Arquivos de x_b com valores acima de 1.5 são recusados com a indicação de
 usar o modo pressão.
 
+**Relatório HTML completo** (`report.html`, gerado junto com os resultados na
+CLI e pelo botão *Gerar relatório HTML* na GUI): arquivo único com o motor e
+todas as constantes, os coeficientes do modelo (Hohenberg, balanço de
+energia, integradores, coeficientes Wiebe de cada estágio e o vetor de
+parâmetros ajustados com limites), a configuração do ajuste, as métricas,
+indicadores termodinâmicos (P e T máximas, CA10/50/90, calores, trabalho
+indicado e IMEP na janela), runs, avisos, a comparação (se houver) e os 10
+gráficos (pressão, P–V linear e log-log, resíduo, taxa de liberação de calor
+por estágio, fração queimada, taxa normalizada, temperatura, calor perdido e
+volume).
+
 ## 6. Otimização
 
 **Parametrização do espaço de busca** (caixa, adequada ao PSO; $k = 4N-1$,

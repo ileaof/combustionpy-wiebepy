@@ -520,9 +520,12 @@ def ajuste() -> None:
     df, _ = tabela(r.Rc, r.stages)
     st.dataframe(df, hide_index=True, column_config={
         c: st.column_config.NumberColumn(format="%.5g") for c in df.columns[1:]})
-    if st.button("Aplicar ao modelo", icon=":material/check:", key="pa_aplicar"):
-        aplicar(r.Rc, r.stages)
-        st.toast("Parâmetros aplicados à página Modelo.")
+    with st.container(horizontal=True):
+        if st.button("Aplicar ao modelo", icon=":material/check:",
+                     key="pa_aplicar"):
+            aplicar(r.Rc, r.stages)
+            st.toast("Parâmetros aplicados à página Modelo.")
+        botao_relatorio(r, d, None, "pa_rel")
     if r.warnings:
         with st.expander(f"Avisos ({len(r.warnings)})", icon=":material/warning:"):
             for w in r.warnings:
@@ -534,6 +537,21 @@ def ajuste() -> None:
                                    "pv_ajuste"))
     g00.altair_chart(grafico_residuo(d, r.P_sim))
     painel_termico(d, r.stages, r.Rc, r.settings.engine, r.Tg, r.Q_wall)
+
+
+def botao_relatorio(r, d, comp, chave: str) -> None:
+    """Gera (sob demanda) e oferece o relatório HTML completo."""
+    from ..pressure.html_report import report_html
+    alvo = f"_rel_{chave}"
+    if st.button("Gerar relatório HTML", icon=":material/description:",
+                 key=f"{chave}_gerar"):
+        with st.spinner("Gerando relatório (gráficos incluídos)…"):
+            st.session_state[alvo] = report_html(r, d, comp).encode("utf-8")
+    if st.session_state.get(alvo):
+        st.download_button("Baixar relatório HTML", st.session_state[alvo],
+                           file_name=f"relatorio_pressao_{r.settings.n_stages}"
+                                     f"wiebe.html", mime="text/html",
+                           icon=":material/download:", key=f"{chave}_baixar")
 
 
 def painel(tipo: str, destino: str) -> None:
@@ -666,7 +684,13 @@ def exportar() -> None:
     st.caption(f"{alvo.settings.n_stages}-Wiebe · Rc = {alvo.Rc:.4f} · "
                f"RMSE = {alvo.metrics.get('rmse', float('nan')):.3f} kPa")
     st.dataframe(df, hide_index=True)
-    if st.button("Preparar .zip", type="primary", icon=":material/folder_zip:"):
+    st.caption("O .zip inclui report.html (relatório completo com todas as "
+               "constantes e gráficos), CSVs, results.json e plots/*.png.")
+    with st.container(horizontal=True):
+        preparar = st.button("Preparar .zip", type="primary",
+                             icon=":material/folder_zip:")
+        botao_relatorio(alvo, d, comp, "exp_rel")
+    if preparar:
         st.session_state.exp_pzip = zip_pressao(alvo, d, comp)
     if st.session_state.get("exp_pzip"):
         st.download_button("Baixar resultados_pressao.zip", st.session_state.exp_pzip,

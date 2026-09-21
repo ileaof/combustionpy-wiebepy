@@ -140,6 +140,10 @@ def test_modo_pressao_ajuste_e_paginas():
     assert any(t.key == "pv_ajuste_log" for t in at.toggle)   # diagrama P–V
     at.toggle(key="pv_ajuste_log").set_value(True).run()
     _sem_erros(at)
+    at.button(key="pa_rel_gerar").click().run()               # relatório HTML
+    _sem_erros(at)
+    rel = at.session_state["_rel_pa_rel"]
+    assert rel.startswith(b"<!DOCTYPE html>") and b"Motor e constantes" in rel
     [b for b in at.button if b.key == "pa_aplicar"][0].click().run()
     for p in ("app_pages/modelo.py", "app_pages/exportar.py",
               "app_pages/comparacao.py"):
