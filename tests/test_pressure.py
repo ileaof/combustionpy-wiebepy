@@ -147,7 +147,8 @@ def test_cli_modo_pressao(tmp_path):
                   "30", "--iterations", "80", "--quiet", "--save-plots",
                   "--output", str(tmp_path)]) == 0
     for f in ("results.csv", "parameters.csv", "metrics.csv", "results.json",
-              "run_statistics.csv", "plots/pressure.png"):
+              "run_statistics.csv", "plots/pressure.png",
+              "plots/pv_diagram.png", "plots/pv_diagram_loglog.png"):
         assert (tmp_path / f).exists(), f
     assert _main(["--input", str(ENSAIO), "--input-type", "pressure",
                   "--quiet", "--output", str(tmp_path / "x")]) == 2

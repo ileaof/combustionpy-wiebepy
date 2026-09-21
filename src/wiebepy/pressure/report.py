@@ -10,7 +10,8 @@ report.py — Arquivos de saída do modo pressão (usados pela CLI e pela GUI).
     warnings.txt     avisos
     results.json     tudo acima
     comparison.csv   (comparação 1..5)
-    plots/*.png      pressão medida × simulada, resíduo, x_b e taxa de queima
+    plots/*.png      pressão medida × simulada, diagrama P–V (modelo ×
+                     experimental), resíduo, x_b e taxa de queima
 """
 from __future__ import annotations
 
@@ -49,10 +50,12 @@ def write_outputs(outdir, r, d, comp: Optional[Dict] = None,
     st_deg = _graus(r.stages)
     xb = multistage_wiebe(thd, st_deg)
     dxb = multistage_wiebe_derivative(thd, st_deg)
+    from .engine import volume
+    V = volume(d.theta, r.Rc, r.settings.engine)[0]
     _csv(out / "results.csv",
-         ["theta_rad", "theta_deg", "P_exp_kPa", "P_sim_kPa", "residual_kPa",
-          "Tg_K", "xb", "dxb_dtheta_per_deg"],
-         zip(d.theta, thd, d.P, r.P_sim, r.P_sim - d.P, r.Tg, xb, dxb))
+         ["theta_rad", "theta_deg", "V_m3", "P_exp_kPa", "P_sim_kPa",
+          "residual_kPa", "Tg_K", "xb", "dxb_dtheta_per_deg"],
+         zip(d.theta, thd, V, d.P, r.P_sim, r.P_sim - d.P, r.Tg, xb, dxb))
     _csv(out / "parameters.csv",
          ["stage", "beta", "theta0_rad", "theta0_deg", "duration_rad",
           "duration_deg", "m", "a"],
@@ -94,6 +97,19 @@ def _plots(pasta: Path, r, d, st_deg):
            title=f"Pressão — RMSE {r.metrics.get('rmse', float('nan')):.2f} kPa")
     ax.grid(alpha=0.3); ax.legend(); f.tight_layout()
     f.savefig(pasta / "pressure.png", dpi=150); plt.close(f)
+    from .engine import volume
+    V = volume(d.theta, r.Rc, r.settings.engine)[0] * 1e6
+    for sufixo, log in (("", False), ("_loglog", True)):
+        f, ax = plt.subplots(figsize=(6.5, 5))
+        ax.plot(V, d.P, "+", ms=5, color="0.35", label="experimental")
+        ax.plot(V, r.P_sim, "r-", lw=1.5,
+                label=f"modelo ({r.settings.n_stages}-Wiebe, Rc {r.Rc:.3f})")
+        if log:
+            ax.set_xscale("log"); ax.set_yscale("log")
+        ax.set(xlabel="Volume [cm³]", ylabel="P [kPa]",
+               title="Diagrama P–V" + (" (log-log)" if log else ""))
+        ax.grid(alpha=0.3, which="both"); ax.legend(); f.tight_layout()
+        f.savefig(pasta / f"pv_diagram{sufixo}.png", dpi=150); plt.close(f)
     f, ax = plt.subplots(figsize=(7, 3.4))
     ax.plot(thd, r.P_sim - d.P, lw=1); ax.axhline(0, color="k", lw=0.8)
     ax.set(xlabel="θ [°]", ylabel="P sim − P med [kPa]", title="Resíduo")

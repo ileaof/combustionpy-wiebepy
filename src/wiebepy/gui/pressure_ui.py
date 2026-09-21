@@ -239,6 +239,36 @@ def grafico_pressao(d, P_sim):
     ).properties(title="Pressão: medida × simulada", height=340).interactive()
 
 
+def grafico_pv(d, P_sim, Rc: float, engine=None, chave: str = "pv"):
+    """Diagrama P–V: modelo (linha, na ordem de θ) × experimental (pontos),
+    volume pela geometria do motor com o Rc do modelo."""
+    from ..pressure.engine import volume
+    e = engine or st.session_state.engine
+    V = volume(d.theta, Rc, e)[0] * 1e6                     # cm³
+    log = st.toggle("Escala log-log (P–V)", value=False, key=f"{chave}_log",
+                    help="Em log-log, compressão e expansão politrópicas "
+                         "aparecem como retas (inclinação ≈ −n).")
+    esc = alt.Scale(type="log") if log else alt.Scale(zero=False)
+    df_m = pd.DataFrame({"V": V, "P": P_sim, "ordem": np.arange(V.size),
+                         "θ": np.degrees(d.theta)})
+    df_e = pd.DataFrame({"V": V, "P": d.P, "θ": np.degrees(d.theta)})
+    linha = alt.Chart(df_m).mark_line(color="#d62728", strokeWidth=1.8).encode(
+        x=alt.X("V:Q", title="Volume [cm³]", scale=esc),
+        y=alt.Y("P:Q", title="P [kPa]", scale=esc), order="ordem:Q",
+        tooltip=[alt.Tooltip("θ:Q", format=".1f", title="θ [°]"),
+                 alt.Tooltip("V:Q", format=".2f"),
+                 alt.Tooltip("P:Q", format=".1f", title="P modelo")])
+    pontos = alt.Chart(df_e).mark_point(shape="cross", size=28, color="#1d2330",
+                                        opacity=0.55).encode(
+        x="V:Q", y="P:Q",
+        tooltip=[alt.Tooltip("θ:Q", format=".1f", title="θ [°]"),
+                 alt.Tooltip("V:Q", format=".2f"),
+                 alt.Tooltip("P:Q", format=".1f", title="P medida")])
+    return (pontos + linha).properties(
+        title="Diagrama P–V: modelo (linha) × experimental (+)",
+        height=380).interactive()
+
+
 def grafico_residuo(d, P_sim):
     df = pd.DataFrame({"θ": np.degrees(d.theta), "resíduo": P_sim - d.P})
     return (alt.Chart(df).mark_line().encode(
@@ -341,6 +371,7 @@ def modelo() -> None:
                           f"{m['P_max_sim_kPa']:.0f} / {m['P_max_exp_kPa']:.0f}",
                           border=True)
             st.altair_chart(grafico_pressao(d, P_sim))
+            st.altair_chart(grafico_pv(d, P_sim, rc, e, "pv_modelo"))
     g1, g2 = st.columns(2)
     if d is not None:
         a, b = graficos_queima(d, stages)
@@ -449,7 +480,11 @@ def ajuste() -> None:
             for w in r.warnings:
                 st.markdown(f"- `{w}`")
     st.altair_chart(grafico_pressao(d, r.P_sim))
-    st.altair_chart(grafico_residuo(d, r.P_sim))
+    g0, g00 = st.columns(2)
+    with g0:
+        st.altair_chart(grafico_pv(d, r.P_sim, r.Rc, r.settings.engine,
+                                   "pv_ajuste"))
+    g00.altair_chart(grafico_residuo(d, r.P_sim))
     a, b = graficos_queima(d, r.stages)
     g1, g2 = st.columns(2)
     g1.altair_chart(a)
@@ -554,6 +589,8 @@ def comparacao() -> None:
                 st.session_state.pfit_result = r
                 st.toast("Disponível na página Ajuste.")
         st.altair_chart(grafico_pressao(d, r.P_sim))
+        st.altair_chart(grafico_pv(d, r.P_sim, r.Rc, r.settings.engine,
+                                   "pv_comp"))
 
 
 # =============================================================================

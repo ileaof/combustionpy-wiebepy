@@ -137,6 +137,9 @@ def test_modo_pressao_ajuste_e_paginas():
     _espera_job(at)
     r = at.session_state["pfit_result"]
     assert r is not None and r.metrics["r2"] > 0.99
+    assert any(t.key == "pv_ajuste_log" for t in at.toggle)   # diagrama P–V
+    at.toggle(key="pv_ajuste_log").set_value(True).run()
+    _sem_erros(at)
     [b for b in at.button if b.key == "pa_aplicar"][0].click().run()
     for p in ("app_pages/modelo.py", "app_pages/exportar.py",
               "app_pages/comparacao.py"):
@@ -166,3 +169,4 @@ def test_modelo_modo_pressao_simula():
     _sem_erros(at)
     assert len(at.session_state["pmodel"]["stages"]) == 3
     assert any(m.label == "RMSE [kPa]" for m in at.metric)
+    assert any(t.key == "pv_modelo_log" for t in at.toggle)
