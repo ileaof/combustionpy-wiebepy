@@ -1,0 +1,15 @@
+fuels:
+  C3H8:
+    name: C3H8
+    display: Propano
+    formula: C3H8 (substância pura)
+    phase: gas
+    feed: premixed_gas (vaporizado)
+    LHV_kJ_per_kg: 46350.0
+    LHV_source: NIST WebBook / valor usual 46,35 MJ/kg (LHV, 25 °C)
+    stoich_AFR: 15.7
+    molar_mass_kg_per_kmol: 44.096
+    remarks: 'Cadastrado via GUI/CLI a pedido do usuário. Modo prescrito: entra apenas
+      via m_f·PCI.'
+    validity: Referência de PCI a 25 °C.
+    mechanism: null
