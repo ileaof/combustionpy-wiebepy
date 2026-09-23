@@ -293,6 +293,48 @@ model.save("model.json")</code></pre>
     <li><strong>Executar</strong> → log do solver ao vivo; <strong>Cancelar execução</strong> interrompe inclusive os processos MPI, preservando logs e resultados parciais. <em>Processo terminou ≠ convergiu</em>: confira o fechamento de energia no relatório.</li>
     <li><strong>Relatório HTML</strong> → arquivo autônomo com proveniência completa (versões, parâmetros, malha, limites científicos) e os resultados p̄×θ, T̄×θ, trabalho indicado, perda às paredes e balanço de energia. Os resultados nunca são apresentados como predição independente de combustão — a fonte é a Wiebe prescrita.</li>
   </ol>
+  <h3>Rodando um exemplo — caso de referência (case_006)</h3>
+  <p>Para rodar um exemplo você só <strong>edita um arquivo</strong>; os
+  outros dois são referenciados por ele. Os 3 arquivos que entram em
+  jogo:</p>
+  <table>
+    <tr><th>Arquivo</th><th>Papel</th><th>Você edita?</th></tr>
+    <tr><td><code>examples/config_cfd_equivalencia.yaml</code></td>
+        <td>Config do caso (motor + CFD) — é o único que o CLI recebe</td>
+        <td>Só se quiser um diretório novo — senão usa <code>--output</code></td></tr>
+    <tr><td><code>examples/model_cfd_calibrated.json</code></td>
+        <td>Fonte Wiebe — já apontado dentro da config (<code>wiebe.model</code>)</td>
+        <td>Não</td></tr>
+    <tr><td><code>examples/data/ensaio_P_exp_carga3_45.txt</code></td>
+        <td>Ensaio experimental para o diagnóstico — já apontado (<code>comparison.experimental</code>)</td>
+        <td>Não</td></tr>
+  </table>
+  <p>A sequência (4 comandos + 1 verificação):</p>
+  <pre><code>wiebepy cfd doctor                <em># 0. uma vez: confere WSL2 + OpenFOAM 13</em>
+wiebepy cfd prepare  --config examples/config_cfd_equivalencia.yaml \
+    --output results/cfd/meu_caso   <em># 1. gera o caso (NÃO executa)</em>
+wiebepy cfd validate --case results/cfd/meu_caso   <em># 2. valida</em>
+wiebepy cfd run      --case results/cfd/meu_caso   <em># 3. executa (WSL2/OpenFOAM; ~2-3 min na malha 24x36)</em>
+wiebepy cfd report   --case results/cfd/meu_caso   <em># 4. relatório HTML com p×θ, p×V e comparação com o ensaio</em></code></pre>
+  <p>O <code>--output</code> sobrescreve o <code>case_directory</code> da
+  config — assim você não toca em arquivo nenhum e não sobrescreve o
+  case_006 arquivado. O que cada comando produz:</p>
+  <ul>
+    <li><code>prepare</code> → <code>results/cfd/meu_caso/</code> completo (<code>system/</code>, <code>constant/</code>, <code>0/</code>, <code>case_config.yaml</code> — este último registra TUDO: procedência da fonte, propriedades, energia, hipóteses); você pode inspecionar antes de rodar.</li>
+    <li><code>validate</code> → estado do caso vira <em>Validado</em> (só caso validado executa — é o gate que já impediu erros de caminho no case_013).</li>
+    <li><code>run</code> → <code>logs/foamRun.log</code>, séries em <code>postProcessing/</code>, estado <em>Concluído</em>.</li>
+    <li><code>report</code> → <code>report.html</code> dentro do diretório do caso — é esse que você abre no navegador.</li>
+  </ul>
+  <p>Variantes úteis sem editar arquivo:</p>
+  <ul>
+    <li><strong>Sem combustão (motored)</strong>: acrescente <code>--no-heat</code> ao <code>prepare</code>.</li>
+    <li><strong>Multicomponente (R1)</strong>: precisa de config própria — copie <code>examples/config_cfd_multicomponent.yaml</code> (já tem <code>gas.model: multicomponent_inert</code>).</li>
+    <li><strong>GUI</strong>: <code>streamlit run src/wiebepy/gui/app.py</code> → aba CFD já abre casada com o case_006; os botões são os mesmos quatro passos.</li>
+  </ul>
+  <p><em>Lembrete de leitura do resultado</em>: o <code>report.html</code>
+  compara com o ensaio de forma <strong>diagnóstica</strong> (mesma
+  rotação, mesma energia) — o que ele diz é onde o modelo diverge do
+  ensaio e por quê, não "o modelo foi validado".</p>
   <p>O modo reativo (combustão com mecanismo químico) está <strong>adiado
   para uma etapa posterior</strong> — não é proibido: aparece como
   indisponível até a implementação própria e nunca é substituído

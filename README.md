@@ -332,6 +332,67 @@ wiebepy cfd status   --case results/cfd/case_001   # cancel/status/report idem
 wiebepy cfd report   --case results/cfd/case_001   # relatório HTML autônomo
 ```
 
+#### Rodando um exemplo — caso de referência (case_006)
+
+Para rodar um exemplo você só **edita um arquivo**; os outros dois são
+referenciados por ele. Os 3 arquivos que entram em jogo:
+
+| Arquivo | Papel | Você edita? |
+|---|---|---|
+| `examples/config_cfd_equivalencia.yaml` | Config do caso (motor + CFD) — é o único que o CLI recebe | Só se quiser um diretório novo — senão usa `--output` |
+| `examples/model_cfd_calibrated.json` | Fonte Wiebe — já apontado dentro da config (`wiebe.model`) | Não |
+| `examples/data/ensaio_P_exp_carga3_45.txt` | Ensaio experimental para o diagnóstico — já apontado (`comparison.experimental`) | Não |
+
+A sequência (4 comandos + 1 verificação):
+
+```bash
+# 0. uma vez: confere WSL2 + OpenFOAM 13
+wiebepy cfd doctor
+
+# 1. gera o caso OpenFOAM para inspeção (NÃO executa)
+wiebepy cfd prepare  --config examples/config_cfd_equivalencia.yaml \
+    --output results/cfd/meu_caso
+
+# 2. valida o caso gerado
+wiebepy cfd validate --case results/cfd/meu_caso
+
+# 3. executa (WSL2/OpenFOAM; ~2–3 min na malha 24×36)
+wiebepy cfd run      --case results/cfd/meu_caso
+
+# 4. relatório HTML com p×θ, p×V e comparação com o ensaio
+wiebepy cfd report   --case results/cfd/meu_caso
+```
+
+O `--output` sobrescreve o `case_directory` da config — assim você não
+toca em arquivo nenhum e não sobrescreve o case_006 arquivado.
+
+O que cada comando produz:
+
+- `prepare` → `results/cfd/meu_caso/` completo (`system/`, `constant/`,
+  `0/`, `case_config.yaml` — este último registra TUDO: procedência da
+  fonte, propriedades, energia, hipóteses); você pode inspecionar antes
+  de rodar.
+- `validate` → estado do caso vira VALIDATED (só caso validado executa —
+  é o gate que já impediu erros de caminho no case_013).
+- `run` → `logs/foamRun.log`, séries em `postProcessing/`, estado
+  COMPLETED.
+- `report` → `report.html` dentro do diretório do caso — é esse que você
+  abre no navegador.
+
+Variantes úteis sem editar arquivo:
+
+- **Sem combustão (motored)**: acrescente `--no-heat` ao `prepare`.
+- **Multicomponente (R1)**: precisa de config própria — copie
+  `examples/config_cfd_multicomponent.yaml` (já tem
+  `gas.model: multicomponent_inert`).
+- **GUI**: `streamlit run src/wiebepy/gui/app.py` → aba CFD já abre
+  casada com o case_006; os botões são os mesmos quatro passos.
+
+Lembrete de leitura do resultado: o `report.html` compara com o ensaio
+de forma **diagnóstica** (mesma rotação, mesma energia) — o que ele diz
+é onde o modelo diverge do ensaio e por quê, não "o modelo foi
+validado".
+
 #### Instalação das dependências CFD (WSL2 + OpenFOAM 13)
 
 O **solver não vem do pip** — `pip install -e ".[cfd]"` instala só
