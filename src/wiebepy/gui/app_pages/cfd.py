@@ -18,6 +18,8 @@ import streamlit as st
 import yaml
 
 from wiebepy.gui import state as S
+from wiebepy.core.parameters import (A_DEFAULT, MAX_STAGES, Stage, as_stages,
+                                     default_stages, validate_stages)
 from wiebepy.cfd.fuels import fuel_names
 
 S.init_state()   # idempotente (app.py já chama; garante standalone)
@@ -55,6 +57,7 @@ def _form() -> dict:
             "fuel_name": "diesel",   # ensaio de referência: Diesel
             "wiebe_origem": "modelo atual",
             "wiebe_model": "results/model.json",
+            "wiebe_stages": None,   # None = inicializar do modelo atual (deg)
             # motor (mesmos parâmetros dos modos 0-D)
             "bore_mm": 86.0, "stroke_mm": 70.0, "rod_length_mm": 117.5,
             "Rc": 17.0, "rpm": 3396.20,
@@ -64,21 +67,48 @@ def _form() -> dict:
     return st.session_state.cfd_form
 
 
+def _estagios_fonte_deg() -> list | None:
+    """Estágios do modelo ATUAL (fonte sugerida da Wiebe prescrita),
+    convertidos para DEG. Modo pressão: pmodel (rad interno); modo xb:
+    model_stages (unidade da sessão)."""
+    if st.session_state.get("mode") == "pressure":
+        pm = st.session_state.pmodel
+        if pm and pm.get("stages"):
+            return [{"beta": float(s.beta),
+                     "theta0": math.degrees(float(s.theta0)),
+                     "duration": math.degrees(float(s.duration)),
+                     "m": float(s.m), "a": float(s.a)}
+                    for s in as_stages(pm["stages"])]
+        return None
+    ms = st.session_state.model_stages
+    if not ms:
+        return None
+    em_rad = st.session_state.angle_unit == "rad"
+    out = []
+    for s in as_stages(ms):
+        t0, du = float(s.theta0), float(s.duration)
+        if em_rad:
+            t0, du = math.degrees(t0), math.degrees(du)
+        out.append({"beta": float(s.beta), "theta0": t0, "duration": du,
+                    "m": float(s.m), "a": float(s.a)})
+    return out
+
+
 def _cfg_do_form() -> "CfdConfig":
     f = _form()
     origem = f["wiebe_origem"]
     if origem == "model.json":
         wiebe = {"source": "model", "model": f["wiebe_model"]}
-    else:  # estágios do modelo atual (unidade da GUI → deg)
-        n = len(st.session_state.model_stages or []) or 1
-        em_rad = st.session_state.angle_unit == "rad"
-        stages = []
-        for s in S.estagios_modelo(n):
-            t0, du = float(s.theta0), float(s.duration)
-            if em_rad:
-                t0, du = math.degrees(t0), math.degrees(du)
-            stages.append({"beta": float(s.beta), "theta0": t0,
-                           "duration": du, "m": float(s.m)})
+    else:  # estágios editáveis nesta página (deg) — fonte: modelo atual
+        stages = list(f.get("wiebe_stages") or [])
+        if not stages:
+            stages = _estagios_fonte_deg() or []
+        if not stages:
+            lo, hi = S.faixa_theta()
+            stages = [s.to_dict() for s in default_stages(1, lo, hi,
+                                                          A_DEFAULT)]
+        stages = [{k: s[k] for k in ("beta", "theta0", "duration", "m")}
+                  for s in stages]
         wiebe = {"source": "parameters", "parameters": stages}
     return CfdConfig.from_dict({
         "mode": "prescribed_wiebe",
@@ -212,16 +242,94 @@ with st.expander("Configuração do caso", expanded=True):
         "Origem", ["modelo atual", "model.json"],
         index=["modelo atual", "model.json"].index(f["wiebe_origem"]),
         horizontal=True,
-        help="Modelo atual = estágios definidos na página Modelo. Os "
-             "parâmetros calibrados definem a liberação de calor; o CFD "
-             "não recalibra o Wiebe.")
+        help="Modelo atual = estágios do modelo 0-D (modo pressão: "
+             "parâmetros da aba Modelo), editáveis AQUI. Os parâmetros "
+             "prescritos definem a liberação de calor; o CFD não recalibra "
+             "o Wiebe. A edição nesta página não altera o modelo 0-D.")
     if f["wiebe_origem"] == "model.json":
         f["wiebe_model"] = st.text_input("Arquivo model.json",
                                          f["wiebe_model"])
     else:
-        n = len(st.session_state.model_stages or []) or 1
-        st.dataframe(S.tabela_estagios(S.estagios_modelo(n)),
-                     use_container_width=True, hide_index=True)
+        fonte = _estagios_fonte_deg()
+        if f.get("wiebe_stages") is None:
+            f["wiebe_stages"] = fonte or [
+                s.to_dict() for s in default_stages(1, -120.0, 120.0,
+                                                    A_DEFAULT)]
+        n_atual = max(1, len(f["wiebe_stages"]))
+        if "_cfd_n_pendente" in st.session_state:
+            st.session_state.cfd_wiebe_n = \
+                st.session_state.pop("_cfd_n_pendente")
+        st.session_state.setdefault("cfd_wiebe_n", n_atual)
+        n = st.segmented_control(
+            "Número de estágios", list(range(1, MAX_STAGES + 1)),
+            key="cfd_wiebe_n", format_func=lambda k: f"{k}-Wiebe",
+            help="Mudar o número re-cria a tabela (estágios extras entram "
+                 "com padrões); use os botões abaixo para re-sincronizar "
+                 "com o modelo atual.")
+        n = int(n or n_atual)
+        atual = list(f["wiebe_stages"])
+        if len(atual) != n:                     # trunca / completa
+            if len(atual) > n:
+                atual = atual[:n]
+            else:
+                lo, hi = S.faixa_theta()
+                atual = atual + [s.to_dict() for s in
+                                 default_stages(n, lo, hi,
+                                                A_DEFAULT)[len(atual):]]
+            f["wiebe_stages"] = atual
+            st.session_state.pop(f"cfd_editor_{n}", None)
+        tab = pd.DataFrame([{"beta": s["beta"], "theta0": s["theta0"],
+                             "duration": s["duration"], "m": s["m"],
+                             "a": s.get("a", A_DEFAULT)}
+                            for s in atual])
+        ed = st.data_editor(tab, key=f"cfd_editor_{n}", num_rows="fixed",
+                            hide_index=True,
+                            column_config={
+                                "beta": st.column_config.NumberColumn(
+                                    "β", min_value=0.0, max_value=1.0,
+                                    format="%.4f",
+                                    help="fração da massa do estágio"),
+                                "theta0": st.column_config.NumberColumn(
+                                    "θ0 [°]", format="%.4f",
+                                    help="início do estágio [°CA]"),
+                                "duration": st.column_config.NumberColumn(
+                                    "Δθ [°]", min_value=1e-6, format="%.4f",
+                                    help="duração (> 0) [°CA]"),
+                                "m": st.column_config.NumberColumn(
+                                    "m", min_value=0.0, format="%.4f",
+                                    help="fator de forma (> 0)"),
+                                "a": st.column_config.NumberColumn(
+                                    "a", min_value=0.0, format="%.4f",
+                                    help="eficiência (6.908 ⇒ 99,9 %)")})
+        f["wiebe_stages"] = [{"beta": float(r.beta), "theta0": float(r.theta0),
+                              "duration": float(r.duration),
+                              "m": float(r.m), "a": float(r.a)}
+                             for r in ed.itertuples()]
+        erros_w = validate_stages([Stage(float(r["beta"]), float(r["theta0"]),
+                                         float(r["duration"]), float(r["m"]),
+                                         float(r["a"]))
+                                   for r in f["wiebe_stages"]])
+        for er in erros_w:
+            st.error(er, icon=":material/error:")
+        with st.container(horizontal=True):
+            if st.button("Usar estágios do modelo atual",
+                         icon=":material/history:",
+                         disabled=fonte is None,
+                         help="Descarta as edições desta página e volta aos "
+                              "estágios do modelo 0-D atual."):
+                f["wiebe_stages"] = fonte
+                st.session_state.cfd_wiebe_n = len(fonte)
+                st.session_state.pop(f"cfd_editor_{len(fonte)}", None)
+                st.rerun()
+            if st.button("Normalizar β (Σβ = 1)",
+                         icon=":material/balance:"):
+                soma = sum(s["beta"] for s in f["wiebe_stages"])
+                if soma > 0:
+                    f["wiebe_stages"] = [
+                        {**s, "beta": s["beta"] / soma}
+                        for s in f["wiebe_stages"]]
+                    st.session_state.pop(f"cfd_editor_{n}", None)
+                    st.rerun()
 
 # ========================================================== estado e ações
 case_dir = Path(_form()["case_directory"])

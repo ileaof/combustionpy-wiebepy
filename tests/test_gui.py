@@ -175,3 +175,20 @@ def test_modelo_modo_pressao_simula():
     assert len(at.session_state["pmodel"]["stages"]) == 3
     assert any(m.label == "RMSE [kPa]" for m in at.metric)
     assert any(t.key == "pv_modelo_log" for t in at.toggle)
+
+
+def test_cfd_muda_numero_de_estagios():
+    at = _app()
+    at.switch_page("app_pages/cfd.py").run()
+    _sem_erros(at)
+    f0 = at.session_state["cfd_form"]
+    n0 = len(f0["wiebe_stages"])
+    at.segmented_control(key="cfd_wiebe_n").set_value(3).run()
+    _sem_erros(at)
+    f1 = at.session_state["cfd_form"]
+    assert len(f1["wiebe_stages"]) == 3
+    assert all(set(s) >= {"beta", "theta0", "duration", "m", "a"}
+               for s in f1["wiebe_stages"])
+    at.segmented_control(key="cfd_wiebe_n").set_value(5).run()
+    _sem_erros(at)
+    assert len(at.session_state["cfd_form"]["wiebe_stages"]) == 5
