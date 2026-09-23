@@ -43,9 +43,14 @@ EXIT_OK, EXIT_ERR, EXIT_USO = 0, 1, 2
 def build_cfd_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="wiebepy cfd",
-        description="Módulo CFD opcional do wiebepy (OpenFOAM). O CFD é "
-                    "sempre opcional: com cfd.enabled=false o restante do "
-                    "programa funciona sem este subcomando.")
+        description="Módulo CFD opcional do wiebepy (OpenFOAM 13 via WSL2). "
+                    "O CFD é sempre opcional: com cfd.enabled=false o "
+                    "restante do programa funciona sem este subcomando. "
+                    "Liberação de calor PRESCRITA pela Wiebe calibrada "
+                    "(modo prescribed_wiebe): NÃO prevê cinética química, "
+                    "frente de chama ou emissões; a comparação com ensaio "
+                    "é diagnóstica, nunca validação. Ver README (seção CFD) "
+                    "e docs/cfd/.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("doctor", help="diagnóstico do ambiente (WSL2, "
@@ -54,22 +59,25 @@ def build_cfd_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("prepare", help="gera o caso para inspeção (sem "
                                        "executar)")
-    s.add_argument("--config", required=True, metavar="ARQ")
+    s.add_argument("--config", required=True, metavar="ARQ",
+                   help="configuração YAML/JSON do caso (engine + cfd)")
     s.add_argument("--output", metavar="DIR",
                    help="sobrescreve cfd.case_directory")
     s.add_argument("--no-heat", action="store_true",
-                   help="gera o caso sem fonte de calor (validação de "
-                        "movimento/conservação)")
+                   help="gera o caso sem fonte de calor (compressão motrada; "
+                        "usa max_Co 0,25)")
     s.add_argument("--fixed-piston", action="store_true",
                    help="gera com pistão fixo (volume constante)")
 
     s = sub.add_parser("validate", help="valida o caso antes da execução")
-    s.add_argument("--case", required=True, metavar="DIR")
+    s.add_argument("--case", required=True, metavar="DIR",
+                   help="diretório do caso (com case_config.yaml)")
     s.add_argument("--distro", metavar="NOME",
                    help="distribuição WSL2 com o solver")
 
     s = sub.add_parser("run", help="executa o caso validado")
-    s.add_argument("--case", required=True, metavar="DIR")
+    s.add_argument("--case", required=True, metavar="DIR",
+                   help="diretório do caso (estado VALIDATED)")
     s.add_argument("--config", metavar="ARQ",
                    help="configuração (workers/distro; o caso prevalece "
                         "para a física)")

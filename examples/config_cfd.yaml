@@ -81,7 +81,13 @@ cfd:
 
   wiebe:                        # parâmetros Wiebe DE UM modelo calibrado
     source: model               # model (model.json) | parameters
-    model: examples/model_cfd.json   # gerado pelo wiebepy (`--optimize`)
+    model: examples/model_cfd.json   # ATENÇÃO (verificação 2026-09-23):
+                                     # este arquivo NÃO é produto da
+                                     # calibração documentada (parâmetros
+                                     # manuais); a calibração 0-D real
+                                     # está em examples/model_cfd_calibrated.json
+                                     # e é usada nos casos controlados 005+
+                                     # (config_cfd_calibrado.yaml)
     # parameters:               # alternativa: lista inline (nesta unidade)
     #   - {beta: 1.0, theta0: -5, duration: 40, m: 2.0}
 

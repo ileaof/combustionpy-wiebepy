@@ -30,6 +30,11 @@ Modos de execução
                       BIC, validação cruzada por blocos, tempo)
   --benchmark         mede os backends nesta máquina
   --devices           mostra o hardware detectado
+  wiebepy cfd …       subcomando CFD OPCIONAL (OpenFOAM 13 via WSL2):
+                      doctor/prepare/validate/run/status/cancel/report —
+                      liberação de calor PRESCRITA pela Wiebe calibrada;
+                      não prevê cinética química, frente de chama ou
+                      emissões (ver README, seção CFD)
 
 Backends (--backend)
   auto             mede os disponíveis com o tamanho real do problema e
@@ -160,6 +165,18 @@ wiebepy --compare-stages 1 2 3 --input ensaio.txt --input-type pressure
 
 # Usar um arquivo de configuração (CLI sobrescreve o arquivo)
 wiebepy --config examples/config_example.yaml --input dados.csv --optimize
+
+# CFD opcional (requer OpenFOAM 13 no WSL2): o fluxo completo
+wiebepy cfd doctor                                        # ambiente WSL2/OpenFOAM
+wiebepy cfd prepare  --config examples/config_cfd.yaml    # gera o caso, sem rodar
+wiebepy cfd validate --case results/cfd/case_001          # valida antes de rodar
+wiebepy cfd run      --case results/cfd/case_001 --follow # executa com log ao vivo
+wiebepy cfd status   --case results/cfd/case_001          # estado do caso
+wiebepy cfd cancel   --case results/cfd/case_001          # interrompe a execução
+wiebepy cfd report   --case results/cfd/case_001          # relatório HTML do caso
+# Variantes de preparação: --no-heat (caso motrado, sem fonte) e
+# --fixed-piston (pistão fixo). A fonte Wiebe é verificada
+# energeticamente na preparação (integral Q̇dt = m_f·PCI·Δx_b em 0,1 %).
 
 # Benchmark dos backends nesta máquina e hardware detectado
 wiebepy --benchmark --workers 8 --output results/bench

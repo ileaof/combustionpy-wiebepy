@@ -113,6 +113,14 @@ Cadeia de cálculo (unidades explícitas):
    troca térmica nas paredes; o κ 0-D e a correlação de Hohenberg NÃO
    são transferidos para o CFD (campo `gas_model.notice` no
    case_config.yaml).
+7. **Grade da tabela e da verificação convergida (2026-09-23)**: a
+   grade fixa de 0,1° subintegra estágios com m pequeno (queima
+   concentrada numa faixa angular fina — ex. m=0,075: déficit de
+   0,29 % na 1ª célula de queima). O builder refina a grade da
+   verificação ∫Q̇dt = m_f·PCI·Δx_b (0,1° → 0,05° → 0,02° → 0,01° →
+   0,005°) e usa a MESMA grade na tabela do fvModel, gravando o passo
+   em `heat_source.table_step_CA_deg`. Se nenhum passo fecha, o erro é
+   levantado — a fonte nunca é aceita com conservação falhando.
 
 ## 5. Geometria e hipóteses
 
@@ -153,11 +161,11 @@ embutido). A validação de `cfd.fuel.name` aceita o registro combinado
 
 ## 7. Verificação e validação (escada progressiva)
 
-1. **Regressão com CFD off**: suíte completa do wiebepy (310 testes)
+1. **Regressão com CFD off**: suíte completa do wiebepy (365 testes)
    inalterada; o módulo CFD não é importado (teste de fronteira).
 2. **Testes da fonte Wiebe**: conservação ∫Q̇dt = m_f·PCI·Δx_b para
    N = 1..5 em deg e rad; identidade ponto a ponto q'''·V₀ = Q̇; tabelas
-   Function1 com fechamento verificado (33 testes CFD).
+   Function1 com fechamento verificado (52 testes CFD).
 3. **Escada do solver** (casos reais executados — ver
    `docs/cfd/verification.md`):
    1. volume fixo, frio (V1) — conserva massa, p(t) ideal;
@@ -166,7 +174,13 @@ embutido). A validação de `cfd.fuel.name` aceita o registro combinado
    4. pistão móvel + fonte Wiebe (caso referência) — balanço de energia
       fecha: prescrito = ΔU + trabalho + perda nas paredes;
    5. comparação 0-D (p×θ CFD vs motored/0-D) — diferenças explicadas;
-   6. (futuro) comparação experimental.
+   6. comparação experimental (DIAGNÓSTICA, nunca validação) — ensaio
+      P_exp-Carga-3_45% (diesel); escada de perdas às paredes
+      (adiabático → 440 K), casos controlados: motorados 007/008,
+      passo temporal 011, malha fina 010, Rc efetivo 012 (ver
+      `verification.md` §3a–3c);
+   7. calibração (ajuste da fonte Wiebe ao ensaio) é distinta de
+      validação — a fonte prescrita usa os mesmos dados na calibração.
 4. **Entrega exige pelo menos um caso real executado** —
    `results/cfd/case_001` (executado de ponta a ponta no WSL2).
 

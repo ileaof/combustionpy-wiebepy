@@ -120,9 +120,240 @@ A interpretação permanece DIAGNÓSTICA, não validação (p̄ volumétrica
 de cilindro genérico sem transferência de carga ≠ pressão no sensor;
 a fonte prescrita já usa estes dados na calibração).
 
+## 3c. Investigação dirigida (plano de 8 passos, 2026-09-23)
+
+Revisão do usuário identificou que a tabela da seção 3a mistura
+diferenças de TERMODINÂMICA com diferenças de TRANSFERÊNCIA DE
+CALOR. Cada hipótese foi confirmada nos arquivos/resultados antes de
+qualquer alteração:
+
+**1. Procedência dos parâmetros Wiebe — CONFIRMADO que a fonte dos
+casos 001–004 NÃO é a calibração documentada.** Reprodução da cadeia
+documentada (`--input-type pressure --pressure-unit bar --optimize`,
+modo pressão, PSO+RK4 sobre 459 pontos do ensaio):
+
+| Parâmetros | θ0 | Δθ | m | Rc | RMSE (ensaio) |
+|---|---|---|---|---|---|
+| model_cfd.json (usado nos casos 001–004) | −10,0° | 45,0° | 2,0 | 17 (motor) | **221,4 kPa** |
+| ajuste reproduzido, Rc livre | +2,79° | 38,7° | 0,459 | 15,89 (ajustado) | 62,0 kPa |
+| ajuste reproduzido, Rc fixado 17 | +5,31° | 58,1° | 0,075 | 17 (motor) | 116,3 kPa |
+
+Os números redondos do `model_cfd.json` indicam parametrização
+manual; avaliado diretamente na curva do ensaio, rende RMSE 3,5×
+pior que o modelo realmente calibrado. **Adoção**: os casos
+controlados 005+ usam `examples/model_cfd_calibrated.json` (Rc
+fixado em 17 — consistente com a geometria da malha; proveniência
+dentro do arquivo; artefatos em `results/calib_wiebe_provenance`).
+O modelo manual é mantido apenas para reproduzir os casos originais
+002–004. A calibração é 0-D (simulado vs ensaio com κ=1,37 +
+Hohenberg) — a comparação CFD–ensaio permanece diagnóstico.
+
+**2. Duração física da janela — bug confirmado e corrigido.**
+`interval_duration_s` nos metadados usava
+`(Δθ_rad)·(RPM/60)/(2π)` = 37,74 s; o correto é
+`Δθ_rad/(2π·RPM/60)` = 0,011776 s (240° = 2/3 de volta a
+3396,2 rpm). O tempo do solver NUNCA dependeu deste campo (endTime
+em graus, case_builder) — era metadado errado, não erro físico.
+Teste novo: mesma janela em deg e rad dá o mesmo valor em segundos,
+coerente com `dtheta_dt` da fonte.
+
+**3. Grade da tabela/verificação convergida.** Com o modelo calibrado
+(m=0,075), a grade fixa de 0,1° subintegra a derivada Wiebe em
+0,29 % (~0,8 % da energia está na 1ª célula de queima). O builder
+agora refina a grade até o fechamento ∫Q̇dt = m_f·PCI·Δx_b passar
+(0,02° dá 1,0e-4) e grava `table_step_CA_deg`. Original: os casos
+001–004 (m=2) fechavam em 0,0 % e não são alterados.
+
+**4. Perda às paredes por ângulo e acumulada ATÉ O PICO (case_004).**
+
+| Banda de CA | CFD case_004 | 0-D Hohenberg |
+|---|---|---|
+| −120°…−40° | 0,45 J | ≈0 (resfriamento) |
+| −40°…−20° | 2,13 J | 2,20 J |
+| −20°…0° | 8,90 J | 7,77 J |
+| 0°…10° | 7,94 J | 7,83 J |
+| 10°…20° | 9,85 J | 10,75 J |
+| 20°…40° | 10,27 J | 14,47 J |
+| 40°…120° | 5,09 J | 11,62 J |
+| **acumulada até o pico** | **18,90 J** | **17,17 J** |
+| total | 44,11 J | 53,67 J |
+
+**Conclusão que corrige a interpretação anterior**: ATÉ O PICO de
+pressão (10,1° vs 10,34°) as perdas CFD e Hohenberg quase coincidem
+(18,9 vs 17,2 J — CFD até perde um pouco MAIS antes de 0°). Os ~10 J
+que faltavam no total estão quase todos DEPOIS do pico (20°…120°),
+onde não afetam p_max. Portanto o gap de p_max (+9,2 %) NÃO se
+explica por déficit de perda acumulada — aponta para as propriedades
+termodinâmicas (γ_CFD=1,400 vs κ_0-D=1,37) e para a fonte manual
+(RMSE 221 kPa por si). O teste controlado de equivalência
+(case_006, Cp=1063 → γ=1,37) separa os efeitos.
+
 O relatório imprime a origem do arquivo, as unidades declaradas, o
 offset, e — se o arquivo experimental não existir — uma linha
 explícita de erro (nenhuma substituição silenciosa).
+
+**5. Resultado da escada de equivalência (casos 005–009, 2026-09-23).**
+
+| Caso | Fonte | γ | Paredes | p_max (erro vs ensaio) | RMSE (kPa) | viés (kPa) |
+|---|---|---|---|---|---|---|
+| 004 (original) | manual | 1,400 | 440 K | +9,2 % | 313,8 | — |
+| 005 | calibrada (Rc 17) | 1,400 | 440 K | +4,7 % | 198,5 | +101,0 |
+| 006 | calibrada (Rc 17) | 1,37 | 440 K | **−2,0 %** | **91,5** | +19,6 |
+| 009 | calibrada (Rc 17) | 1,37 | adiabático | +0,7 % | 115,0 | +61,7 |
+
+O degrau γ=1,37 (case_006, `config_cfd_equivalencia.yaml`, Cp=1063 →
+γ = 1063/(1063−287,07) = 1,370) é um **teste controlado de
+equivalência** com o 0-D — não ajuste arbitrário: o 0-D sempre usou
+κ=1,37 e o CFD estava em 1,400 (hConst Cp=1005/M=28,96). Curvas
+p×θ e p×V do case_006: `results/cfd/case_006/curvas_p_theta_pv.png`.
+O degrau adiabático (case_009) isola a transferência de calor: sem
+perdas o p_max vai a +0,7 %, mas o RMSE piora (91,5 → 115,0) e o viés
+sobe (+19,6 → +61,7) — paredes a 440 K aproximam mais o ensaio do
+que paredes adiabáticas. Curvas/métricas do 007/008 (compressão
+motrada sem queima) não foram produzidas: ambos abortaram (ver 5b
+abaixo — impedimento registrado, nenhum resultado estimado).
+
+**6. Análise por faixa angular do resíduo do case_006 — o erro do CFD
+é o erro do 0-D.**
+
+| Faixa [°] | RMSE CFD | viés CFD | RMSE 0-D | viés 0-D |
+|---|---|---|---|---|
+| −120…−60 | 2,8 | −2,7 | 2,4 | −2,2 |
+| −60…−30 | 34,6 | +24,7 | 35,4 | +26,1 |
+| −30…−10 | 216,2 | +203,9 | 215,0 | +202,8 |
+| −10…0 | 276,9 | +272,5 | 274,2 | +269,7 |
+| 0…5 | 88,3 | +48,1 | 85,8 | +42,3 |
+| 5…10 | 90,8 | −69,8 | 116,5 | −103,1 |
+| 10…15 | 96,4 | −86,5 | 124,1 | −116,3 |
+| 15…25 | 28,4 | −9,5 | 45,7 | −37,3 |
+| 25…40 | 52,5 | −52,2 | 75,9 | −75,7 |
+| 40…70 | 28,6 | −27,2 | 47,0 | −45,6 |
+| 70…120 | 12,8 | −12,7 | 23,9 | −23,8 |
+| **total** | **91,5** | +19,6 | **95,0** | — |
+
+CFD e 0-D coincidem faixa a faixa (diferença ≤ 5 kPa): o resíduo
+remanescente NÃO é deficiência do CFD. ~90 % do erro quadrático está
+na compressão (−60…0°), onde nenhuma queima age — nenhum re-ajuste
+de Wiebe pode corrigi-lo (queima só soma pressão onde o modelo já
+está alto).
+
+A verificação **case_012** (diagnóstico) confirma a hipótese: com Rc
+efetivo 15,635 + fonte 2 estágios + γ = 1,37 + paredes 440 K
+(`config_cfd_rc_efetivo.yaml`), o CFD entrega **RMSE 43,6 kPa**
+(R² 0,99923), p_max 5547,7 kPa @ 11,46° (−1,0% vs ensaio), viés −23,4
+kPa — vs RMSE 91,5 do case_006. Por faixa: −120…−60° RMSE 4,1
+(viés −4,0); −60…−30° 8,9 (+3,0); −30…−10° 35,7 (+32,8); −10…0° 104,0
+(−95,5); 0…5° 84,4 (−76,3). O resíduo de compressão desaparece
+(confirmando o Rc efetivo), e o erro remanescente concentra-se na
+janela de queima com sinal INVERTIDO (CFD agora abaixo do ensaio
+entre −10° e 70°) — coerente com a fonte 2 estágios calibrada a P1
+ancorado no primeiro ponto medido (verificação 0-D independente:
+RMSE 57,9 kPa na janela −120…120° com P1=127,6 @ −120°). As curvas
+p×θ e p×V estão em `results/cfd/case_012/curvas_p_theta_pv.png`.
+**Interpretação**: o caso é diagnóstico — demonstra QUE o resíduo
+vinha do Rc, não calibra a geometria; Rc 15,635 contradiz o valor
+documentado (17) e não deve ser adotado como projeto.
+
+**7. Diagnóstico de fase e expoente politrópico efetivo.** Ajuste de
+`ln p = c − n·ln V(θ−δ)` na compressão pura do ensaio (−80…−5°): o
+melhor deslocamento é δ = +0,25° com ganho marginal (rms(log)
+0,00637 → 0,00609) — **não há desalinhamento de PMS relevante**. O
+n_eff do ENSAIO é não-monotônico (1,324 em −80…−40°; **1,284** em
+−40…−20°; 1,366 em −20…−5°) — incompatível com zona única de γ
+constante e perda monotônica; modelos 0-D e CFD dão 1,370/1,371,
+1,358/1,361 e 1,333/1,332 nas mesmas faixas (CFD e 0-D idênticos). A
+combinação "n_eff 1,284 no meio da compressão + p igual ao ensaio em
+−120° e −80°" só é reproduzível com **Rc efetivo menor que o
+nominal** (crevices/blow-by/medição de Vc): a calibração com Rc LIVRE
+produz RMSE 62,0 kPa com UM estágio (Rc 15,89) — vs 116,3 kPa com Rc
+fixado em 17.
+
+**8. Estágios Wiebe 1/2/3 — hipótese testada objetivamente.**
+`--compare-stages 1 2 3` (PSO+RK4, seed 42, 2 runs, 459 pontos):
+
+| Estágios | Rc fixado 17: RMSE / ΔBIC | Rc livre: RMSE / R² / CV |
+|---|---|---|
+| 1 | 116,3 / 0 | 62,0 / 0,9984 / 79,5 |
+| 2 | 115,1 / +15,0 | **44,6 / 0,9992 / 50,8** |
+| 3 | 115,1 / +39,3 (pior AIC) | 42,8 / 0,9993 / 55,6 (avisos estruturais) |
+
+Com Rc nominal 17, estágios extras NÃO melhoram (saturam em ~115 kPa
+— o erro vive na compressão). Com Rc efetivo livre, o multi-estágio
+entrega de verdade (62,0 → 44,6 kPa); N=2 é o ponto de equilíbrio
+(N=3: θ0_2 ≈ θ0_3, CV pior). **case_012** (`config_cfd_rc_efetivo.yaml`,
+fonte `model_cfd_duo_rc15635.json`): CFD com Rc 15,635 + fonte 2
+estágios calibrada em par com este Rc + γ=1,37 — TESTE DIAGNÓSTICO da
+hipótese de Rc efetivo. Rc 15,635 **contradiz a geometria documentada
+(Rc 17)** e não deve ser adotado como geometria de projeto; a
+comparação resultante é diagnostica, nunca validação. Resultado (item
+6 acima): RMSE 43,6 kPa, R² 0,99923, p_max −1,0% — hipótese do Rc
+efetivo CONFIRMADA como causa dominante do resíduo de compressão.
+
+**10. Conservação de massa (todos os casos com pistão móvel).** Massa
+inicial = final em TODOS os casos (leitura `mass_kg` do primeiro e do
+último instante gravado; variação relativa 0,00e+00): 005/006/007/008/
+009/011 = 0,509452 g; 012 = 0,512867 g (Rc menor → V mínimo maior →
+mais massa a p₀/T₀ idênticos). Conservação de energia: a fonte é
+verificada na preparação (∫Q̇dt = m_f·PCI·Δx_b ≤ 0,1 %, grade refinada
+até fechar — §4 e caso_builder), o mecanismo q'''·V₀ = Q̇ é testado
+ponto a ponto na suíte, e o fechamento ΔU + W + perda com campos
+exatos foi verificado no case_001 (+0,72 %, seção 2); os casos
+seguintes reutilizam o mesmo mecanismo de fonte.
+
+**11. Sensibilidade de malha (case_010, 36×54 vs 006, 24×36).**
+case_010 (2,25× células, mesmas física/fonte do 006, max_Co 0,25 —
+a 0,5 abortou, §5b): p_max 5494,0 kPa @ 12,05° (006: 5489,6 @ 12,02°),
+RMSE vs ensaio 91,1 (006: 91,5), viés +21,7, perda às paredes 37,25 J
+(006: 36,99 J), massa conservada (0,509654 g, variação 0,00e+00). A
+diferença entre as duas MALHAS é rms 4,4 kPa e máx 11,2 kPa (0,08 % do
+p_max) — a solução é independente de malha nesta faixa; junto do
+case_011 (passo temporal, 3,6 kPa rms), a independência numérica está
+fechada e o resíduo de ~91 kPa do case_006 é físico (Rc efetivo —
+item 6), não numérico.
+
+**9. Sensibilidade ao passo temporal / Courant (case_011 vs 006).**
+case_011 repete o case_006 com `max_Co 0,25` (em vez de 0,5):
+p_max 5487,6 @ 12,08° (006: 5489,6 @ 12,02°), RMSE vs ensaio 92,5
+(006: 91,5). A diferença entre as duas soluções CFD é rms 3,6 kPa e
+máx 10,0 kPa (0,065 % do p_max) — o resultado é insensível ao passo
+temporal nesta faixa, e a queda de max_Co de 0,5 para 0,25 não altera
+as conclusões. (Os casos 001–006 rodaram a 0,5; 007/008/011/012 a 0,25;
+o padrão do construtor passou a ser 0,25.)
+
+## 5b. Impedimentos registrados (nenhum resultado estimado como simulado)
+
+* **RESOLVIDO — Casos motorados 007/008 e caso 012: foamRun aborta
+  (rc=134) com `FOAM FATAL ERROR: Negative initial temperature T0`
+  (−42 K em 007 @ +12,3°; −921 K em 008; −2534 K em 012 @ −23,55°)**
+  em `fluid::thermophysicalPredictor()`. Histórico do log: Co_max sobe
+  suavemente até ~0,5 e explode em 3 passos (0,5 → 1,2 → 3,5 → 140 no
+  008; 0,5 → 1,6 → 1633 no 012) com deltaT colapsando
+  (1,4e-5 → 2,8e-9 s) — pico de velocidade local (Co médio ~0,006),
+  seguido de divergência do campo h. Ocorre identicamente com paredes
+  adiabáticas (007), a 440 K (008) e com queima (012); a ausência de
+  `constant/fvModels` não é causa. **Causa raiz: max_Co 0,5 é
+  marginal** para a malha/rotação deste caso. **Correção:
+  `max_Co 0,25`** nos `system/controlDict` (logs de crash preservados
+  como `logs/foamRun.crash_maxCo05.log`) e novo padrão do construtor
+  (`CfdConfig.max_Co = 0.25`, com comentário no código citando esta
+  seção). **Verificação pós-correção**: 007, 008, 011 e 012 completaram
+  (rc=0; 133–160 s cada) com resultados consistentes — 008 (motorado,
+  paredes 440 K) p_max 4593,8 kPa @ −0,35° vs 0-D motorado com
+  Hohenberg 4580,8 @ −0,40° (RMSE 8,2 kPa, viés +4,7; perda às paredes
+  CFD 13,60 J vs Hohenberg 15,95 J); 007 (motorado adiabático) p_max
+  4712,7 @ 0,00° (RMSE 55,9 vs 0-D motorado; +2,9 % = efeito isolado
+  da perda às paredes); 011 e 012 conforme §3c itens 6 e 9. Os degraus
+  motorados da escada ficaram temporariamente sem resultado CFD entre
+  as execuções abortadas e a correção; nenhum resultado foi estimado
+  ou interpolado nesse período.
+
+* **Segunda ocorrência em 0,5 — caso 010 (malha fina 36×54)**: mesma
+  assinatura (Co_max 2,9e5, deltaT 6,4e-12 s, `T0: −106,8 K`) em
+  −14,45° CA, durante a queima; log preservado como
+  `case_010/logs/foamRun.crash_maxCo05.log`. Reexecução com max_Co
+  0,25: **completou** (614,6 s) — resultado na seção 3c item 11.
+  Reforça que 0,5 é marginal neste motor em qualquer malha, não apenas
+  nos casos motorados.
 
 ## 4. Bug descoberto e corrigido (fonte de calor do OF13)
 
@@ -147,17 +378,18 @@ do fvModel (`Function1s::Scale(Constant("1/V", 1/zone_.V()), …)` —
 
 ## 5. Cobertura de testes automatizados
 
-- Suíte CFD: `pytest tests/test_cfd.py` → **46 passed**
+- Suíte CFD: `pytest tests/test_cfd.py` → **52 passed**
   (config/estados, fonte Wiebe N=1..5 em deg/rad, identidade
   q'''·V₀ = Q̇ ponto a ponto, tabelas Function1, geometria/cinemática,
   combustíveis com fontes citadas + registro permanente em
   data/fuels_custom.yaml com portabilidade CSV, case builder — incl.
   teste que garante que o caso com pistão móvel usa q''' e não Q,
-  kOmegaSST (campo omega, BCs, wallDist) e kEpsilon,
+  kOmegaSST (campo omega, BCs, wallDist) e kEpsilon, gás configurável
+  (Cp/M/μ/Pr) e paredes adiabáticas,
   comparação experimental: métricas de sobreposição, unidades/offset
   declarados e erro explícito sem arquivo — nenhuma substituição
   silenciosa).
-- **Regressão completa com CFD off: `pytest` → 359 passed**
+- **Regressão completa com CFD off: `pytest` → 365 passed**
   (nenhuma alteração de comportamento no núcleo; inclui as páginas
   novas da GUI — CFD editável e Combustíveis — via Streamlit AppTest).
 - GUI: página CFD renderiza (AppTest, sem exceções) com o caso real
@@ -166,16 +398,23 @@ do fvModel (`Function1s::Scale(Constant("1/V", 1/zone_.V()), …)` —
 
 ## 6. Pendências de verificação (a fazer na entrega final)
 
-Nenhuma — suíte completa executada (359 passed), caso de referência
-case_004 (kEpsilon + malha refinada) executado e verificado
-(seções 2, 3a e 3b).
+Nenhuma — suíte completa executada (365 passed, 2026-09-23); escada
+completa com casos reais 001–012 (fonte calibrada, escada de perdas,
+motorados, passo temporal, malha fina, Rc efetivo) e independência
+numérica fechada (malha + Δt). O balanço de energia com campos exatos
+(functionObject `coded`) foi verificado nos casos de referência
+001/004 (§2 e §3b) e o mecanismo de fonte é idêntico nos demais,
+onde se verifica a conservação exata de massa e a verificação da
+fonte na preparação (§3c item 10).
 
 ## 7. Limites da verificação
 
-- Sensibilidade de malha varrida em dois níveis (16×24 e 24×36);
-  refinamentos adicionais têm ganho pequeno (perda 41 → 44 J) — o
-  gap restante (~9 % de p_max) é dominado pela geometria
-  simplificada e pelo modelo de parede, não pela resolução.
+- Sensibilidade de malha varrida em TRÊS níveis (16×24, 24×36 e
+  36×54 — caso 010): 24×36 → 36×54 muda p̄(θ) em 4,4 kPa rms (0,08 %
+  do p_max); refinamentos adicionais têm ganho desprezível. O resíduo
+  remanescente é físico (Rc efetivo, §3c item 6), não numérico —
+  independência de passo temporal confirmada em separado (case_011,
+  3,6 kPa rms).
 - kOmegaSST executado e documentado (33,7 J — abaixo do kEpsilon
   neste caso); sem varredura exaustiva de constantes dos modelos.
 - A comparação experimental é **diagnóstica**: a p̄ volumétrica de um

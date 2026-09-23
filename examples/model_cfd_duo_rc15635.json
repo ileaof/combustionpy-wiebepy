@@ -1,0 +1,38 @@
+{
+  "description": "Fonte Wiebe de 2 estagios calibrada em pressao (0-D) com razao de compressao EFETIVA livre, para o caso diagnostico CFD case_012 (Rc efetivo).",
+  "angle_unit": "rad",
+  "stages": [
+    {
+      "beta": 0.6565332201,
+      "theta0": -0.2522471155,
+      "duration": 0.8625464721,
+      "m": 2.871766549,
+      "a": 6.9078
+    },
+    {
+      "beta": 0.3434667799,
+      "theta0": 0.09663781776,
+      "duration": 0.2125257707,
+      "m": 0.568549852,
+      "a": 6.9078
+    }
+  ],
+  "provenance": {
+    "what": "Calibracao 0-D por ajuste de pressao (PSO + polimento) ao ensaio examples/data/ensaio_P_exp_carga3_45.txt, com Rc LIVRE (bounds 14-20) e 2 estagios Wiebe.",
+    "command": "wiebepy --compare-stages 1 2 3 --input examples/data/ensaio_P_exp_carga3_45.txt --input-type pressure --pressure-unit bar --angle-unit rad --a-fixed 6.908 --workers 8 --seed 42 --runs 2 --output results/calib_wiebe_stages123_freerc",
+    "date": "2026-09-23",
+    "seed": 42,
+    "window": "theta em [-2, 2] rad (459 pontos do ensaio)",
+    "Rc_effective": 15.63540583,
+    "fit_metrics": {
+      "rmse_kPa": 44.59817148,
+      "r2": 0.9991922049,
+      "cv_rmse_kPa": 50.79576762,
+      "P_max_exp_kPa": 5602.3,
+      "P_max_sim_kPa": null,
+      "note": "o ajuste ancora P1 na primeira pressao medida; verificacao independente 0-D (P1=127.6 kPa em -120 grau, T1=308.15 K): RMSE 57.9 kPa, R2 0.99864, p_max 5516.5 kPa (-1.5%)"
+    },
+    "why_2_stages": "Em Rc nominal 17, 1/2/3 estagios saturam em RMSE ~115-116 kPa (o erro vive na compressao, onde queima nao age). Com Rc livre, estagios extras entregam: N=1 62.0 -> N=2 44.6 -> N=3 42.8 kPa; N=3 tem avisos estruturais (theta0_2 ~ theta0_3) e CV pior; N=2 e o ponto de equilíbrio.",
+    "diagnostic_not_validation": "case_012 e um TESTE DIAGNOSTICO da hipotese 'Rc efetivo do ensaio menor que o nominal 17 (crevices/blow-by/medicao de Vc)'. Rc 15.635 CONTRADIZ a geometria documentada do motor (Rc 17) e NAO deve ser adotado como geometria de projeto; a comparacao resultante e diagnostica, nunca validacao."
+  }
+}

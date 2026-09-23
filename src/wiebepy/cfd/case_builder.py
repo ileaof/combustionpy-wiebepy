@@ -111,9 +111,33 @@ class CaseBuilder:
         # converte deg→rad) e theta_grid() retorna rad — a unidade angular
         # passada às funções da fonte deve ser a DO ARRAY θ, não a da
         # configuração do intervalo
-        self.energy_check = energy_check(
-            self.theta_grid(), self.load_stages(), engine.m_fuel,
-            engine.LHV, "rad", engine.rpm)
+        #
+        # A grade da verificação (e da tabela do fvModel) é refinada até o
+        # fechamento ∫Q̇dt = m_f·PCI·Δx_b passar no gate (0,1 %): estágios
+        # com m pequeno (queima muito "degrau") concentram energia numa
+        # faixa angular fina e o trapezóide em grade fixa de 0,1°
+        # subintegra (ex.: m=0,075 → 0,29 % de déficit na 1ª célula de
+        # queima). Nenhum resultado é aceito com a verificação falhando —
+        # a grade é afunilada até passar ou o erro é levantado.
+        stages = self.load_stages()
+        self.energy_check = None
+        self._grid_step_deg = 0.1
+        for step in (0.1, 0.05, 0.02, 0.01, 0.005):
+            chk = energy_check(self.theta_grid(step), stages, engine.m_fuel,
+                               engine.LHV, "rad", engine.rpm)
+            if chk["ok"]:
+                self.energy_check = chk
+                self._grid_step_deg = step
+                self._theta_grid = self.theta_grid(step_deg=step)
+                break
+        if self.energy_check is None:
+            chk = energy_check(self.theta_grid(step_deg=0.005), stages,
+                               engine.m_fuel, engine.LHV, "rad", engine.rpm)
+            raise ValueError(
+                "A fonte Wiebe não passa na verificação de conservação "
+                f"mesmo com grade de 0,005° (erro relativo "
+                f"{chk['rel_error']:.2e} > 0,1 %) — revise os estágios "
+                "Wiebe (m muito pequeno ou queima fora da janela).")
         self.motion = motion_report(self.kin, a0, self.theta_end_rad)
 
     # ------------------------------------------------------------ utilidades
@@ -192,6 +216,12 @@ boundaryField
     }}
 }}"""), encoding="utf-8")
 
+        adiab = self.cfg.wall_model == "adiabatic"
+        if adiab:
+            t_bc = "        type            zeroGradient;\n"
+        else:
+            t_bc = (f"        type            fixedValue;\n"
+                    f"        value            uniform {_fmt(Tw)};\n")
         d.joinpath("T").write_text(_dict_file("volScalarField", "", "T", f"""
 dimensions      [0 0 0 1 0 0 0];
 
@@ -201,19 +231,13 @@ boundaryField
 {{
     piston
     {{
-        type            fixedValue;
-        value            uniform {_fmt(Tw)};
-    }}
+{t_bc}    }}
     liner
     {{
-        type            fixedValue;
-        value            uniform {_fmt(Tw)};
-    }}
+{t_bc}    }}
     head
     {{
-        type            fixedValue;
-        value            uniform {_fmt(Tw)};
-    }}
+{t_bc}    }}
 }}"""), encoding="utf-8")
 
         d.joinpath("U").write_text(_dict_file("volVectorField", "", "U", f"""
@@ -306,14 +330,18 @@ boundaryField
 
     # ------------------------------------------------------------ constant/
     def _write_constant(self, d: Path) -> None:
-        # Propriedades do ar — VALORES SIMPLIFICADOS declarados (§9). Não
-        # são os κ/Hohenberg do 0-D: o CFD resolve a energia e a troca
-        # térmica nas paredes por si.
+        # Propriedades do gás — VALORES configuráveis, padrão ar
+        # simplificado declarado (§9). Não são os κ/Hohenberg do 0-D: o
+        # CFD resolve a energia e a troca térmica nas paredes por si.
+        # γ_CFD = Cp/(Cp−R), R = 8314.46/molWeight — o teste de
+        # equivalência termodinâmica (γ_CFD = κ do 0-D) sobrescreve Cp.
+        cp = self.cfg.gas_Cp_J_kgK
+        mw = self.cfg.gas_molWeight
         d.joinpath("physicalProperties").write_text(_dict_file("dictionary",
                                                                "constant",
-                                                               "physicalProperties", """
+                                                               "physicalProperties", f"""
 thermoType
-{
+{{
     type            heRhoThermo;
     mixture         pureMixture;
     transport       const;
@@ -321,25 +349,25 @@ thermoType
     equationOfState perfectGas;
     specie          specie;
     energy          sensibleEnthalpy;
-}
+}}
 
 mixture
-{
+{{
     specie
-    {
-        molWeight       28.96;
-    }
+    {{
+        molWeight       {_fmt(mw)};
+    }}
     thermodynamics
-    {
-        Cp              1005;
+    {{
+        Cp              {_fmt(cp)};
         hf              0;
-    }
+    }}
     transport
-    {
-        mu              5.5e-05;
-        Pr              0.7;
-    }
-}"""), encoding="utf-8")
+    {{
+        mu              {_fmt(self.cfg.gas_mu)};
+        Pr              {_fmt(self.cfg.gas_Pr)};
+    }}
+}}"""), encoding="utf-8")
 
         if self.cfg.turbulence_model == "laminar":
             d.joinpath("momentumTransport").write_text(_dict_file(
@@ -397,7 +425,7 @@ mover
         # atuais). No modo ``region`` o volume da zona não é conhecido na
         # geração do caso: mantém-se Q com a limitação registrada.
         if self.heat_enabled:
-            th = self.theta_grid()
+            th = self._theta_grid          # MESMA grade da verificação
             zona = ("all" if self.cfg.distribution == "uniform"
                     else self.cfg.region)
             if self.cfg.distribution == "uniform":
@@ -407,14 +435,16 @@ mover
                 tabela = table_text_density(
                     th, self.load_stages(), self.engine.m_fuel,
                     self.engine.LHV, "rad", self.engine.rpm,
-                    self.kin.volume(th))
+                    self.kin.volume(th),
+                    step_deg=self._grid_step_deg)
             else:                    # region: limitação documentada abaixo
                 campo = "Q"          # Q̇ [W] (não conservativo c/ malha móvel)
                 comentario = ("Q̇ [W] — NÃO conservativo com malha móvel "
                               "no OF13 (limitação em case_config.yaml)")
                 tabela = table_text(th, self.load_stages(),
                                     self.engine.m_fuel, self.engine.LHV,
-                                    "rad", self.engine.rpm)
+                                    "rad", self.engine.rpm,
+                                    step_deg=self._grid_step_deg)
             d.joinpath("fvModels").write_text(_dict_file(
                 "dictionary", "constant", "fvModels", f"""
 wiebeHeatSource
@@ -775,18 +805,23 @@ mergePatchPairs
                                if self.cfg.distribution == "uniform"
                                else "total_power_W"),
                 "notice": distribution_notice(self.cfg.distribution),
-                "energy_check": self.energy_check},
+                "energy_check": self.energy_check,
+                "table_step_CA_deg": self._grid_step_deg},
             "motion": self.motion,
             "numerics": {"deltaT_CA_deg": 0.01, "max_Co": self.cfg.max_Co,
                          "time_is_crank_angle_deg": True},
             "initial_conditions": {"P_Pa": self.cfg.P0_kPa * 1e3,
                                    "T_K": self.cfg.T0_K},
-            "walls": {"model": "fixed_temperature", "Tw_K": self.cfg.Tw_K},
+            "walls": {"model": self.cfg.wall_model, "Tw_K": self.cfg.Tw_K},
             "turbulence": {"model": self.cfg.turbulence_model,
                            "wall_functions": self.cfg.wall_functions},
             "gas_model": {
-                "eos": "perfectGas", "Cp_J_kgK": 1005.0,
-                "mu_Pa_s": 5.5e-5, "Pr": 0.7,
+                "eos": "perfectGas", "Cp_J_kgK": self.cfg.gas_Cp_J_kgK,
+                "molWeight_kg_kmol": self.cfg.gas_molWeight,
+                "mu_Pa_s": self.cfg.gas_mu, "Pr": self.cfg.gas_Pr,
+                "gamma": self.cfg.gas_Cp_J_kgK
+                         / (self.cfg.gas_Cp_J_kgK - 8314.46
+                            / self.cfg.gas_molWeight),
                 "notice": "Ar simplificado (propriedades constantes). O κ "
                           "do modelo 0-D e a correlação de Hohenberg não "
                           "são transferidos para o CFD; a troca térmica "

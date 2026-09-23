@@ -1,0 +1,30 @@
+{
+  "format": "wiebepy-model",
+  "version": "1.0.0",
+  "n_stages": 1,
+  "angle_unit": "rad",
+  "a_fixed": 6.9078,
+  "stages": [
+    {
+      "beta": 1.0,
+      "theta0": 0.09263864261,
+      "duration": 1.013745483,
+      "m": 0.07541287652,
+      "a": 6.9078
+    }
+  ],
+  "provenance": {
+    "note": "ESTE modelo (e não examples/model_cfd.json) é o produto da calibração 0-D documentada contra o ensaio P_exp-Carga-3_45% (diesel). Verificado em 2026-09-23: model_cfd.json (theta0 -10 deg, duracao 45 deg, m=2) NAO corresponde a nenhuma calibracao documentada — avaliado diretamente na curva do ensaio da RMSE 221,4 kPa (janela de queima: 334,4 kPa) e p_max +3,1%; os numeros redondos indicam parametrizacao manual. Este arquivo vem do modo pressao com Rc FIXADO em 17 (geometria do motor), mesmos comandos documentados em docs.",
+    "calibration_command": "wiebepy --config <cfg> --input examples/data/ensaio_P_exp_carga3_45.txt --input-type pressure --pressure-unit bar --optimize --fixed-rc",
+    "calibration_date": "2026-09-23",
+    "window": "theta em [-2.0, 2.0] rad (459 pontos, -114.5 a +114.5 deg CA)",
+    "rmse_kPa": 116.3246375,
+    "r2": 0.9945044583,
+    "P_max_exp_kPa": 5602.3,
+    "P_max_sim_kPa": 5537.36,
+    "Rc_fixed": 17.0,
+    "m_f_PCI": "m_f 9.42754647351e-6 kg/ciclo, PCI 39191.3 kJ/kg (diesel do ensaio)",
+    "alternative_fit_rc_free": "theta0 +2.790 deg, duracao 38.665 deg, m=0.4585, Rc ajustado 15.8869, RMSE 62.03 kPa (results/calib_wiebe_provenance) — NAO adotado no CFD porque o Rc ajustado (15.89) contradiz a geometria do motor (Rc 17) usada na malha",
+    "diagnostic_not_validation": "calibracao 0-D (simulado vs ensaio, kappa=1.37 + Hohenberg); a comparacao CFD-experimental permanece diagnostica"
+  }
+}

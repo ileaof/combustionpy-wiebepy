@@ -28,7 +28,7 @@ padrão — ver io/config.py):
       initial: {P_kPa: 250, T_K: 800}
       walls: {Tw_K: 440, model: fixed_temperature}
       turbulence: {model: kEpsilon, wall_functions: true}
-      numerics: {deltaT_s: 1.0e-06, max_Co: 0.5, write_interval_deg: 5}
+      numerics: {deltaT_s: 1.0e-06, max_Co: 0.25, write_interval_deg: 5}
 
       heat_source:
         distribution: uniform    # uniform (referência) | region
@@ -122,12 +122,25 @@ class CfdConfig:
     P0_kPa: float = 250.0                     # pressão inicial [kPa]
     T0_K: float = 800.0                       # temperatura inicial [K]
     Tw_K: float = 440.0                       # temperatura de parede [K]
+    wall_model: str = "fixed_temperature"     # fixed_temperature | adiabatic
 
     turbulence_model: str = "kEpsilon"
     wall_functions: bool = True
 
+    # Propriedades do gás no physicalProperties (ar simplificado, §9).
+    # Padrões = valores atuais do builder; o teste de equivalência
+    # termodinâmica (γ = κ do 0-D) sobrescreve Cp explicitamente.
+    gas_Cp_J_kgK: float = 1005.0              # Cp [J/kgK]
+    gas_molWeight: float = 28.96              # massa molar [kg/kmol]
+    gas_mu: float = 5.5e-05                   # viscosidade [Pa·s]
+    gas_Pr: float = 0.7                       # Prandtl [-]
+
     deltaT_s: float = 1.0e-6                  # passo temporal [s]
-    max_Co: float = 0.5
+    # 0,25 e não 0,5: com max_Co 0,5 os casos 008 (motrado) e 012 (Rc
+    # efetivo) abortaram com pico de velocidade local → T negativa
+    # (ver docs/cfd/verification.md §5b). Os casos 001–006 concluíram
+    # em 0,5; 0,25 é o padrão robusto (sensibilidade Δt: case_011).
+    max_Co: float = 0.25
     write_interval_deg: float = 5.0           # gravação por grau de manivela
 
     distribution: str = "uniform"             # uniform | region
@@ -162,6 +175,7 @@ class CfdConfig:
         fuel = d.get("fuel") or {}
         wiebe = d.get("wiebe") or {}
         comp = d.get("comparison") or {}
+        gas = d.get("gas") or {}
         return cls(
             enabled=bool(d.get("enabled", False)),
             adapter=d.get("adapter", "openfoam"),
@@ -179,15 +193,20 @@ class CfdConfig:
             P0_kPa=float(ini.get("P_kPa", 250.0)),
             T0_K=float(ini.get("T_K", 800.0)),
             Tw_K=float(walls.get("Tw_K", 440.0)),
+            wall_model=walls.get("model", "fixed_temperature"),
             turbulence_model=turb.get("model", "kEpsilon"),
             wall_functions=bool(turb.get("wall_functions", True)),
             deltaT_s=float(num.get("deltaT_s", 1.0e-6)),
-            max_Co=float(num.get("max_Co", 0.5)),
+            max_Co=float(num.get("max_Co", 0.25)),
             write_interval_deg=float(num.get("write_interval_deg", 5.0)),
             distribution=hs.get("distribution", "uniform"),
             region=hs.get("region"),
             fuel_name=fuel.get("name", "diesel"),
             fuel_feed=fuel.get("feed", "premixed_gas"),
+            gas_Cp_J_kgK=float(gas.get("Cp_J_kgK", 1005.0)),
+            gas_molWeight=float(gas.get("molWeight_kg_kmol", 28.96)),
+            gas_mu=float(gas.get("mu_Pa_s", 5.5e-05)),
+            gas_Pr=float(gas.get("Pr", 0.7)),
             wiebe_source=wiebe.get("source", "model"),
             wiebe_model=wiebe.get("model"),
             wiebe_parameters=wiebe.get("parameters"),
@@ -215,7 +234,7 @@ class CfdConfig:
                              "end": self.interval_end},
                 "initial": {"P_kPa": self.P0_kPa, "T_K": self.T0_K},
                 "walls": {"Tw_K": self.Tw_K,
-                          "model": "fixed_temperature"},
+                          "model": self.wall_model},
                 "turbulence": {"model": self.turbulence_model,
                                "wall_functions": self.wall_functions},
                 "numerics": {"deltaT_s": self.deltaT_s, "max_Co": self.max_Co,
@@ -223,6 +242,9 @@ class CfdConfig:
                 "heat_source": {"distribution": self.distribution,
                                 "region": self.region},
                 "fuel": {"name": self.fuel_name, "feed": self.fuel_feed},
+                "gas": {"Cp_J_kgK": self.gas_Cp_J_kgK,
+                        "molWeight_kg_kmol": self.gas_molWeight,
+                        "mu_Pa_s": self.gas_mu, "Pr": self.gas_Pr},
                 "wiebe": {"source": self.wiebe_source,
                           "model": self.wiebe_model,
                           "parameters": self.wiebe_parameters},
@@ -256,8 +278,8 @@ class CfdConfig:
             Vmin, Vmax = min(Vmin, V), max(Vmax, V)
         return {
             "interval_start_rad": a0, "interval_end_rad": a1,
-            "interval_duration_s": (a1 - a0) * engine_cfg.omega_rev_s
-                                   / (2.0 * math.pi),
+            "interval_duration_s": (a1 - a0)
+                                   / (2.0 * math.pi * engine_cfg.omega_rev_s),
             "V_start_m3": float(V0), "V_end_m3": float(V1),
             "V_min_m3": float(Vmin), "V_max_m3": float(Vmax),
             "Rc_geometric_check": float(engine_cfg.Rc),
@@ -294,6 +316,16 @@ class CfdConfig:
             e.append("cfd.initial.P_kPa e T_K devem ser > 0.")
         if not self.Tw_K > 0:
             e.append("cfd.walls.Tw_K deve ser > 0.")
+        if self.wall_model not in ("fixed_temperature", "adiabatic"):
+            e.append("cfd.walls.model deve ser fixed_temperature ou "
+                     "adiabatic.")
+        if self.wall_model == "adiabatic" and self.Tw_K != 440.0:
+            e.append("cfd.walls.model=adiabatic não usa Tw_K (paredes sem "
+                     "fluxo de calor); omita Tw_K ou use fixed_temperature.")
+        if not self.gas_Cp_J_kgK > 0 or not self.gas_molWeight > 0:
+            e.append("cfd.gas.Cp_J_kgK e molWeight_kg_kmol devem ser > 0.")
+        if not self.gas_mu > 0 or not 0 < self.gas_Pr <= 1.0:
+            e.append("cfd.gas.mu_Pa_s deve ser > 0 e Pr em (0, 1].")
         if self.turbulence_model not in ("kEpsilon", "kOmegaSST", "laminar"):
             e.append("cfd.turbulence.model deve ser kEpsilon, kOmegaSST "
                      "ou laminar.")

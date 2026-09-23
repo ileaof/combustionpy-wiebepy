@@ -122,8 +122,8 @@ def _pairs_text(pares) -> str:
 
 
 def function1_table(theta, stages, m_fuel_kg: float, LHV_kJ_per_kg: float,
-                    angle_unit: str, rpm: float,
-                    n_min: int = 400) -> List[Tuple[float, float]]:
+                    angle_unit: str, rpm: float, n_min: int = 400,
+                    step_deg: float = 0.1) -> List[Tuple[float, float]]:
     """Tabela (CA [graus], Q̇ [W]) para o campo Function1 ``Q`` do fvModel
     ``heatSource`` do OpenFOAM (tipo ``table``).
 
@@ -137,8 +137,11 @@ def function1_table(theta, stages, m_fuel_kg: float, LHV_kJ_per_kg: float,
     ca_deg = np.degrees(theta)
     q = qdot_power(theta, stages, m_fuel_kg, LHV_kJ_per_kg, angle_unit, rpm)
     # reamostragem uniforme em CA (mín. n_min pontos) para que o
-    # interpolador linear do solver reproduza o pico de Q̇
-    n = max(n_min, int(math.ceil(np.ptp(ca_deg) / 0.1)) + 1)
+    # interpolador linear do solver reproduza o pico de Q̇. O passo
+    # padrão de 0,1° subintegra estágios com m pequeno (energia
+    # concentrada numa faixa fina); o case_builder passa o passo
+    # convergido da verificação de conservação.
+    n = max(n_min, int(math.ceil(np.ptp(ca_deg) / step_deg)) + 1)
     cu = np.linspace(ca_deg[0], ca_deg[-1], n)
     qu = np.interp(cu, ca_deg, q)
     # fechamento da tabela (o solver integra exatamente esta série)
@@ -156,7 +159,7 @@ def function1_table(theta, stages, m_fuel_kg: float, LHV_kJ_per_kg: float,
 
 
 def table_text(theta, stages, m_fuel_kg: float, LHV_kJ_per_kg: float,
-               angle_unit: str, rpm: float) -> str:
+               angle_unit: str, rpm: float, step_deg: float = 0.1) -> str:
     """Tabela (CA [graus], Q̇ [W]) no formato do Function1 ``table`` do
     OpenFOAM Foundation 13 (forma de dicionário — ver tutorials, ex.
     engine2Valve2D):
@@ -167,16 +170,17 @@ def table_text(theta, stages, m_fuel_kg: float, LHV_kJ_per_kg: float,
     (potência total) é dividido pelo volume da cellZone **congelado na
     construção do fvModel** — com malha móvel (pistão) isso torna a
     fonte NÃO conservativa. Para casos com pistão móvel use
-    ``table_text_density``, que prescreve a densidade q''' diretamente.
+    ``table_text_density``, que prescreve q''' diretamente.
     """
     pares = function1_table(theta, stages, m_fuel_kg, LHV_kJ_per_kg,
-                            angle_unit, rpm)
+                            angle_unit, rpm, step_deg=step_deg)
     return _pairs_text(pares)
 
 
 def function1_table_density(theta, stages, m_fuel_kg: float,
                             LHV_kJ_per_kg: float, angle_unit: str, rpm: float,
-                            volume_of_theta, n_min: int = 400
+                            volume_of_theta, n_min: int = 400,
+                            step_deg: float = 0.1
                             ) -> List[Tuple[float, float]]:
     """Tabela (CA [graus], q''' [W/m³]) da distribuição UNIFORME (§7):
 
@@ -201,7 +205,7 @@ def function1_table_density(theta, stages, m_fuel_kg: float,
     if V.ndim == 0:
         V = np.full_like(theta, float(V))
     # reamostragem uniforme em CA (mín. n_min pontos), como em function1_table
-    n = max(n_min, int(math.ceil(np.ptp(ca_deg) / 0.1)) + 1)
+    n = max(n_min, int(math.ceil(np.ptp(ca_deg) / step_deg)) + 1)
     cu = np.linspace(ca_deg[0], ca_deg[-1], n)
     qu = np.interp(cu, ca_deg, q)
     Vu = np.interp(cu, ca_deg, V)
@@ -220,11 +224,13 @@ def function1_table_density(theta, stages, m_fuel_kg: float,
 
 
 def table_text_density(theta, stages, m_fuel_kg: float, LHV_kJ_per_kg: float,
-                       angle_unit: str, rpm: float, volume_of_theta) -> str:
+                       angle_unit: str, rpm: float, volume_of_theta,
+                       step_deg: float = 0.1) -> str:
     """Tabela (CA [°], q''' [W/m³]) no formato do Function1 ``table``
     do OpenFOAM 13 — ver ``function1_table_density``."""
     pares = function1_table_density(theta, stages, m_fuel_kg, LHV_kJ_per_kg,
-                                    angle_unit, rpm, volume_of_theta)
+                                    angle_unit, rpm, volume_of_theta,
+                                    step_deg=step_deg)
     return _pairs_text(pares)
 
 

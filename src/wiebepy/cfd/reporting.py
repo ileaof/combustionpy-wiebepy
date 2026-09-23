@@ -136,6 +136,27 @@ def _metricas_experimental(res: Dict, exp: Dict) -> List[List]:
     dif = p_cf - pd_
     imax_c = int(np.argmax(p))
     imax_e = int(np.argmax(pe))
+    extra: List[List] = []
+    wl_ca = res.get("wall_loss_ca_deg")
+    wl_W = res.get("wall_loss_W")
+    if wl_ca is not None and wl_W is not None and len(wl_ca) > 1 \
+            and "wall_loss_J" in res:
+        # perda às paredes acumulada ATÉ O PICO: calor perdido depois do
+        # pico não corrige a pressão máxima anterior (escada de V&V).
+        wl_ca = np.asarray(wl_ca, float)
+        wl_W = np.asarray(wl_W, float)
+        m_ate = wl_ca <= ca[imax_c]
+        if wl_ca.size > 1 and m_ate.sum() > 1:
+            l_tot = float(np.trapz(wl_W, wl_ca))
+            l_ate = float(np.trapz(wl_W[m_ate], wl_ca[m_ate]))
+            extra = [
+                ["perda às paredes: total na janela [J]",
+                 float(res["wall_loss_J"])],
+                ["perda às paredes acumulada até p_max "
+                 f"({ca[imax_c]:.1f}°) [J]", float(l_ate)],
+                ["fração da perda antes do p_max [%]",
+                 float(100.0 * l_ate / l_tot) if l_tot else float("nan")],
+            ]
     return [
         ["p_max CFD [kPa]", float(p[imax_c])],
         ["CA de p_max CFD [°]", float(ca[imax_c])],
@@ -147,7 +168,7 @@ def _metricas_experimental(res: Dict, exp: Dict) -> List[List]:
         ["diferença média (viés) [kPa]", float(np.mean(dif))],
         ["diferença média absoluta [kPa]", float(np.mean(np.abs(dif)))],
         ["RMSE na sobreposição [kPa]", float(np.sqrt(np.mean(dif ** 2)))],
-    ]
+    ] + extra
 
 
 def _e(v) -> str:

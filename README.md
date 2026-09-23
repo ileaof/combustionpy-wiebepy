@@ -8,8 +8,14 @@ com estatística, comparação objetiva entre números de estágios (AIC/BIC +
 validação cruzada por blocos), diagnóstico de identificabilidade e execução
 serial, paralela em CPU ou em GPU NVIDIA.
 
-É independente de qualquer modelo termodinâmico: trabalha só com a função
-Wiebe e com dados $(\theta, x_b)$ e/ou $(\theta, dx_b/d\theta)$.
+O **núcleo** trabalha só com a função Wiebe e com dados $(\theta, x_b)$ e/ou
+$(\theta, dx_b/d\theta)$, sem qualquer modelo termodinâmico. Dois módulos
+**opcionais** estendem isso sem alterar o núcleo:
+
+- **modo pressão** (0-D): ajusta N estágios à curva de pressão do cilindro
+  com modelo de zona única (Hohenberg) — §"Modo pressão" abaixo;
+- **CFD** (OpenFOAM 13): escoamento compressível com liberação de calor
+  prescrita pela Wiebe calibrada — §"CFD" abaixo.
 
 > 📖 Guia passo a passo: abra [`Help.html`](Help.html) no navegador.
 > Ajuda na linha de comando: `wiebepy --help`, `wiebepy --help-model`,
@@ -55,6 +61,7 @@ Extras opcionais — o programa funciona **sem nenhum deles**:
 | `numba` | `numba` | kernels compilados em CPU (o backend mais rápido em CPU) |
 | `gpu` | `cupy-cuda12x` | GPU NVIDIA (requer driver CUDA 12+) |
 | `gui` | `streamlit`, `altair`, `pandas` | interface gráfica (`wiebepy --gui`) |
+| `cfd` | dependências do módulo CFD | subcomando `wiebepy cfd` (solver OpenFOAM 13 no WSL2 à parte; ver `docs/cfd/install.md`) |
 | `dev` | `pytest` | testes |
 
 Sem instalar o pacote, use `python main.py` no lugar de `wiebepy`.
@@ -255,12 +262,13 @@ ou GPU). Runs em processos paralelos continuam disponíveis na CLI.
 Com dados de ensaio θ × P, o wiebepy ajusta a **pressão** exatamente como o
 Double Wiebe, mas com **1 a 5 estágios** de liberação de calor: mesmo modelo
 0-D de zona única (geometria biela-manivela, Hohenberg, EDOs em P e T_g),
-com $dQ/d	heta = Q_{total}\sum_j eta_j\,dx_j/d	heta$. Rc é ajustado
+com $dQ/d\theta = Q_{total}\sum_j \beta_j\,dx_j/d\theta$. Rc é ajustado
 por padrão (`--fixed-rc` para fixá-lo). **Com N = 2 o modelo reproduz o
 Double Wiebe** (diferença ≤ 1e-6 relativa, testada).
 
 ```bash
-wiebepy --stages 2 --optimize --input examples/data/ensaio_P_exp_carga3_45.txt         --input-type pressure --pressure-unit bar --runs 5 --save-plots
+wiebepy --stages 2 --optimize --input examples/data/ensaio_P_exp_carga3_45.txt \
+        --input-type pressure --pressure-unit bar --runs 5 --save-plots
 wiebepy --compare-stages 1 2 3 --input ensaio.txt --input-type pressure
 ```
 
@@ -323,6 +331,44 @@ wiebepy cfd run      --case results/cfd/case_001 --follow
 wiebepy cfd status   --case results/cfd/case_001   # cancel/status/report idem
 wiebepy cfd report   --case results/cfd/case_001   # relatório HTML autônomo
 ```
+
+`prepare` aceita `--no-heat` (caso motrado, sem fonte de calor) e
+`--fixed-piston` (volume constante). Estado do caso (Preparado →
+Validado → Executando → Concluído/Falhou/Cancelado) fica em
+`<caso>/estado.yaml`; `run` exige estado VALIDATED e verifica ao final
+se a janela foi coberta — **"processo terminou" ≠ "convergiu"**.
+Códigos de saída: 0 ok | 2 uso/configuração | 1 inesperado.
+
+Chaves de configuração CFD principais (além de `engine:`, já
+documentado no modo pressão):
+
+| Chave | Padrão | Efeito |
+|---|---|---|
+| `cfd.mode` | – | `prescribed_wiebe` (fonte de calor prescrita) |
+| `cfd.geometry` | `simplified_cylinder` | `n_radial` × `n_axial`, `moving_piston` |
+| `cfd.interval` | – | janela em °CA ou rad (`angle_unit`) |
+| `cfd.initial` | – | P [kPa] e T [K] no início da janela |
+| `cfd.walls.Tw_K`, `cfd.walls.model` | 440 K / `fixed_temperature` | temperatura de parede ou `adiabatic` (sem fluxo) |
+| `cfd.turbulence` | laminar | `kEpsilon`/`kOmegaSST` com `wall_functions: true` |
+| `cfd.numerics` | Δt 1e-6 s, max_Co 0,25 | passo adaptativo; **max_Co 0,5 abortou** nos casos deste motor (divergência com T negativa em θ ≈ 12° APMS/−24°) |
+| `cfd.gas` | Cp 1005, M 28,96 (γ=1,400) | Cp_J_kgK/molWeight_kg_kmol/mu_Pa_s/Pr — ex.: Cp 1063 ⇒ γ=1,37 (equivalência com o κ=1,37 do 0-D) |
+| `cfd.heat_source` | uniform | distribuição da fonte; `region` opcional |
+| `cfd.wiebe` | – | `model: caminho/model.json` (fonte calibrada) |
+| `cfd.comparison` | – | ensaio experimental p×θ (unidades, offset) para o relatório |
+
+O **balanço de energia é verificado na preparação**: a grade da tabela
+da fonte é refinada (0,1° → 0,005°) até ∫Q̇dt = m_f·PCI·Δx_b (0,1 %)
+e o caso é recusado se nenhuma grade fecha (relevante com m pequeno —
+início abrupto da queima). Fontes calibradas prontas em `examples/`:
+`model_cfd_calibrated.json` (1 estágio, Rc 17) e
+`model_cfd_duo_rc15635.json` (2 estágios, Rc efetivo 15,635 — só para
+o caso diagnóstico `config_cfd_rc_efetivo.yaml`). Casos controlados e
+resultados da escada de verificação: `docs/cfd/verification.md` §3c.
+
+**Limites do modo CFD**: a liberação de calor é PRESCRITA — o módulo
+NÃO prevê cinética química, frente de chama ou emissões; a comparação
+CFD–ensaio é **diagnóstica, nunca validação** (calibração ≠ validação);
+"concluído" reporta término do solver, não convergência física.
 
 O modo reativo (combustível com mecanismo químico) existe apenas como
 arquitetura — nunca é apresentado como funcional nem substituído
@@ -505,7 +551,7 @@ $dx_b/d\theta$; (4) $\beta_j\,dx_j/d\theta$; (5) experimental × ajustado;
 ## 10. Validação e testes
 
 ```bash
-python -m pytest                  # 280 testes, ~45 s
+python -m pytest                  # 365 testes
 python -m pytest -m "not slow"    # só os rápidos
 ```
 
@@ -516,6 +562,8 @@ python -m pytest -m "not slow"    # só os rápidos
 | `test_optimization.py` | PSO (esfera, limites, reprodutibilidade, cancelamento, topologias), recuperação de parâmetros N = 1 e N = 2, estatísticas dos runs, reprodutibilidade por semente, runs paralelos ≡ sequenciais, modos de β, `--fit-a` + alvo `both`, métricas, avisos, folds da CV, regra de recomendação, comparação que identifica N = 2 |
 | `test_gui.py` | interface (AppTest, sem navegador): todas as páginas sem dados, botão Ajuda, edição do modelo, carga de exemplo → ajuste em segundo plano → aplicar ao modelo → .zip, comparação completa |
 | `test_io_cli.py` | leitura CSV/TXT/DAT/JSON (cabeçalho, aliases, σ → peso, ordenação, erros), configs JSON/YAML/TOML e precedência, API (avaliação, `save`/`load`, `fit`), CLI (`--help`, `--help-model`, `--help-examples`, avaliação N = 1…5, modelo salvo, ajuste com todos os arquivos, erros de uso, `--devices`, comparação) |
+| `test_pressure.py` | modelo 0-D de pressão (Hohenberg, EDOs), ajuste em modo pressão, N = 2 ≡ Double Wiebe em pressão, relatório HTML |
+| `test_cfd.py` | configuração e validação do caso CFD (unidades, γ/gás, paredes fixa/adiabática, grade convergente da fonte, erro claro se ∫Q̇dt não fecha), builder (malha, BCs, tabelas fvModels), resultados e métricas do relatório, conversões deg/rad/s da janela |
 
 Testes de GPU são pulados sem CuPy/GPU; testes de Numba, sem Numba.
 Os testes de equivalência com Single/Double Wiebe são pulados se os projetos
@@ -583,10 +631,15 @@ wiebepy/
 │   ├── io/                      # readers, writers, config
 │   ├── plotting/plots.py
 │   ├── gui/                     # Streamlit: app.py, state.py, app_pages/
+│   ├── pressure/                # modelo 0-D: engine, model (Hohenberg, EDOs), fit
+│   ├── cfd/                     # OPCIONAL: config, case_builder, sources,
+│   │                            # adapters (OpenFOAM 13/WSL2), runner,
+│   │                            # results, reporting, validation
 │   └── cli/                     # parser (argparse), helptext
-├── tests/                       # 280 testes
-├── examples/                    # dados sintéticos N = 1…5, configs, modelo
-└── docs/                        # figuras e benchmark medido
+├── tests/                       # 365 testes
+├── examples/                    # dados sintéticos N = 1…5, configs, modelos
+│                                # calibrados, ensaio de pressão
+└── docs/                        # figuras, benchmark medido, docs/cfd/*
 ```
 
 ## 13. Limitações conhecidas
@@ -602,6 +655,11 @@ wiebepy/
 - **GPU**: ganho só em problemas grandes; float32 reduz a precisão da busca.
 - **GUI**: runs em processos paralelos só na CLI (na interface, sequenciais
   com Numba/GPU).
+- **CFD**: liberação de calor prescrita (sem cinética/frente de chama/
+  emissões); comparação com ensaio é diagnóstica, não validação;
+  `max_Co 0,5` abortou por divergência com T negativa neste motor — use
+  0,25 (novo padrão); a fonte Wiebe é verificada energeticamente na
+  preparação e o caso é recusado se ∫Q̇dt não fecha em 0,1 %.
 
 ## 14. Referências
 

@@ -52,6 +52,31 @@ def test_cfd_disabled_by_default():
     assert cfd_enabled({"cfd": {"enabled": True}}) is True
 
 
+def test_derived_interval_duration_s_conversoes():
+    """Duração física da janela: Δθ[rad] / (2π·RPM/60); deg e rad
+    (mesma janela) devem dar o MESMO valor em segundos."""
+    cfg = CfdConfig.from_dict({"wiebe": CFG_DICT["wiebe"]})
+    d = cfg.derived(ENGINE)
+    # −120°…+120° = 240° = 2/3 de volta a 3396,2 rpm:
+    # 2/3 × (60/3396,2) s = 0,011776 s
+    esperado = (240.0 / 360.0) * (60.0 / ENGINE.rpm)
+    assert math.isclose(d["interval_duration_s"], esperado, rel_tol=1e-12)
+    # a mesma janela em rad produz o mesmo tempo
+    cfg_rad = CfdConfig.from_dict({"wiebe": CFG_DICT["wiebe"],
+                                   "interval": {"angle_unit": "rad",
+                                                "start": -2.0943951023931953,
+                                                "end": 2.0943951023931953}})
+    assert math.isclose(cfg_rad.derived(ENGINE)["interval_duration_s"],
+                        esperado, rel_tol=1e-9)
+    # coerência com a conversão da fonte: Δθ[rad] / (dθ/dt) = duração
+    from wiebepy.cfd.sources import dtheta_dt
+    assert math.isclose(
+        (cfg_rad.derived(ENGINE)["interval_end_rad"]
+         - cfg_rad.derived(ENGINE)["interval_start_rad"])
+        / dtheta_dt("rad", ENGINE.rpm),
+        esperado, rel_tol=1e-12)
+
+
 def test_config_defaults_and_validation():
     cfg = CfdConfig.from_dict({"wiebe": CFG_DICT["wiebe"]})
     assert cfg.enabled is False                # CFD desabilitado por padrão
@@ -70,6 +95,25 @@ def test_config_interval_validation():
     ruim = CfdConfig.from_dict({"interval": {"start": 120, "end": -120},
                                 "wiebe": CFG_DICT["wiebe"]})
     assert cfg_has_error(ruim, "end deve ser > start")
+
+
+def test_config_wall_model_e_gas_validation():
+    # modelo de parede inválido é bloqueante
+    ruim = CfdConfig.from_dict({"walls": {"model": "qualquer"},
+                                "wiebe": CFG_DICT["wiebe"]})
+    assert cfg_has_error(ruim, "fixed_temperature ou adiabatic")
+    # adiabatic com Tw explícito é bloqueante (nenhuma inferência silenciosa)
+    ruim = CfdConfig.from_dict({"walls": {"model": "adiabatic", "Tw_K": 500},
+                                "wiebe": CFG_DICT["wiebe"]})
+    assert cfg_has_error(ruim, "não usa Tw_K")
+    # adiabatic sem Tw_K (padrão) valida
+    ok = CfdConfig.from_dict({"walls": {"model": "adiabatic"},
+                              "wiebe": CFG_DICT["wiebe"]})
+    assert ok.validate() == []
+    # gas com Cp ≤ 0 é bloqueante
+    ruim = CfdConfig.from_dict({"gas": {"Cp_J_kgK": 0},
+                                "wiebe": CFG_DICT["wiebe"]})
+    assert cfg_has_error(ruim, "devem ser > 0")
 
 
 def cfg_has_error(cfg, trecho):
@@ -575,6 +619,78 @@ def test_case_builder_kepsilon_campos(tmp_path):
     assert (t0 / "epsilon").read_text(encoding="utf-8").count(
         "epsilonWallFunction") == 3
     assert not (t0 / "omega").exists()
+
+
+def test_case_builder_paredes_adiabaticas(tmp_path):
+    # model: adiabatic → T com zeroGradient nas três paredes
+    from wiebepy.cfd.case_builder import CaseBuilder
+    d_cfg = dict(CFG_DICT)
+    d_cfg["walls"] = {"model": "adiabatic"}
+    cfg = CfdConfig.from_dict(d_cfg)
+    b = CaseBuilder(cfg, ENGINE, solver_info={"version": "13"},
+                    heat_enabled=True, moving_override=True)
+    d = b.build(tmp_path / "adiab")
+    t = (d / "-120/T").read_text(encoding="utf-8")
+    assert t.count("zeroGradient") >= 3 and "fixedValue" not in t.split(
+        "boundaryField")[1]
+
+
+def test_case_builder_grade_converge_para_m_pequeno(tmp_path):
+    # fonte calibrada (m=0.075): grade fixa de 0,1° NÃO fecha o
+    # fechamento (déficit 0,29 % na 1ª célula de queima); o builder
+    # refina a grade da verificação e da tabela até passar (0,02°) e
+    # registra o passo em case_config.yaml
+    import yaml as _yaml
+    from wiebepy.cfd.case_builder import CaseBuilder
+    modelo = str(Path(__file__).resolve().parent.parent
+                 / "examples/model_cfd_calibrated.json")
+    d_cfg = dict(CFG_DICT)
+    d_cfg["wiebe"] = {"source": "model", "model": modelo}
+    cfg = CfdConfig.from_dict(d_cfg)
+    b = CaseBuilder(cfg, ENGINE, solver_info={"version": "13"},
+                    heat_enabled=True, moving_override=True)
+    d = b.build(tmp_path / "m075")
+    info = _yaml.safe_load((d / "case_config.yaml").read_text(
+        encoding="utf-8"))
+    chk = info["heat_source"]["energy_check"]
+    assert chk["ok"] is True and chk["rel_error"] <= 1e-3
+    assert info["heat_source"]["table_step_CA_deg"] < 0.1
+
+
+def test_case_builder_fonte_inconsistente_levanta_erro(monkeypatch):
+    # mecanismo de segurança: se o fechamento não fecha em NENHUMA grade
+    # (até 0,005°), o builder levanta erro — nunca aceita silenciosamente
+    import wiebepy.cfd.case_builder as cb
+    from wiebepy.cfd.case_builder import CaseBuilder
+    monkeypatch.setattr(
+        cb, "energy_check",
+        lambda *a, **k: {"integral_J": 100.0, "expected_J": 369.0,
+                         "rel_error": 0.5, "ok": False})
+    d_cfg = dict(CFG_DICT)
+    cfg = CfdConfig.from_dict(d_cfg)
+    with pytest.raises(ValueError, match="0,005"):
+        CaseBuilder(cfg, ENGINE, solver_info={"version": "13"},
+                    heat_enabled=True, moving_override=True)
+
+
+def test_case_builder_gas_cp_equivalencia(tmp_path):
+    # teste de equivalência termodinâmica: Cp 1063 com molWeight 28.96
+    # dá γ = 1,37 (o κ do 0-D) — escrito no physicalProperties e
+    # registrado no case_config.yaml
+    from wiebepy.cfd.case_builder import CaseBuilder
+    d_cfg = dict(CFG_DICT)
+    d_cfg["gas"] = {"Cp_J_kgK": 1063.0, "molWeight_kg_kmol": 28.96}
+    cfg = CfdConfig.from_dict(d_cfg)
+    b = CaseBuilder(cfg, ENGINE, solver_info={"version": "13"},
+                    heat_enabled=True, moving_override=True)
+    d = b.build(tmp_path / "gamma")
+    pp = (d / "constant/physicalProperties").read_text(encoding="utf-8")
+    assert "Cp              1063" in pp and "molWeight       28.96" in pp
+    import yaml as _yaml
+    info = _yaml.safe_load((d / "case_config.yaml").read_text(
+        encoding="utf-8"))
+    assert info["gas_model"]["gamma"] == pytest.approx(1.37, abs=0.002)
+    assert info["walls"]["model"] == "fixed_temperature"
 
 
 def test_case_state_machine(tmp_path):

@@ -1,0 +1,75 @@
+# =====================================================================
+# Caso controlado case_005 — fonte Wiebe CALIBRADA (equivalência com
+# o case_004, que usava a fonte manual model_cfd.json).
+#
+# Diferença única vs case_004: a fonte Wiebe vem de
+# examples/model_cfd_calibrated.json (calibração 0-D documentada, Rc
+# fixado em 17 — ver provenience dentro do arquivo). Malha, turbulência,
+# paredes e condições iniciais idênticas às do case_004. Isola o efeito
+# da procedência da fonte sobre a comparação com o ensaio.
+# =====================================================================
+engine:
+  bore_mm: 86.0
+  stroke_mm: 70.0
+  rod_length_mm: 117.5
+  Rc: 17.0
+  rpm: 3396.20
+  m_fuel_kg_per_cycle: 9.42754647351e-6
+  LHV_kJ_per_kg: 39191.3
+  T1_K: 308.15
+  Tw_K: 440.0
+
+cfd:
+  enabled: true
+  adapter: openfoam
+  mode: prescribed_wiebe
+  case_directory: results/cfd/case_005
+  workers: 1
+  wsl_distro: Ubuntu-22.04
+
+  geometry:
+    type: simplified_cylinder
+    moving_piston: true
+    n_radial: 24
+    n_axial: 36
+
+  interval:
+    angle_unit: deg
+    start: -120
+    end: 120
+
+  initial:
+    P_kPa: 127.6
+    T_K: 308.15
+
+  walls:
+    Tw_K: 440
+    model: fixed_temperature
+
+  turbulence:
+    model: kEpsilon
+    wall_functions: true
+
+  numerics:
+    deltaT_s: 1.0e-6
+    max_Co: 0.5
+    write_interval_deg: 10
+
+  heat_source:
+    distribution: uniform
+    region: null
+
+  fuel:
+    name: diesel
+    feed: premixed_gas
+
+  wiebe:
+    source: model
+    model: examples/model_cfd_calibrated.json
+
+  comparison:
+    criterion: same_rpm_same_energy
+    experimental: examples/data/ensaio_P_exp_carga3_45.txt
+    experimental_angle_unit: rad
+    experimental_pressure_unit: bar
+    experimental_offset_deg: 0.0
