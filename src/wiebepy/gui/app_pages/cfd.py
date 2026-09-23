@@ -18,6 +18,7 @@ import streamlit as st
 import yaml
 
 from wiebepy.gui import state as S
+from wiebepy.cfd.fuels import fuel_names
 
 S.init_state()   # idempotente (app.py já chama; garante standalone)
 
@@ -29,7 +30,12 @@ st.caption(
     "depende desta página; desabilitar o CFD não apaga resultados.")
 
 # ------------------------------------------------------------------ helpers
-_COMBUSTIVEIS = ["H2", "CH4", "ethanol", "diesel"]
+# Registro combinado: embutidos (ordem do FUELS) + combustíveis
+# cadastrados na aba "Combustíveis" (data/fuels_custom.yaml).
+def _lista_combustiveis() -> list:
+    return fuel_names()
+
+
 _TURB = {"laminar": False, "kEpsilon": True, "kOmegaSST": True}
 
 
@@ -46,7 +52,7 @@ def _form() -> dict:
             "moving_piston": True,
             "n_radial": 16, "n_axial": 24,
             "distribution": "uniform",
-            "fuel_name": "CH4",
+            "fuel_name": "diesel",   # ensaio de referência: Diesel
             "wiebe_origem": "modelo atual",
             "wiebe_model": "results/model.json",
             # motor (mesmos parâmetros dos modos 0-D)
@@ -180,8 +186,14 @@ with st.expander("Configuração do caso", expanded=True):
             "Distribuição da fonte", ["uniform", "region"], f["distribution"],
             help="uniform = referência (§7); region usa potência total Q "
                  "e herda uma limitação do OF13 com pistão móvel.")
-        f["fuel_name"] = st.select_slider("Combustível", _COMBUSTIVEIS,
-                                          f["fuel_name"])
+        lista = _lista_combustiveis()
+        if f["fuel_name"] not in lista:
+            f["fuel_name"] = "diesel"     # ensaio de referência: Diesel
+        f["fuel_name"] = st.select_slider("Combustível", lista,
+                                          f["fuel_name"],
+                                          help="Inclui combustíveis "
+                                               "cadastrados na aba "
+                                               "'Combustíveis'.")
     st.markdown("**Motor** (mesmos parâmetros dos modos 0-D)")
     e = st.columns(4)
     f["bore_mm"] = e[0].number_input("Diâmetro [mm]", f["bore_mm"])

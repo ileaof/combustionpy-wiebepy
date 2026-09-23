@@ -14,7 +14,8 @@ from streamlit.testing.v1 import AppTest  # noqa: E402
 APP = str(Path(__file__).resolve().parents[1] / "src" / "wiebepy" / "gui" / "app.py")
 PAGINAS = ["app_pages/dados.py", "app_pages/modelo.py", "app_pages/ajuste.py",
            "app_pages/comparacao.py", "app_pages/exportar.py",
-           "app_pages/desempenho.py"]
+           "app_pages/desempenho.py", "app_pages/cfd.py",
+           "app_pages/combustiveis.py"]
 
 
 def _app():

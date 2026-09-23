@@ -230,14 +230,20 @@ def report_html(case_dir, res: Dict, cfg: Optional[CfdConfig] = None,
         ["composição/formula", fuel.get("formula")],
         ["fase", fuel.get("phase")],
         ["alimentação", fuel.get("feed")],
-        ["PCI (LHV)", f"{fuel.get('LHV_kJ_per_kg')} kJ/kg"],
+        ["PCI (LHV) usado na fonte",
+         f"{fuel.get('LHV_kJ_per_kg_engine', fuel.get('LHV_kJ_per_kg'))}"
+         " kJ/kg"],
+        ["PCI de referência do registro", f"{fuel.get('LHV_kJ_per_kg')} kJ/kg"],
         ["fonte do PCI", fuel.get("LHV_source")],
         ["massa por ciclo", f"{fuel.get('m_fuel_kg_per_cycle')} kg"],
-        ["energia por ciclo", f"{fuel.get('Q_cycle_J')} J"],
+        ["energia por ciclo (m_f·PCI do ensaio)",
+         f"{fuel.get('m_fuel_kg_per_cycle', 0) * 1e3 * fuel.get('LHV_kJ_per_kg_engine', fuel.get('LHV_kJ_per_kg', 0)):.1f} J"],
         ["mecanismo químico", fuel.get("mechanism")
          or "— (não aplicável ao modo prescrito)"],
         ["limitações", fuel.get("validity")],
     ]))
+    if fuel.get("notice"):
+        a(f"<p class='nota'>{fuel['notice']}</p>")
 
     a("<h2>Geometria e movimento do pistão</h2>")
     a(_tabela(["Grandeza", "Valor"], [

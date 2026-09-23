@@ -34,7 +34,8 @@ padrão — ver io/config.py):
         distribution: uniform    # uniform (referência) | region
         region: null             # nome do cellZone, se distribution=region
 
-      fuel: {name: CH4, feed: premixed_gas}
+      fuel: {name: diesel, feed: premixed_gas}   # diesel do ensaio (PCI do
+                                                 # ensaio na seção engine)
       wiebe:
         source: model            # model (model.json do wiebepy) | parameters
         model: results/model.json
@@ -56,6 +57,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
+
+from wiebepy.cfd.fuels import fuel_names
 
 
 class CaseState(str, Enum):
@@ -125,8 +128,8 @@ class CfdConfig:
     distribution: str = "uniform"             # uniform | region
     region: Optional[str] = None              # cellZone (distribution=region)
 
-    fuel_name: str = "CH4"
-    fuel_feed: str = "premixed_gas"
+    fuel_name: str = "diesel"   # ensaio de pressão de referência: Diesel
+    fuel_feed: str = "premixed_gas"   # pré-vaporizado no modo prescrito
 
     wiebe_source: str = "model"               # model | parameters
     wiebe_model: Optional[str] = None         # caminho de model.json
@@ -174,7 +177,7 @@ class CfdConfig:
             write_interval_deg=float(num.get("write_interval_deg", 5.0)),
             distribution=hs.get("distribution", "uniform"),
             region=hs.get("region"),
-            fuel_name=fuel.get("name", "CH4"),
+            fuel_name=fuel.get("name", "diesel"),
             fuel_feed=fuel.get("feed", "premixed_gas"),
             wiebe_source=wiebe.get("source", "model"),
             wiebe_model=wiebe.get("model"),
@@ -283,9 +286,9 @@ class CfdConfig:
         if self.distribution == "region" and not self.region:
             e.append("distribution=region exige cfd.heat_source.region "
                      "(nome do cellZone).")
-        if self.fuel_name not in FUELS:
+        if self.fuel_name not in fuel_names():
             e.append(f"cfd.fuel.name '{self.fuel_name}' inválida "
-                     f"({FUELS}).")
+                     f"(válidos: {fuel_names()}).")
         if self.fuel_feed not in ("premixed_gas",):
             e.append("cfd.fuel.feed: apenas 'premixed_gas' no modo de calor "
                      "prescrito (injeção líquida/spray é futura).")

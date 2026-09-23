@@ -67,8 +67,13 @@ cfd:
     region: null
 
   fuel:
-    name: CH4                   # H2 | CH4 | ethanol | diesel
-    feed: premixed_gas
+    name: diesel                # ENSAIO DE REFERÊNCIA É DIESEL (carga 3_45%):
+                                # H2 | CH4 | ethanol | diesel
+    feed: premixed_gas          # pré-vaporizado no modo prescrito; o diesel
+                                # do ensaio entra via m_f·PCI (seção engine,
+                                # LHV do combustível do ensaio 39191.3 kJ/kg)
+                                # — a composição/surrogate só é relevante no
+                                # modo reativo (não implementado)
 
   wiebe:                        # parâmetros Wiebe DE UM modelo calibrado
     source: model               # model (model.json) | parameters

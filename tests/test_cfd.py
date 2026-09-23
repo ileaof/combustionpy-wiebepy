@@ -36,7 +36,7 @@ CFG_DICT = {
     "initial": {"P_kPa": 250, "T_K": 800},
     "walls": {"Tw_K": 440},
     "turbulence": {"model": "laminar"},
-    "fuel": {"name": "CH4", "feed": "premixed_gas"},
+    "fuel": {"name": "diesel", "feed": "premixed_gas"},
     "wiebe": {"source": "parameters",
               "parameters": [{"beta": 1.0, "theta0": -5, "duration": 40,
                               "m": 2.0}]},
@@ -254,6 +254,138 @@ def test_fuels_registry_sources():
         1e-5 * FUELS["CH4"].LHV_kJ_per_kg * 1e3, rel=1e-9)
     # CH4 puro ≠ gás natural (§10)
     assert "gás natural" in FUELS["CH4"].remarks.lower()
+
+
+# ------------------------------------------ cadastro permanente + CSV
+def _registro_exemplo(nome="C3H8"):
+    return {
+        "name": nome, "display": "Propano", "formula": "C3H8",
+        "phase": "gas", "feed": "premixed_gas (vaporizado)",
+        "LHV_kJ_per_kg": 46350.0,
+        "LHV_source": "NIST WebBook (LHV, 25 °C)",
+        "stoich_AFR": 15.7, "molar_mass_kg_per_kmol": 44.096,
+        "remarks": "teste", "validity": "", "mechanism": None,
+    }
+
+
+def test_custom_fuel_save_load_delete_roundtrip(tmp_path, monkeypatch):
+    from wiebepy.cfd import fuels as fuels_mod
+    from wiebepy.cfd.fuels import (all_fuel_specs, delete_custom_fuel,
+                                   fuel_names, fuel_summary, load_custom_fuels,
+                                   save_custom_fuel)
+    yaml_path = tmp_path / "fuels_custom.yaml"
+    # get_fuel/fuel_summary resolvem pelo caminho padrão — redireciona p/ tmp
+    monkeypatch.setattr(fuels_mod, "custom_fuels_path", lambda: yaml_path)
+    assert load_custom_fuels(yaml_path) == {}
+    assert save_custom_fuel(_registro_exemplo(), yaml_path) == []
+    customs = load_custom_fuels(yaml_path)
+    assert "C3H8" in customs
+    assert customs["C3H8"]["LHV_source"] == "NIST WebBook (LHV, 25 °C)"
+    # registro combinado inclui o cadastrado; embutidos preservados
+    specs = all_fuel_specs(yaml_path)
+    assert "C3H8" in specs and "CH4" in specs
+    assert specs["C3H8"].LHV_kJ_per_kg == pytest.approx(46350.0)
+    assert set(FUELS) <= set(specs)
+    assert fuel_names(yaml_path) == list(FUELS) + ["C3H8"]
+    assert fuel_summary("C3H8", 1e-5)["Q_cycle_J"] == pytest.approx(
+        1e-5 * 46350.0 * 1e3, rel=1e-9)
+    # embutido nunca é alterado; cadastro sobrepõe com marcação
+    assert save_custom_fuel(_registro_exemplo("diesel"), yaml_path) == []
+    specs2 = all_fuel_specs(yaml_path)
+    assert specs2["diesel"].LHV_kJ_per_kg == pytest.approx(46350.0)
+    assert FUELS["diesel"].LHV_kJ_per_kg == pytest.approx(42_600.0)
+    assert "sobrepõe" in specs2["diesel"].remarks
+    # remoção: remove o cadastro (embutido volta a valer intacto)
+    assert delete_custom_fuel("C3H8", yaml_path) is True
+    assert delete_custom_fuel("diesel", yaml_path) is True
+    assert all_fuel_specs(yaml_path)["diesel"].LHV_kJ_per_kg == \
+        pytest.approx(42_600.0)
+    assert delete_custom_fuel("C3H8", yaml_path) is False
+    assert load_custom_fuels(yaml_path) == {}
+
+
+def test_custom_fuel_validation_sem_fonte(tmp_path):
+    from wiebepy.cfd.fuels import (custom_fuels_path, load_custom_fuels,
+                                   save_custom_fuel)
+    yaml_path = tmp_path / "fuels_custom.yaml"
+    r = _registro_exemplo()
+    r["LHV_source"] = ""                     # propriedade sem fonte: negada
+    erros = save_custom_fuel(r, yaml_path)
+    assert any("fonte do PCI" in e for e in erros)
+    assert load_custom_fuels(yaml_path) == {}
+    r["LHV_kJ_per_kg"] = -1
+    assert save_custom_fuel(r, yaml_path)
+    r["LHV_kJ_per_kg"] = 100.0
+    r["LHV_source"] = "ok"
+    r["name"] = "com espaco"
+    assert save_custom_fuel(r, yaml_path)
+    r["name"] = "ok_nome"
+    r["mechanism"] = "GRI3.0"
+    erros = save_custom_fuel(r, yaml_path)
+    assert any("reativo" in e for e in erros)
+    # caminho padrão (permanente): data/fuels_custom.yaml na raiz
+    assert custom_fuels_path().as_posix() == "data/fuels_custom.yaml"
+
+
+def test_fuel_csv_export_import_roundtrip(tmp_path):
+    from wiebepy.cfd.fuels import (all_fuel_specs, export_fuels_csv,
+                                   import_fuels_csv, save_custom_fuel)
+    yaml_path = tmp_path / "fuels_custom.yaml"
+    save_custom_fuel(_registro_exemplo(), yaml_path)
+    csv_path = tmp_path / "fuels.csv"
+    nomes = export_fuels_csv(csv_path, path_yaml=yaml_path)
+    assert nomes == list(FUELS) + ["C3H8"]
+    texto = csv_path.read_text(encoding="utf-8-sig")
+    assert texto.splitlines()[0].split(";")[0] == "name"
+    # ler de volta: grava cada linha como cadastro permanente
+    res = import_fuels_csv(csv_path, path_yaml=yaml_path)
+    assert sorted(res["gravados"]) == sorted(list(FUELS) + ["C3H8"])
+    assert res["erros"] == []
+    specs = all_fuel_specs(yaml_path)
+    # os embutidos passam a ser servidos do CSV (sobrepõe, valores iguais)
+    assert specs["H2"].LHV_kJ_per_kg == pytest.approx(
+        FUELS["H2"].LHV_kJ_per_kg, rel=1e-12)
+    assert specs["C3H8"].LHV_kJ_per_kg == pytest.approx(46350.0)
+    # CSV editado sem fonte do PCI → linha rejeitada, lote não aborta
+    import csv as _csv
+    with csv_path.open("r", newline="", encoding="utf-8-sig") as fh:
+        linhas_csv = list(_csv.reader(fh, delimiter=";"))
+    cab, corpo = linhas_csv[0], linhas_csv[1:]
+    idx_fonte = cab.index("LHV_source")
+    quebrada = list(corpo[0])
+    quebrada[idx_fonte] = ""                 # H2 sem fonte
+    csv2 = tmp_path / "quebrado.csv"
+    with csv2.open("w", newline="", encoding="utf-8-sig") as fh:
+        w = _csv.writer(fh, delimiter=";")
+        w.writerow(cab)
+        w.writerow(quebrada)
+        w.writerows(corpo[1:])
+    res2 = import_fuels_csv(csv2, path_yaml=yaml_path)
+    assert res2["erros"] and "H2" in res2["erros"][0]
+    assert len(res2["gravados"]) == len(corpo) - 1   # C3H8 + demais embutidos
+    specs3 = all_fuel_specs(yaml_path)
+    assert specs3["C3H8"].LHV_kJ_per_kg == pytest.approx(46350.0)
+
+
+def test_fuel_csv_import_csv_sem_coluna_name(tmp_path):
+    from wiebepy.cfd.fuels import import_fuels_csv
+    csv_path = tmp_path / "sem_name.csv"
+    csv_path.write_text("a;b\n1;2\n", encoding="utf-8-sig")
+    with pytest.raises(ValueError):
+        import_fuels_csv(csv_path)
+
+
+def test_config_aceita_combustivel_cadastrado(tmp_path, monkeypatch):
+    from wiebepy.cfd import fuels as fuels_mod
+    from wiebepy.cfd.fuels import save_custom_fuel
+    yaml_path = tmp_path / "fuels_custom.yaml"
+    save_custom_fuel(_registro_exemplo("C3H8"), yaml_path)
+    monkeypatch.setattr(fuels_mod, "custom_fuels_path",
+                        lambda: yaml_path)
+    cfg = CfdConfig.from_dict({**CFG_DICT,
+                               "fuel": {"name": "C3H8",
+                                        "feed": "premixed_gas"}})
+    assert cfg.validate() == []
 
 
 # ------------------------------------------------------------ case builder

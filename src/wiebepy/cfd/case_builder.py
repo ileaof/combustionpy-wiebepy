@@ -94,6 +94,19 @@ class CaseBuilder:
                                     Rc=engine.Rc, rpm=engine.rpm)
         a0 = self.theta_start_rad
         self.fuel = fuel_summary(cfg.fuel_name, engine.m_fuel)
+        # O PCI usado na fonte de calor é o do ENSAIO (engine.LHV); a
+        # referência típica do registro fica registrada ao lado, com a
+        # diferença explicada (ex.: diesel do ensaio ≠ diesel típico).
+        if abs(float(engine.LHV) - self.fuel["LHV_kJ_per_kg"]) > 1e-9:
+            self.fuel["LHV_kJ_per_kg_engine"] = float(engine.LHV)
+            self.fuel["notice"] = (
+                "O PCI usado na fonte de calor é o do combustível DO ENSAIO "
+                f"({engine.LHV:.1f} kJ/kg, seção engine); a referência típica "
+                f"do registro é {self.fuel['LHV_kJ_per_kg']:.1f} kJ/kg "
+                "(substituir pela ficha/certificado do combustível real). "
+                "No modo prescrito o combustível entra apenas via m_f·PCI; "
+                "a composição/surrogate só é relevante no modo reativo "
+                "(não implementado).")
         # os estágios Wiebe são carregados em RAD (config.load_wiebe_stages
         # converte deg→rad) e theta_grid() retorna rad — a unidade angular
         # passada às funções da fonte deve ser a DO ARRAY θ, não a da

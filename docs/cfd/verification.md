@@ -18,7 +18,10 @@ paramétrico 6144 células (16×24×16, axissimétrico circular)
 ## 2. Caso de referência case_001 — balanço de energia
 
 Motor: bore 86 mm, curso 70 mm, biela 117,5 mm, Rc 17, 3396,2 rpm,
-m_f = 9,4275 µg/ciclo, PCI 39 191,3 kJ/kg (CH₄), janela −120°…+120°,
+m_f = 9,4275 µg/ciclo, PCI 39 191,3 kJ/kg (**diesel do ensaio** — o
+experimento de pressão P_exp-Carga-3_45% foi um motor Diesel; a
+referência típica do registro é 42,6 MJ/kg, o valor usado na fonte é o
+do combustível do ensaio, seção engine), janela −120°…+120°,
 início 250 kPa / 800 K, paredes 440 K.
 
 | Grandeza | Valor |

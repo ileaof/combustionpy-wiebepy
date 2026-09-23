@@ -40,6 +40,8 @@ page = st.navigation(
         st.Page("app_pages/desempenho.py", title="Desempenho",
                 icon=":material/speed:"),
         st.Page("app_pages/cfd.py", title="CFD", icon=":material/cloud:"),
+        st.Page("app_pages/combustiveis.py", title="Combustíveis",
+                icon=":material/science:"),
     ],
     position="top",
 )

@@ -304,7 +304,9 @@ Módulo **independente e opcional** (`pip install -e ".[cfd]"`; a física e
 os fluxos acima não mudam nada com CFD ligado ou desligado): simulação 3D
 compressível transiente do cilindro com **liberação de calor global
 prescrita pela Wiebe calibrada** (modo *prescribed*), combustíveis H₂,
-CH₄ (puro — não é gás natural), etanol e diesel (surrogate). **Não prevê
+CH₄ (puro — não é gás natural), etanol e diesel (surrogate) — o caso de
+teste/referência usa **Diesel**, combustível do ensaio de pressão que
+originou o motor calibrado. **Não prevê
 cinética química, frente de chama ou emissões.** Solver: OpenFOAM
 Foundation 13 (`foamRun`, solver `fluid`), no Windows via WSL2 — o
 programa continua 100 % utilizável sem WSL2/solver (sem fallback

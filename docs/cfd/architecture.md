@@ -129,11 +129,27 @@ Cadeia de cálculo (unidades explícitas):
 ## 6. Combustíveis
 
 Registro `fuels/` com composição, alimentação, PCI (unidade + **fonte
-citada**), propriedades, modelo de combustão e faixa de validade. CH₄
-puro ≠ gás natural (observação explícita); diesel exige surrogate
-(registrado como limitação; no modo prescrito entra apenas via PCI).
-No modo prescrito, a troca de combustível só muda o PCI/m_f — não há
-mecanismo químico (`mechanism is None` para todos).
+citada**), propriedades, modelo de combustão e faixa de validade —
+H₂, CH₄, etanol e diesel permanecem todos configuráveis. CH₄ puro ≠
+gás natural (observação explícita); diesel exige surrogate (registrado
+como limitação; no modo prescrito entra apenas via PCI). **O combustível
+do caso de teste/referência é DIESEL**, pois o experimento de pressão
+que origina o motor calibrado (ensaio P_exp-Carga-3_45%) foi executado
+com diesel — o PCI usado na fonte é o do ensaio (39 191,3 kJ/kg,
+seção engine), não a referência típica do registro. No modo prescrito,
+a troca de combustível só muda o PCI/m_f — não há mecanismo químico
+(`mechanism is None` para todos).
+
+**Cadastro permanente de combustíveis (aba "Combustíveis" da GUI)**:
+além dos quatro embutidos, o usuário pode cadastrar combustíveis
+próprios (gravados em `data/fuels_custom.yaml`, permanecem entre
+sessões) e exportar/lê-los em CSV (`;`-separado, UTF-8 — biblioteca
+portátil). Nenhuma propriedade é aceita sem fonte: o cadastro exige
+`LHV_source` (fonte do PCI). Os embutidos nunca são alterados no
+código; um cadastro com o mesmo nome sobrepõe o embutido em memória,
+com o registro marcando a substituição (remover o cadastro restaura o
+embutido). A validação de `cfd.fuel.name` aceita o registro combinado
+(embutidos + cadastrados).
 
 ## 7. Verificação e validação (escada progressiva)
 
