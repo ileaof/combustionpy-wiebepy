@@ -207,33 +207,48 @@ isso Cp/γ deixam de ser constantes (efeito separado no R1).
   ROHR/emissões (o ensaio não os fornece — seção 5). Enquanto não
   houver fonte citada para esses dados, R7 não sai do papel.
 
-## 4. Solver e compatibilidade (VERIFICAÇÃO PENDENTE)
+## 4. Solver e compatibilidade — VERIFICADO NO FONTE DO OF13 (2026-09-23)
 
-Candidato: **reactingFoam (OpenFOAM 13)**, reusando a infraestrutura
-existente do módulo (builder, runner, adapter WSL2, reporting). Nada
-disso está afirmado como certo — as verificações abaixo são
-prerequisito do R2/R3 e impedimentos registrados (seção 8):
+Caminho reativo do OF13 confirmado por inspeção direta do fonte
+instalado (`/opt/openfoam13/`, Ubuntu-22.04 WSL2) e dos tutoriais:
 
-- **(a) Existência e compatibilidade no OF13**: o `reactingFoam` existe
-  no OpenFOAM Foundation 13? (no OF13 os solvers são modulares — é
-  preciso confirmar como a combustão é acoplada ao `foamRun`/solver
-  modular `fluid` dessa versão). Ele aceita `fvModels` (incl.
-  `dynamicMotionSolverList`) e movimento/topologia de malha? A
-  combinação reação + malha móvel é o ponto crítico do R3.
-- **(b) Termoquímica**: compatibilidade dos polinômios NASA
-  (`hPolynomial`, exigido pelo R1) com o modelo de química candidato
-  (família PSUChemistryModel / equivalente no OF13) — confirmar quais
-  combinações thermo+chemistry o OF13 realmente suporta antes de fixar
-  o caminho do R1.
-- **(c) Integração química**: esquema de integração da química
-  (semi-implícito / Euler implícito) e controle de passo — no modo
-  reativo o passo é governado pela rigidez química além do Courant;
-  confirmar os controles disponíveis no OF13 e o efeito no custo por
-  passo (multiplicado — magnitude a medir, seção 6).
+- **(a) Solver — CONFIRMADO**: no OF13 não há `reactingFoam` próprio; o
+  executável `/opt/openfoam13/bin/reactingFoam` é um script que informa
+  que foi substituído e executa **`foamRun -solver multicomponentFluid`**.
+  O módulo `applications/modules/multicomponentFluid/` existe e seu
+  cabeçalho declara *"multicomponent fluids with optional mesh motion
+  and change"* (`multicomponentFluid.H:29`) — malha móvel suportada pelo
+  mesmo framework `fvModels`/`fvConstraints` usado no modo prescrito
+  (ex.: `fvModels().source(rho, Yi)` em `thermophysicalPredictor.C`).
+- **(b) Combustion models — CONFIRMADO**: `src/combustionModels/` com
+  `laminar` (cinética finita — caminho do R2/R4-R6), `PaSR`, `EDC`,
+  `noCombustion` (transporte de espécies SEM reação — caminho do R1),
+  `infinitelyFastChemistry`, `singleStepCombustion`, entre outros.
+- **(c) Química — CONFIRMADO**: `src/thermophysicalModels/chemistryModel/`
+  com `odeChemistryModel`, solvers `ode` (Rosenbrock43 etc.),
+  `EulerImplicit` e `noChemistrySolver`, tabulação ISAT e redução
+  (DRGEP/DRG); functionObject `adjustTimeStepToChemistry` para passo
+  controlado pela química (seção 4c antiga — controles existem; custo
+  continua a medir, seção 6).
+- **(d) Formato de mecanismo — CONFIRMADO, com ressalva**: o leitor do
+  OF13 NÃO lê CHEMKIN; os mecanismos entram em dicionário OpenFOAM
+  (reactions `reversibleArrhenius`/`irreversibleArrhenius` + thermo por
+  espécie com polinômios NASA low/high Cp — formato do tutorial
+  `tutorials/multicomponentFluid/counterFlowFlame2D_GRI_TDAC`, que já
+  traz o GRI-Mech 3.0 pré-convertido). A conversão CHEMKIN → OpenFOAM é
+  feita pelo utilitário **`chemkinToFoam`**
+  (`platforms/linux64GccDPInt32Opt/bin/chemkinToFoam`, incluído no OF13)
+  — mecanismos publicados (Burke, GRI, Yao) precisam desse passo de
+  conversão antes do uso.
+- **(e) Reação + malha móvel — PLAUSÍVEL, A TESTAR (R3)**: o módulo
+  declara suporte a movimento de malha e reusa o framework de fvModels
+  do modo prescrito, mas não há tutorial de motor com `multicomponentFluid`
+  no OF13 — a combinação com `dynamicMotionSolverList` +
+  `crankConnectingRodMotion` (nossa infraestrutura) continua sendo gate
+  de verificação prática do R3, não mais uma dúvida de existência.
 
-Se qualquer verificação falhar, o degrau correspondente é redefinido
-(ou adiado) com o impedimento registrado — nunca se contorna uma
-incompatibilidade silenciosamente.
+Impedimentos 1–3 da seção 8 ficam resolvidos nesta inspeção (com a
+ressalva (e)); a lista da seção 8 é atualizada em consequência.
 
 ## 5. Verificação e diagnóstico (o que é honesto prometer)
 
@@ -311,16 +326,22 @@ APENAS no pós-processo comparativo:
 Lista viva — cada item é resolvido (ou reescopado) antes do degrau que
 depende dele:
 
-1. **Compatibilidade do solver reativo no OF13** (seção 4a): existência
-   de `reactingFoam`/caminho reativo no OF13 modular, aceitação de
-   `fvModels`/malha móvel + reação. Pendente — bloqueia R3 (e orienta
-   R2).
-2. **Termoquímica × química** (seção 4b): combinação `hPolynomial` +
-   modelo de química suportada no OF13. Pendente — bloqueia R1 na
-   forma planejada.
-3. **Integração química e passo** (seção 4c): esquemas e controles
-   disponíveis; custo por passo multiplicado — magnitude a medir
-   (protocolo seção 6).
+1. **~~Compatibilidade do solver reativo no OF13~~ — RESOLVIDO
+   (seção 4a-d)**: caminho reativo = `foamRun -solver multicomponentFluid`;
+   combustion models `laminar`/`PaSR`/`noCombustion` confirmados no
+   fonte; `chemkinToFoam` disponível para conversão de mecanismos.
+   Restante: teste prático de reação + malha móvel (item 2).
+2. **~~Termoquímica × química~~ — RESOLVIDO (seção 4d)**: a termoquímica
+   multicomponente do OF13 usa polinômios NASA low/high Cp por espécie
+   (formato dos tutoriais `multicomponentFluid`), o mesmo formalismo dos
+   arquivos dos mecanismos publicados — compatível por construção com
+   `chemkinToFoam`. A verificação numérica (fechamento com NASA vs Cp
+   constante) permanece gate do R1.
+3. **~~Integração química e passo~~ — CONTROLES CONFIRMADOS
+   (seção 4c)**: solvers `ode` (Rosenbrock43 etc.), `EulerImplicit`,
+   `initialChemicalTimeStep` e functionObject
+   `adjustTimeStepToChemistry` existem no OF13; o CUSTO multiplicado
+   continua a medir (item 7).
 4. **Mecanismo de etanol a escolher** (R5): Marinov 1999 vs AramcoMech
    — critério de escolha documentado (faixa de validade vs condições
    do motor, disponibilidade do arquivo, licença) é prerequisito;

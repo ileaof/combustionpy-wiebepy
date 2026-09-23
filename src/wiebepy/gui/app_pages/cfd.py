@@ -45,7 +45,11 @@ def _form() -> dict:
     """Estado do formulário (persistente entre execuções)."""
     if "cfd_form" not in st.session_state:
         st.session_state.cfd_form = {
-            "case_directory": "results/cfd/case_004",
+            # caso de referência atual: case_006 (equivalência γ=1,37,
+            # fonte calibrada, RMSE/R² documentados em verification.md §3).
+            # Preencher com case_012 só se recriando o par calibrado
+            # (Rc 15,635 + model_cfd_duo_rc15635.json) JUNTOS — §3d.
+            "case_directory": "results/cfd/case_006",
             "wsl_distro": "Ubuntu-22.04",
             "workers": 1,
             "interval_start": -120.0, "interval_end": 120.0,
@@ -59,8 +63,10 @@ def _form() -> dict:
             "n_radial": 24, "n_axial": 36,
             "distribution": "uniform",
             "fuel_name": "diesel",   # ensaio de referência: Diesel
-            "wiebe_origem": "modelo atual",
-            "wiebe_model": "results/model.json",
+            # fonte do case_006: Wiebe calibrada 0-D (examples/, não a
+            # manual model_cfd.json) — procedência em verification.md §3c
+            "wiebe_origem": "model.json",
+            "wiebe_model": "examples/model_cfd_calibrated.json",
             "wiebe_stages": None,   # None = inicializar do modelo atual (deg)
             # motor (mesmos parâmetros dos modos 0-D)
             "bore_mm": 86.0, "stroke_mm": 70.0, "rod_length_mm": 117.5,
