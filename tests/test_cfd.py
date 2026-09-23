@@ -9,6 +9,7 @@ Os testes que exigem solver real estão marcados com
 desenvolvimento (ver docs/cfd/install.md).
 """
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -388,6 +389,116 @@ def test_config_aceita_combustivel_cadastrado(tmp_path, monkeypatch):
     assert cfg.validate() == []
 
 
+# --------------------------------------- comparação experimental (relatório)
+def _res_sintetico():
+    ca = np.linspace(-120.0, 120.0, 241)
+    p = 250.0 + 9000.0 * np.exp(-0.5 * ((ca - 5.0) / 15.0) ** 2)  # kPa
+    V = 5e-5 + 3e-4 * 0.5 * (1.0 + np.cos(np.radians(ca)))
+    return {"ca_deg": ca, "p_mean_kPa": p, "V_m3": V}
+
+
+def _exp_sintetico(ca):
+    p_exp = 250.0 + 8600.0 * np.exp(-0.5 * ((ca - 5.0) / 16.0) ** 2)
+    return {"source": "sintetico", "ca_deg": np.asarray(ca, float),
+            "p_kPa": p_exp, "offset_deg": 0.0,
+            "V_m3": 5e-5 + 3e-4 * 0.5 * (1.0 + np.cos(np.radians(ca))),
+            "units": {"angle": "deg", "pressure": "kPa"}, "warnings": []}
+
+
+def test_metricas_experimental_valores():
+    from wiebepy.cfd.reporting import _metricas_experimental
+    res = _res_sintetico()
+    exp = _exp_sintetico(res["ca_deg"][::2])
+    met = dict((k, v) for k, v in _metricas_experimental(res, exp))
+    assert met["pontos experimentais na janela CFD"] == 121
+    assert met["p_max CFD [kPa]"] == pytest.approx(9250.0, rel=1e-6)
+    assert met["CA de p_max CFD [°]"] == pytest.approx(5.0, abs=1.0)
+    assert met["erro de fase de p_max [°]"] == pytest.approx(0.0, abs=1.0)
+    dif = np.interp(exp["ca_deg"], res["ca_deg"],
+                    res["p_mean_kPa"]) - exp["p_kPa"]
+    assert met["RMSE na sobreposição [kPa]"] == pytest.approx(
+        float(np.sqrt(np.mean(dif ** 2))), rel=1e-6)
+    assert met["diferença média (viés) [kPa]"] == pytest.approx(
+        float(np.mean(dif)), rel=1e-6)
+
+
+def test_metricas_experimental_sem_sobreposicao():
+    from wiebepy.cfd.reporting import _metricas_experimental
+    res = _res_sintetico()
+    exp = _exp_sintetico(np.linspace(500.0, 700.0, 50))
+    met = _metricas_experimental(res, exp)
+    assert met and "sobreposição" in met[0][0]
+
+
+def test_report_html_com_experimental(tmp_path):
+    from wiebepy.cfd.reporting import report_html
+    res = _res_sintetico()
+    exp = _exp_sintetico(res["ca_deg"][::2])
+    h = report_html(tmp_path, res, exp_data=exp)
+    assert "Comparação experimental" in h
+    assert "Diagrama P–V (CFD vs experimental)" in h
+    assert "p_max experimental [kPa]" in h
+    assert "RMSE na sobreposição [kPa]" in h
+    assert "alinhamento de fase declarado" in h
+    # figuras embutidas (p×θ e P–V com exp; res sintético só tem p e V)
+    assert h.count("<img") >= 2
+    # sem dados experimentais: sem a seção
+    h2 = report_html(tmp_path, res)
+    assert "Comparação experimental" not in h2
+
+
+def test_load_exp_data_csv_unidades_e_offset(tmp_path):
+    from wiebepy.cfd.reporting import load_exp_data
+    csv = tmp_path / "exp.csv"
+    th = np.linspace(-1.0, 1.0, 41)          # rad
+    p = 100.0 + 9000.0 * np.exp(-0.5 * ((np.degrees(th) - 5.0) / 15.0) ** 2)
+    csv.write_text("\n".join(f"{t:.6f},{v:.6f}"
+                             for t, v in zip(th, p)) + "\n",
+                   encoding="utf-8")
+    exp = load_exp_data(tmp_path, cfg=CfdConfig.from_dict(
+        {**CFG_DICT, "comparison": {
+            "experimental": "exp.csv",
+            "experimental_angle_unit": "rad",
+            "experimental_pressure_unit": "kPa",
+            "experimental_offset_deg": 3.5}}), engine=ENGINE)
+    assert "exp.csv" in exp["source"]
+    assert np.allclose(exp["ca_deg"], np.degrees(th) + 3.5)
+    assert exp["p_kPa"][np.argmax(exp["p_kPa"])] == pytest.approx(
+        p.max(), rel=1e-6)
+    assert "V_m3" in exp and len(exp["V_m3"]) == 41
+    assert exp["units"] == {"angle": "rad", "pressure": "kPa"}
+
+
+def test_load_exp_data_bar_e_sem_arquivo(tmp_path):
+    from wiebepy.cfd.reporting import load_exp_data
+    # ensaio real (θ rad, P bar): valores convertidos para kPa
+    src = Path(__file__).resolve().parents[1] / "examples" / "data" / \
+        "ensaio_P_exp_carga3_45.txt"
+    cfg = CfdConfig.from_dict({**CFG_DICT, "comparison": {
+        "experimental": str(src),
+        "experimental_angle_unit": "rad",
+        "experimental_pressure_unit": "bar"}})
+    exp = load_exp_data(tmp_path, cfg=cfg, engine=ENGINE)
+    assert "erro" not in exp
+    assert len(exp["ca_deg"]) > 100
+    assert exp["p_kPa"].max() > exp["p_kPa"].min() * 5
+    # arquivo declarado e ausente → erro explícito, sem substituição
+    cfg2 = CfdConfig.from_dict({**CFG_DICT, "comparison": {
+        "experimental": "inexistente.csv"}})
+    exp2 = load_exp_data(tmp_path, cfg=cfg2)
+    assert exp2 and "não encontrado" in exp2["erro"]
+
+
+def test_config_valida_unidades_experimentais():
+    base = {**CFG_DICT, "comparison": {
+        "experimental": "x.csv", "experimental_pressure_unit": "atm"}}
+    erros = CfdConfig.from_dict(base).validate()
+    assert any("experimental_pressure_unit" in e for e in erros)
+    base["comparison"]["experimental_pressure_unit"] = "bar"
+    base["comparison"]["experimental_angle_unit"] = "deg"
+    assert CfdConfig.from_dict(base).validate() == []
+
+
 # ------------------------------------------------------------ case builder
 def test_case_builder_generates_openfoam_case(tmp_path):
     from wiebepy.cfd.case_builder import CaseBuilder
@@ -426,6 +537,44 @@ def test_case_builder_fixed_cold_no_heat(tmp_path):
     assert not (d / "constant/dynamicMeshDict").exists()
     cc = yaml.safe_load((d / "case_config.yaml").read_text(encoding="utf-8"))
     assert cc["features"] == {"moving_piston": False, "heat_source": False}
+
+
+def test_case_builder_komega_sst_campos(tmp_path):
+    # kOmegaSST: campo omega (não epsilon), BCs de parede coerentes,
+    # schemes e solvers com omega no grupo
+    from wiebepy.cfd.case_builder import CaseBuilder
+    d_cfg = dict(CFG_DICT)
+    d_cfg["turbulence"] = {"model": "kOmegaSST", "wall_functions": True}
+    cfg = CfdConfig.from_dict(d_cfg)
+    b = CaseBuilder(cfg, ENGINE, solver_info={"version": "13"},
+                    heat_enabled=True, moving_override=True)
+    d = b.build(tmp_path / "sst")
+    t0 = d / "-120"
+    om = (t0 / "omega").read_text(encoding="utf-8")
+    assert "omegaWallFunction" in om and "uniform" in om
+    assert not (t0 / "epsilon").exists()
+    for nome in ("k", "nut", "alphat"):
+        assert (t0 / nome).exists()
+    mt = (d / "constant/momentumTransport").read_text(encoding="utf-8")
+    assert "kOmegaSST" in mt and "RAS" in mt
+    esc = (d / "system/fvSchemes").read_text(encoding="utf-8")
+    assert "div(phi,omega)" in esc and "wallDist" in esc
+    sol = (d / "system/fvSolution").read_text(encoding="utf-8")
+    assert "epsilon|omega" in sol
+
+
+def test_case_builder_kepsilon_campos(tmp_path):
+    from wiebepy.cfd.case_builder import CaseBuilder
+    d_cfg = dict(CFG_DICT)
+    d_cfg["turbulence"] = {"model": "kEpsilon", "wall_functions": True}
+    cfg = CfdConfig.from_dict(d_cfg)
+    b = CaseBuilder(cfg, ENGINE, solver_info={"version": "13"},
+                    heat_enabled=True, moving_override=True)
+    d = b.build(tmp_path / "ke")
+    t0 = d / "-120"
+    assert (t0 / "epsilon").read_text(encoding="utf-8").count(
+        "epsilonWallFunction") == 3
+    assert not (t0 / "omega").exists()
 
 
 def test_case_state_machine(tmp_path):

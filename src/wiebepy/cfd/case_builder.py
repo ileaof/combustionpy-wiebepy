@@ -239,6 +239,7 @@ boundaryField
 }}"""), encoding="utf-8")
 
         if turb:
+            k0, eps0 = 1.0, 100.0
             d.joinpath("k").write_text(_dict_file("volScalarField", "", "k", """
 dimensions      [0 2 -2 0 0 0 0];
 
@@ -250,8 +251,24 @@ boundaryField
     liner  { type kqRWallFunction; value uniform 1.0; }
     head   { type kqRWallFunction; value uniform 1.0; }
 }"""), encoding="utf-8")
-            d.joinpath("epsilon").write_text(_dict_file("volScalarField", "",
-                                                        "epsilon", """
+            if self.cfg.turbulence_model == "kOmegaSST":
+                # ω₀ = ε₀/(Cμ·k₀) com Cμ = 0.09 (par consistente com k/ε acima)
+                omega0 = eps0 / (0.09 * k0)
+                d.joinpath("omega").write_text(_dict_file("volScalarField", "",
+                                                          "omega", f"""
+dimensions      [0 0 -1 0 0 0 0];
+
+internalField   uniform {_fmt(omega0)};
+
+boundaryField
+{{
+    piston {{ type omegaWallFunction; value uniform {_fmt(omega0)}; }}
+    liner  {{ type omegaWallFunction; value uniform {_fmt(omega0)}; }}
+    head   {{ type omegaWallFunction; value uniform {_fmt(omega0)}; }}
+}}"""), encoding="utf-8")
+            else:
+                d.joinpath("epsilon").write_text(_dict_file("volScalarField", "",
+                                                            "epsilon", """
 dimensions      [0 2 -3 0 0 0 0];
 
 internalField   uniform 100.0;
@@ -554,6 +571,7 @@ divSchemes
     div(phi,(p|rho)) Gauss upwind;
     div(phi,k)      Gauss upwind;
     div(phi,epsilon) Gauss upwind;
+    div(phi,omega)  Gauss upwind;
     div(phi,R)      Gauss upwind;
     div(phi,K)      Gauss linear;
     div(phi,Ekp)    Gauss linear;
@@ -569,6 +587,12 @@ laplacianSchemes
 interpolationSchemes
 {
     default         linear;
+}
+
+// exigido pelos modelos kOmega (distância à parede); inócuo nos demais
+wallDist
+{
+    method          meshWave;
 }
 
 snGradSchemes
@@ -610,7 +634,7 @@ solvers
         relTol          0;
     }}
 
-    "(U|h|e|k|epsilon|R)"
+    "(U|h|e|k|epsilon|omega|R)"
     {{
         solver          PBiCGStab;
         preconditioner  DILU;
@@ -618,7 +642,7 @@ solvers
         relTol          0.1;
     }}
 
-    "(U|h|e|k|epsilon|R)Final"
+    "(U|h|e|k|epsilon|omega|R)Final"
     {{
         $U;
         relTol          0;

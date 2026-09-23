@@ -1,0 +1,94 @@
+﻿# =====================================================================
+# Exemplo de configuraÃ§Ã£o CFD do wiebepy (mÃ³dulo opcional).
+#
+# Com este arquivo o restante do wiebepy funciona normalmente (fraÃ§Ã£o
+# queimada, pressÃ£o, ajuste, comparaÃ§Ã£o): a seÃ§Ã£o cfd sÃ³ Ã© usada pelos
+# comandos `wiebepy cfd â€¦` e pela pÃ¡gina CFD da GUI. Para desabilitar,
+# basta enabled: false (padrÃ£o) â€” nenhuma dependÃªncia CFD Ã© importada.
+#
+# FÃ­sica do caso: modo prescribed_wiebe â€” calor prescrito pela funÃ§Ã£o
+# Wiebe calibrada; NÃƒO prevÃª cinÃ©tica quÃ­mica, frente de chama ou
+# emissÃµes. Ver docs/cfd/architecture.md.
+# =====================================================================
+
+# ---------------------------------------------------------------- motor
+# Mesma seÃ§Ã£o usada pelos modos de fraÃ§Ã£o queimada e pressÃ£o (Â§8):
+# a geometria do CFD reutiliza estes parÃ¢metros.
+engine:
+  bore_mm: 86.0
+  stroke_mm: 70.0
+  rod_length_mm: 117.5
+  Rc: 17.0
+  rpm: 3396.20
+  m_fuel_kg_per_cycle: 9.42754647351e-6
+  LHV_kJ_per_kg: 39191.3
+  T1_K: 308.15
+  Tw_K: 440.0
+
+# ------------------------------------------------------------------ cfd
+cfd:
+  enabled: true
+  adapter: openfoam
+  mode: prescribed_wiebe        # 'reactive' nÃ£o estÃ¡ implementado
+  case_directory: results/cfd/case_004
+  workers: 1                    # processos MPI do SOLVER (nÃ£o do wiebepy)
+  wsl_distro: Ubuntu-22.04      # Windows: distribuiÃ§Ã£o com o OpenFOAM
+
+  geometry:
+    type: simplified_cylinder
+    moving_piston: true
+    n_radial: 24
+    n_axial: 36
+
+  interval:                     # janela simulada (vÃ¡lvulas fechadas)
+    angle_unit: deg
+    start: -120
+    end: 120
+
+  initial:                      # condiÃ§Ãµes do ENSAIO no inÃ­cio da janela:
+    P_kPa: 127.6                # pressÃ£o medida em Î¸ = âˆ’120Â° CA (ensaio
+                                # P_exp-Carga-3_45%, 1,276 bar) â€” comparÃ¡vel
+                                # ao estado inicial do 0-D (P1 do ensaio)
+    T_K: 308.15                 # T1 do motor (seÃ§Ã£o engine), nÃ£o T fictÃ­cia
+
+  walls:
+    Tw_K: 440
+    model: fixed_temperature
+
+  turbulence:
+    model: kEpsilon              # laminar | kEpsilon | kOmegaSST
+    wall_functions: true
+
+  numerics:
+    deltaT_s: 1.0e-6            # passo inicial (o solver adapta pelo Co)
+    max_Co: 0.5
+    write_interval_deg: 10
+
+  heat_source:
+    distribution: uniform       # uniform (referÃªncia) | region
+    region: null
+
+  fuel:
+    name: diesel                # ENSAIO DE REFERÃŠNCIA Ã‰ DIESEL (carga 3_45%):
+                                # H2 | CH4 | ethanol | diesel
+    feed: premixed_gas          # prÃ©-vaporizado no modo prescrito; o diesel
+                                # do ensaio entra via m_fÂ·PCI (seÃ§Ã£o engine,
+                                # LHV do combustÃ­vel do ensaio 39191.3 kJ/kg)
+                                # â€” a composiÃ§Ã£o/surrogate sÃ³ Ã© relevante no
+                                # modo reativo (nÃ£o implementado)
+
+  wiebe:                        # parÃ¢metros Wiebe DE UM modelo calibrado
+    source: model               # model (model.json) | parameters
+    model: examples/model_cfd.json   # gerado pelo wiebepy (`--optimize`)
+    # parameters:               # alternativa: lista inline (nesta unidade)
+    #   - {beta: 1.0, theta0: -5, duration: 40, m: 2.0}
+
+  comparison:
+    criterion: same_rpm_same_energy   # critÃ©rio registrado (Â§11)
+    experimental: examples/data/ensaio_P_exp_carga3_45.txt
+                                  # ensaio de pressÃ£o (carga 3_45%) usado
+                                  # nas comparaÃ§Ãµes do relatÃ³rio (pÃ—Î¸ e Pâ€“V)
+    experimental_angle_unit: rad
+    experimental_pressure_unit: bar   # o arquivo do ensaio estÃ¡ em bar
+    experimental_offset_deg: 0.0      # alinhamento de fase [Â°CA] (0 = PMP em
+                                      # Î¸=0, mesma referÃªncia do modelo 0-D)

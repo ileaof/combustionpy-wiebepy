@@ -246,7 +246,9 @@ def _cmd_report(a) -> int:
     except Exception:                                   # noqa: BLE001
         stages = None
     res = read_results(case, engine=engine, stages=stages)
-    p = write_report(case, res)
+    from .reporting import load_exp_data
+    exp_data = load_exp_data(case, engine=engine)
+    p = write_report(case, res, exp_data=exp_data)
     log.info("Relatório gravado em %s", p)
     return EXIT_OK
 

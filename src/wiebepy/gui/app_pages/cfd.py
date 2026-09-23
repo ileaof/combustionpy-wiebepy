@@ -45,14 +45,18 @@ def _form() -> dict:
     """Estado do formulário (persistente entre execuções)."""
     if "cfd_form" not in st.session_state:
         st.session_state.cfd_form = {
-            "case_directory": "results/cfd/case_001",
+            "case_directory": "results/cfd/case_004",
             "wsl_distro": "Ubuntu-22.04",
             "workers": 1,
             "interval_start": -120.0, "interval_end": 120.0,
-            "P0_kPa": 250.0, "T0_K": 800.0, "Tw_K": 440.0,
-            "turbulence_model": "laminar",
+            # condições do ensaio Diesel de referência em −120° CA
+            # (P_exp-Carga-3_45%: 1,276 bar; T1 do motor)
+            "P0_kPa": 127.6, "T0_K": 308.15, "Tw_K": 440.0,
+            # referência de comparação com o ensaio: kEpsilon + malha
+            # refinada (perda às paredes 44,1 J vs alvo Hohenberg 53,7 J)
+            "turbulence_model": "kEpsilon",
             "moving_piston": True,
-            "n_radial": 16, "n_axial": 24,
+            "n_radial": 24, "n_axial": 36,
             "distribution": "uniform",
             "fuel_name": "diesel",   # ensaio de referência: Diesel
             "wiebe_origem": "modelo atual",
@@ -416,7 +420,22 @@ if relatorio:
         except Exception:                               # noqa: BLE001
             stages = None
         res = read_results(case_dir, engine=engine, stages=stages)
-        return str(write_report(case_dir, res))
+        # dados experimentais: prioridade ao ensaio carregado (aba Dados)
+        exp = None
+        pd_ = st.session_state.get("pdata")
+        if pd_ is not None:
+            import numpy as _np
+            from wiebepy.pressure.engine import volume
+            ca = _np.degrees(_np.asarray(pd_.theta, float))
+            V, _, _ = volume(_np.radians(ca), engine.Rc, engine)
+            exp = {"source": pd_.source or "ensaio carregado (aba Dados)",
+                   "ca_deg": ca, "p_kPa": _np.asarray(pd_.P, float),
+                   "offset_deg": 0.0, "V_m3": _np.asarray(V, float),
+                   "warnings": list(getattr(pd_, "warnings", []) or [])}
+        else:
+            from wiebepy.cfd.reporting import load_exp_data
+            exp = load_exp_data(case_dir, engine=engine)
+        return str(write_report(case_dir, res, exp_data=exp))
     _iniciar_cfd_job("geração do relatório", _rep)
 
 # ------------------------------------------------------- progresso do job

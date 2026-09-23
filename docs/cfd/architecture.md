@@ -194,8 +194,11 @@ embutido). A validação de `cfd.fuel.name` aceita o registro combinado
 - Pressão medida vs média de volume vs sonda: o relatório distingue as
   três.
 - Ar simplificado (perfectGas, Cp/mu constantes): hipótese declarada;
-  propriedades reais e turbulência (kEpsilon/kOmegaSST) são caminhos
-  de refinamento já configuráveis.
+  turbulência (kEpsilon e kOmegaSST, com wall functions e campo omega
+  no builder) é caminho de refinamento configurável — no caso de
+  referência do ensaio Diesel, kEpsilon + malha refinada eleva a
+  perda às paredes de 16 J (laminar) para 44,1 J vs alvo Hohenberg
+  53,7 J (verification.md §3b).
 - Modo 4.2 (reativo): **apenas arquitetura** — nunca apresentado como
   funcional; nunca substituir silenciosamente a fonte Wiebe por
   combustão reativa (ou vice-versa).

@@ -43,6 +43,113 @@ _LIM = [
 ]
 
 
+def load_exp_data(case_dir, cfg=None, engine=None) -> Optional[Dict]:
+    """Dados experimentais para a comparação do relatório.
+
+    Fonte: ``cfd.comparison.experimental`` (CSV θ,P — leitor do módulo de
+    pressão, unidade angular rad e pressão kPa por documentação) +
+    ``experimental_offset_deg`` (alinhamento de fase declarado; 0 = sem
+    alinhamento). Retorna dict com ca_deg/p_kPa (pós-offset), volume
+    V(θ) pela cinemática do motor e avisos; None se não configurado.
+    """
+    import yaml as _yaml
+    from ..pressure.fit import read_pressure
+    case_dir = Path(case_dir)
+    fonte, offset, extra = None, 0.0, []
+    au, pu = "rad", "kPa"
+    if cfg is not None and getattr(cfg, "experimental", None):
+        fonte = cfg.experimental
+        offset = float(cfg.experimental_offset_deg or 0.0)
+        au = cfg.experimental_angle_unit or "rad"
+        pu = cfg.experimental_pressure_unit or "kPa"
+    else:
+        yml = case_dir / "case_config.yaml"
+        if yml.exists():
+            try:
+                info = _yaml_load(yml)
+            except OSError:
+                info = {}
+            comp = (info.get("comparison")
+                    or (info.get("configuration") or {}).get("comparison")
+                    or {})
+            fonte = comp.get("experimental")
+            offset = float(comp.get("experimental_offset_deg") or 0.0)
+            au = str(comp.get("experimental_angle_unit") or "rad")
+            pu = str(comp.get("experimental_pressure_unit") or "kPa")
+    if not fonte:
+        return None
+    p = Path(fonte)
+    if not p.exists() and not p.is_absolute():
+        alt = case_dir / fonte
+        if alt.exists():
+            p = alt
+    if not p.exists():
+        return {"source": fonte, "erro": "arquivo experimental não "
+                                         "encontrado (relatório gerado "
+                                         "sem as comparações)."}
+    try:
+        d = read_pressure(p, angle_unit=au, pressure_unit=pu,
+                          theta_min=None, theta_max=None)
+    except ValueError as e:
+        return {"source": fonte, "erro": f"leitura do CSV experimental "
+                                         f"falhou: {e}"}
+    if d.warnings:
+        extra = d.warnings
+    ca_deg = np.degrees(d.theta) + offset
+    out = {"source": str(p), "ca_deg": ca_deg, "p_kPa": d.P,
+           "offset_deg": offset,
+           "units": {"angle": au, "pressure": pu},
+           "warnings": extra}
+    if engine is not None and len(ca_deg):
+        from ..pressure.engine import volume
+        V, _, _ = volume(np.radians(ca_deg - offset), engine.Rc, engine)
+        out["V_m3"] = np.asarray(V, float)
+    return out
+
+
+def _yaml_load(p: Path) -> Dict:
+    import yaml
+    return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+
+
+def _metricas_experimental(res: Dict, exp: Dict) -> List[List]:
+    """Métricas p̄ CFD × p medida no ponto experimental (seleção
+    documentada; sem calibração silenciosa)."""
+    ca = np.asarray(res.get("ca_deg") if res.get("ca_deg") is not None
+                    else [], float)
+    p = np.asarray(res.get("p_mean_kPa") if res.get("p_mean_kPa")
+                   is not None else [], float)
+    cae = np.asarray(exp.get("ca_deg") if exp.get("ca_deg") is not None
+                     else [], float)
+    pe = np.asarray(exp.get("p_kPa") if exp.get("p_kPa") is not None
+                    else [], float)
+    if not len(ca) or not len(cae):
+        return []
+    dentro = (cae >= ca.min()) & (cae <= ca.max())
+    n_sobre = int(dentro.sum())
+    if not n_sobre:
+        return [["sobreposição em CA", "nenhum ponto experimental dentro "
+                                       "da janela CFD — verifique o "
+                                       "alinhamento de fase"]]
+    p_cf = np.interp(cae[dentro], ca, p)
+    pd_ = pe[dentro]
+    dif = p_cf - pd_
+    imax_c = int(np.argmax(p))
+    imax_e = int(np.argmax(pe))
+    return [
+        ["p_max CFD [kPa]", float(p[imax_c])],
+        ["CA de p_max CFD [°]", float(ca[imax_c])],
+        ["p_max experimental [kPa]", float(pe[imax_e])],
+        ["CA de p_max experimental [°]", float(cae[imax_e])],
+        ["erro de p_max (CFD − exp) [kPa]", float(p[imax_c] - pe[imax_e])],
+        ["erro de fase de p_max [°]", float(ca[imax_c] - cae[imax_e])],
+        ["pontos experimentais na janela CFD", n_sobre],
+        ["diferença média (viés) [kPa]", float(np.mean(dif))],
+        ["diferença média absoluta [kPa]", float(np.mean(np.abs(dif)))],
+        ["RMSE na sobreposição [kPa]", float(np.sqrt(np.mean(dif ** 2)))],
+    ]
+
+
 def _e(v) -> str:
     return html.escape(str(v))
 
@@ -90,10 +197,11 @@ def _fig(curvas: List[Dict]) -> List[tuple]:
         x = curvas["ca_deg"]
 
         def p_theta(fig, ax):
-            ax.plot(x, curvas["p_mean_kPa"], lw=2, color="#b4432f")
+            ax.plot(x, curvas["p_mean_kPa"], lw=2, color="#b4432f",
+                    label="CFD (p̄ volumétrica)")
             if curvas.get("exp_ca_deg") is not None:
                 ax.plot(curvas["exp_ca_deg"], curvas["exp_p_kPa"], ".",
-                        ms=3, color="#5b6475", label="medida")
+                        ms=3, color="#5b6475", label="experimental")
                 ax.legend(frameon=False)
             ax.set_xlabel("ângulo de manivela [°]")
             ax.set_ylabel("pressão média volumétrica [kPa]")
@@ -104,11 +212,16 @@ def _fig(curvas: List[Dict]) -> List[tuple]:
 
         def pv(fig, ax):
             ax.plot(curvas["V_m3"] * 1e6, curvas["p_mean_kPa"], lw=2,
-                    color="#b4432f")
+                    color="#b4432f", label="CFD (p̄ volumétrica)")
+            if curvas.get("exp_V_m3") is not None:
+                ax.plot(np.asarray(curvas["exp_V_m3"], float) * 1e6,
+                        curvas["exp_p_kPa"], ".", ms=3, color="#5b6475",
+                        label="experimental")
+                ax.legend(frameon=False)
             ax.set_xlabel("volume do cilindro [cm³]")
-            ax.set_ylabel("pressão média volumétrica [kPa]")
-            ax.set_title("Diagrama P–V (médias volumétricas)")
-        add(pv, "Diagrama P–V (pressão média volumétrica)")
+            ax.set_ylabel("pressão [kPa]")
+            ax.set_title("Diagrama P–V: CFD vs experimental")
+        add(pv, "Diagrama P–V (CFD vs experimental)")
 
     if "prescribed_Q_W" in curvas:
 
@@ -158,9 +271,11 @@ def _fig(curvas: List[Dict]) -> List[tuple]:
 def report_html(case_dir, res: Dict, cfg: Optional[CfdConfig] = None,
                 exp: Optional[Dict] = None,
                 run_summary: Optional[Dict] = None,
-                exp_data: Optional[Dict] = None) -> str:
+                exp_data: Optional[Dict] = None,
+                engine=None) -> str:
     """Relatório HTML do caso. ``res`` = read_results(...);
-    ``exp_data`` = dict com ca_deg/p_kPa experimentais (opcional)."""
+    ``exp_data`` = dict com ca_deg/p_kPa experimentais (opcional; quando
+    ausente, tentado de comparison.experimental em case_config.yaml)."""
     case_dir = Path(case_dir)
     import yaml
     info: Dict = {}
@@ -330,6 +445,10 @@ def report_html(case_dir, res: Dict, cfg: Optional[CfdConfig] = None,
           "recursos aqui são os efetivamente usados nesta máquina — não "
           "são estimativas.</p>")
 
+    # --------------------------------------------- dados experimentais
+    if exp_data is None and exp is None:
+        exp_data = load_exp_data(case_dir, engine=engine)
+
     a("<h2>Balanços e curvas</h2>")
     linhas = []
     if "indicated_work_J" in res:
@@ -354,19 +473,64 @@ def report_html(case_dir, res: Dict, cfg: Optional[CfdConfig] = None,
     if exp_data:
         a("<h2>Comparação experimental</h2>")
         a("<p class='nota'>A comparação abaixo é INDICATIVA: pressão média "
-          "volumétrica vs pressão medida em sensores de anel. Não há "
-          "equivalência garantida em nenhum regime.</p>")
-        a(_tabela(["Item", "Valor"], [
-            ["arquivo experimental", exp_data.get("source", "—")],
-            ["pontos", len(exp_data.get("p_kPa", []))],
-        ]))
+          "volumétrica (CFD) vs pressão medida no sensor. A comparação é "
+          "DIAGNÓSTICA, não validação do modo prescrito: a liberação de "
+          "calor foi imposta a partir da calibração que já usa estes "
+          "dados.</p>")
+        pk = exp_data.get("p_kPa")
+        linhas_exp = [["arquivo experimental", exp_data.get("source", "—")],
+                      ["pontos", int(np.asarray(pk).size) if pk is not None
+                       else 0],
+                      ["unidades declaradas", _e(", ".join(
+                          f"{k}: {v}" for k, v in
+                          (exp_data.get("units") or {}).items()))
+                          or "θ: rad, P: kPa (padrão)"],
+                      ["alinhamento de fase declarado [°CA]",
+                       float(exp_data.get("offset_deg") or 0.0)]]
+        if exp_data.get("erro"):
+            linhas_exp.append(["erro", exp_data["erro"]])
+        if exp_data.get("warnings"):
+            linhas_exp.append(["avisos do leitor",
+                               " | ".join(exp_data["warnings"])])
+        a(_tabela(["Item", "Valor"], linhas_exp))
+        if exp_data.get("erro"):
+            a("<p class='nota'>As comparações abaixo estão ausentes por "
+              "causa do erro acima — nenhuma substituição silenciosa foi "
+              "feita.</p>")
+        else:
+            met = _metricas_experimental(res, exp_data)
+            if met:
+                a("<h3>Métricas p̄ CFD × p medida</h3>")
+                a(_tabela(["Métrica", "Valor"], met))
+                a("<p class='nota'>Diferenças calculadas por interpolação "
+                  "linear de p̄(θ) do CFD nos pontos experimentais, "
+                  "somente dentro da janela simulada. Pressão média "
+                  "volumétrica ≠ pressão medida no sensor (posicionamento "
+                  "do sensor, cavitação, defasagem de aquisição).</p>")
+            else:
+                a("<p class='nota'>Sem métricas: as séries não se "
+                  "sobrepõem em ângulo de manivela.</p>")
+
+    # ------------------------------------------------- comparação exp. (fig)
+    curvas = dict(res)
+    if exp_data and exp_data.get("ca_deg") is not None:
+        curvas["exp_ca_deg"] = exp_data["ca_deg"]
+        curvas["exp_p_kPa"] = exp_data["p_kPa"]
+        curvas["exp_V_m3"] = exp_data.get("V_m3")
 
     a("<h2>Avisos e limitações científicas</h2>")
     a("<ul class='avisos'>"
       + "".join(f"<li>{_e(w)}</li>" for w in _LIM) + "</ul>")
 
+    # --------------------------------------- curvas p/ gráficos (com exp.)
+    curvas = dict(res)
+    if exp_data and exp_data.get("ca_deg") is not None:
+        curvas["exp_ca_deg"] = exp_data["ca_deg"]
+        curvas["exp_p_kPa"] = exp_data["p_kPa"]
+        curvas["exp_V_m3"] = exp_data.get("V_m3")
+
     a("<h2>Gráficos</h2>")
-    for titulo, b64 in _fig(res):
+    for titulo, b64 in _fig(curvas):
         a(f"<figure><figcaption>{_e(titulo)}</figcaption>"
           f"<img src='data:image/png;base64,{b64}' "
           f"alt='{_e(titulo)}'></figure>")

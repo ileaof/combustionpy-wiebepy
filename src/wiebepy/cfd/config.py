@@ -43,7 +43,12 @@ padrão — ver io/config.py):
 
       comparison:
         criterion: same_rpm_same_energy   # registro do critério (doc)
-        experimental: null                # CSV θ(rad),P(kPa) opcional
+        experimental: null                # CSV θ,P opcional (leitor do módulo
+                                          # de pressão)
+        experimental_angle_unit: rad      # rad | deg
+        experimental_pressure_unit: kPa   # kPa | bar | MPa | Pa | psi
+        experimental_offset_deg: 0.0      # alinhamento de fase [°CA] (0 = sem
+                                          # alinhamento; PMP em θ=0 assumida)
 
 A validação (``CfdConfig.validate``) checa campos obrigatórios ANTES de
 qualquer execução. O arquivo de configuração efetivamente usado — incluindo
@@ -136,7 +141,11 @@ class CfdConfig:
     wiebe_parameters: Optional[List[dict]] = None
 
     comparison_criterion: str = "same_rpm_same_energy"
-    experimental: Optional[str] = None        # CSV θ(rad), P(kPa)
+    experimental: Optional[str] = None        # CSV θ,P (leitor do módulo
+                                              # de pressão)
+    experimental_angle_unit: str = "rad"      # rad | deg
+    experimental_pressure_unit: str = "kPa"   # kPa | bar | MPa | Pa | psi
+    experimental_offset_deg: float = 0.0      # alinhamento de fase [°CA]
 
     # ------------------------------------------------------------- leitura
     @classmethod
@@ -184,6 +193,12 @@ class CfdConfig:
             wiebe_parameters=wiebe.get("parameters"),
             comparison_criterion=comp.get("criterion", "same_rpm_same_energy"),
             experimental=comp.get("experimental"),
+            experimental_angle_unit=str(comp.get("experimental_angle_unit")
+                                        or "rad"),
+            experimental_pressure_unit=str(
+                comp.get("experimental_pressure_unit") or "kPa"),
+            experimental_offset_deg=float(
+                comp.get("experimental_offset_deg", 0.0) or 0.0),
         )
 
     def to_dict_public(self) -> Dict:
@@ -212,7 +227,13 @@ class CfdConfig:
                           "model": self.wiebe_model,
                           "parameters": self.wiebe_parameters},
                 "comparison": {"criterion": self.comparison_criterion,
-                               "experimental": self.experimental}}
+                               "experimental": self.experimental,
+                               "experimental_angle_unit":
+                                   self.experimental_angle_unit,
+                               "experimental_pressure_unit":
+                                   self.experimental_pressure_unit,
+                               "experimental_offset_deg":
+                                   self.experimental_offset_deg}}
 
     # ---------------------------------------------------------- derivados
     def derived(self, engine_cfg) -> Dict:
@@ -292,6 +313,14 @@ class CfdConfig:
         if self.fuel_feed not in ("premixed_gas",):
             e.append("cfd.fuel.feed: apenas 'premixed_gas' no modo de calor "
                      "prescrito (injeção líquida/spray é futura).")
+        if self.experimental:
+            if self.experimental_angle_unit not in ("rad", "deg"):
+                e.append("cfd.comparison.experimental_angle_unit deve ser "
+                         "'rad' ou 'deg'.")
+            from ..pressure.fit import PRESSURE_FACTORS_KPA
+            if self.experimental_pressure_unit not in PRESSURE_FACTORS_KPA:
+                e.append("cfd.comparison.experimental_pressure_unit inválida "
+                         f"({list(PRESSURE_FACTORS_KPA)}).")
         if self.wiebe_source not in ("model", "parameters"):
             e.append("cfd.wiebe.source deve ser 'model' (model.json) ou "
                      "'parameters' (lista inline).")

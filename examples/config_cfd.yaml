@@ -30,32 +30,36 @@ cfd:
   enabled: true
   adapter: openfoam
   mode: prescribed_wiebe        # 'reactive' não está implementado
-  case_directory: results/cfd/case_001
+  case_directory: results/cfd/case_004   # referência de comparação c/ ensaio
   workers: 1                    # processos MPI do SOLVER (não do wiebepy)
   wsl_distro: Ubuntu-22.04      # Windows: distribuição com o OpenFOAM
 
   geometry:
     type: simplified_cylinder
     moving_piston: true
-    n_radial: 16
-    n_axial: 24
+    n_radial: 24
+    n_axial: 36
 
   interval:                     # janela simulada (válvulas fechadas)
     angle_unit: deg
     start: -120
     end: 120
 
-  initial:
-    P_kPa: 250
-    T_K: 800
+  initial:                      # condições do ENSAIO no início da janela:
+    P_kPa: 127.6                # pressão medida em θ = −120° CA (ensaio
+                                # P_exp-Carga-3_45%, 1,276 bar) — comparável
+                                # ao estado inicial do 0-D (P1 do ensaio)
+    T_K: 308.15                 # T1 do motor (seção engine), não T fictícia
 
   walls:
     Tw_K: 440
     model: fixed_temperature
 
   turbulence:
-    model: laminar              # laminar | kEpsilon | kOmegaSST
-    wall_functions: false
+    model: kEpsilon              # laminar | kEpsilon | kOmegaSST
+    wall_functions: true         # troca convectiva realista nas paredes:
+                                 # perda 44,1 J vs alvo Hohenberg 53,7 J
+                                 # (laminar: só 16 J → p_max +13%)
 
   numerics:
     deltaT_s: 1.0e-6            # passo inicial (o solver adapta pelo Co)
@@ -83,4 +87,10 @@ cfd:
 
   comparison:
     criterion: same_rpm_same_energy   # critério registrado (§11)
-    experimental: null                # CSV (θ [rad], P [kPa]) opcional
+    experimental: examples/data/ensaio_P_exp_carga3_45.txt
+                                  # ensaio de pressão (carga 3_45%) usado
+                                  # nas comparações do relatório (p×θ e P–V)
+    experimental_angle_unit: rad
+    experimental_pressure_unit: bar   # o arquivo do ensaio está em bar
+    experimental_offset_deg: 0.0      # alinhamento de fase [°CA] (0 = PMP em
+                                      # θ=0, mesma referência do modelo 0-D)
