@@ -10,9 +10,10 @@
 # Objetivo: medir a energia efetivamente injetada pelo fvModel
 # heatSource no modo Q (potência total) com pistão em movimento,
 # via fechamento ΔU + W + perda vs energia prescrita (369,48 J).
-# A limitação conhecida do OF13 (volume da zona congelado na
-# construção — verification.md §4) prevê SUBENTREGA forte perto do
-# PMS; este caso quantifica o erro real.
+# RESULTADO MEDIDO (verification.md §3e): entrega efetiva de apenas
+# 10,7% (39,40 J de 369,48 J prescritos) — a limitação do OF13 (volume
+# da zona congelado na construção, §4) confirma-se empiricamente.
+# VEREDITO: NÃO usar `region` com malha móvel; preferir `uniform`.
 # =====================================================================
 engine:
   bore_mm: 86.0

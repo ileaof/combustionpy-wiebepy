@@ -1,0 +1,337 @@
+# Roadmap do modo reativo (modo 4.2) — proposta incremental
+
+Status: **proposta (não implementada)** · Modo 4.2 reativo: **adiado para
+etapa posterior (não proibido permanentemente)** · Última revisão:
+2026-09-23 · Complementa `docs/cfd/architecture.md` (seção 9) e
+`docs/cfd/verification.md`.
+
+Este documento é uma **proposta**. Nada aqui foi executado; cada etapa
+tem critérios de verificação que devem ser cumpridos ANTES de subir o
+degrau seguinte. Onde há afirmação não confirmada, ela é marcada como
+**VERIFICAÇÃO PENDENTE**. Onde há custo computacional esperado, ele é
+marcado como **a medir** — nenhum número de custo é prometido sem
+medição (protocolo na seção 6).
+
+## 1. Objetivo e princípios
+
+O modo reativo permite estudar a liberação de calor **calculada pela
+cinética química** (mecanismos publicados) em vez de prescrita pela
+Wiebe, mantendo tudo o que existe hoje intacto.
+
+Princípios invioláveis (herdados da arquitetura, seção 9):
+
+- **Uma única fonte de calor por caso.** No modo prescrito
+  (`prescribed_wiebe`) a Wiebe fornece o calor. No modo reativo a
+  **química fornece o calor** e a Wiebe serve APENAS para comparação e
+  ajuste posterior (pós-processo, seção 7). As duas fontes **nunca
+  coexistem** no mesmo caso — nunca duplicar a fonte energética. A
+  troca de modo é explícita na configuração; nunca substituir
+  silenciosamente uma fonte pela outra.
+- **Opcional e independente.** O modo reativo não pode quebrar o
+  `prescribed_wiebe`: CFD permanece desabilitado por padrão
+  (`cfd.enabled: false`), o núcleo 0-D não importa nada de CFD, e a
+  suíte de testes do wiebepy (365 testes) continua passando sem o
+  módulo CFD.
+- **Preservar os modelos atuais de 1 a 5 estágios.** As Wiebes 1–5
+  estágios do núcleo não são modificadas; no modo reativo elas existem
+  apenas como referência comparativa.
+- **Comparação com ensaio é DIAGNÓSTICO, nunca validação** (mesma
+  convenção do modo prescrito). O modo reativo nascente seria
+  **verificado** contra resultados 0-D e contra dados publicados de
+  autoignição, e **diagnosticado** contra o ensaio (seção 5).
+- **Nada é apresentado como funcional antes de existir.** Enquanto o
+  modo 4.2 não estiver implementado e verificado, ele não aparece como
+  opção executável na GUI/CLI — apenas esta proposta.
+
+## 2. Arquitetura incremental (degraus R1..R7)
+
+Cada degrau adiciona UMA capacidade nova. Subir um degrau exige cumprir
+os critérios de gate do degrau anterior. Cada degrau declara
+explicitamente o que fica FORA de escopo — o que não está listado como
+entrega não é prometido.
+
+### R1 — Gás inerte multicomponente (sem reação)
+
+- **O que adiciona**: substituir o gás simplificado (perfectGas, Cp/mu
+  constantes) por termoquímica multicomponente — polinômios NASA
+  (`hPolynomial`) e múltiplas constituições — sem nenhuma reação. O
+  caso é inerte: a composição não muda, só as propriedades passam a
+  depender de T e da composição.
+- **Gate antes de subir para R2**:
+  - p×V motored com Cp constante reproduz o caso atual (regressão);
+  - p×V motored com `hPolynomial` converge e a diferença vs Cp
+    constante é quantificada e explicada (Cp/γ deixam de ser
+    constantes — efeito registrado, não corrigido);
+  - massa de cada espécie conservada ao longo do ciclo;
+  - fechamento de energia no padrão do `verification.md` (seção 2).
+- **Fora de escopo**: qualquer espécie combustível, reação, ignição.
+
+### R2 — H₂ autoignição, câmara fechada homogênea
+
+- **O que adiciona**: primeira reação — mistura H₂/ar definida
+  homogênea, câmara de volume FIXO (malha fixa), ignição espontânea
+  pela cinética (sem fonte, sem faísca, sem malha adaptativa).
+  Mecanismo: **Burke et al. 2012** (núcleo ~19 reações derivado de Li
+  et al. 2004; arquivo CHEMKIN com 13 espécies, incluindo gases de
+  banho N₂/Ar/He/CO/CO₂; blocos de taxa específicos por gás de banho —
+  N₂ vs Ar/He; validado para chamas diluídas de alta pressão).
+  Candidato alternativo: Ó Conaire et al. 2004 (Combustion and Flame),
+  mecanismo H₂/O₂ amplamente usado em motores — citado como candidato,
+  sem números não confirmados.
+- **Gate antes de subir para R3**:
+  - atraso de ignição (0-D, integrador homogêneo) reproduz dados
+    publicados de shock tube citados na referência do mecanismo —
+    comparação com dados PUBLICADOS (verificação, seção 5);
+  - o mesmo atraso no CFD (malha fixa, homogênea) é consistente com o
+    0-D dentro de tolerância declarada;
+  - fechamento de energia: energia liberada pela química = ΔU
+    (volume fixo) dentro de tolerância registrada;
+  - passo de integração química estabilizado (sem oscilação não
+    física em p̄(t)).
+- **Fora de escopo**: malha móvel, geometria de motor, CH₄/etanol/
+  diesel, emissões.
+
+### R3 — Geometria de motor (malha móvel + reação)
+
+- **O que adiciona**: juntar o pistão móvel (já verificado no modo
+  prescrito) com a reação do R2 — o primeiro caso reativo no motor
+  (ainda H₂, premistura homogênea).
+- **VERIFICAÇÃO PENDENTE — não afirmar compatibilidade**: é preciso
+  confirmar ANTES de começar R3 que o caminho reativo do OF13 aceita
+  malha móvel (fvModels + movers `multiValveEngine`/
+  `crankConnectingRodMotion` combinados com química), e como o solver
+  reativo candidato se comporta com remeshing. A compatibilidade
+  reactingFoam + malha móvel no OF13 NÃO está afirmada neste documento
+  — é uma pendência registrada (seção 8) e critério de gate.
+- **Gate antes de subir para R4**:
+  - compatibilidade solver+malha móvel confirmada em caso real (ou o
+    degrau é redefinido/adiado com o impedimento registrado);
+  - compressão motored reativa (sem combustível, inerte) = caso R1
+    (a reação não contamina o motored);
+  - fechamento de energia reativo na malha móvel no padrão
+    `verification.md` (inclui trabalho ∮p̄ dV);
+  - conservação de massa de cada espécie.
+- **Fora de escopo**: válvulas, injeção, chama de difusão.
+
+### R4 — CH₄ (premistura gasosa homogênea)
+
+- **O que adiciona**: trocar o combustível para CH₄, mesmo arcabouço do
+  R3. Mecanismo recomendado: **GRI-Mech 3.0** (Smith et al. 1999,
+  Berkeley) — 53 espécies / 325 reações, validado 1000–2500 K,
+  10 Torr–10 atm, φ 0,1–5. Candidato leve: **DRM19** (redução do
+  GRI-Mech, 19 espécies) — citado como candidato sem afirmar
+  desempenho; a escolha entre GRI-Mech e DRM19 é feita com critério
+  documentado (custo medido vs faixa de validade do caso, seção 6).
+- **Gate antes de subir para R5**:
+  - verificação do mecanismo contra dados publicados citados na
+    referência (ignition delay/chamas);
+  - custo por passo medido e registrado (a medir — seção 6);
+  - se DRM19: divergência vs GRI-Mech no caso de referência
+    quantificada antes de adotá-lo.
+- **Fora de escopo**: gás natural (CH₄ puro ≠ gás natural — mesma
+  observação do modo prescrito), NOₓ, emissões.
+
+### R5 — Etanol (premistura gasosa homogênea)
+
+- **O que adiciona**: etanol gasoso premisturado, mesmo arcabouço.
+  Mecanismo: **a escolher entre candidatos** — Marinov 1999 (mecanismo
+  etanol clássico) e versões do AramcoMech — apresentados como
+  candidatos A CONFIRMAR; a contagem de espécies/reações de cada um só
+  entra neste documento após verificação da fonte. Critério de escolha
+  documentado (faixa de validade vs condições do motor, licença,
+  disponibilidade do arquivo) é prerequisito do degrau.
+- **Gate antes de subir para R6**: igual ao padrão (verificação contra
+  dados publicados citados; custo medido).
+- **Fora de escopo**: etanol/gasolina, emissões.
+
+### R6 — Diesel PREMISTURADO (surrogate n-dodecano, Yao 2017)
+
+- **O que adiciona**: diesel representado pelo surrogate **n-dodecano**
+  — **Yao et al. 2017**, Fuel 191:339–349 — 54 espécies / 269 reações,
+  química de alta e baixa temperatura (NTC), otimizado contra ECN
+  Spray A; manuscrito aberto no UCL Discovery
+  (discovery.ucl.ac.uk/id/eprint/1532208/). Alimentação ainda
+  **premisturada homogênea** (o combustível entra gasoso, distribuído
+  — NÃO é injeção). Candidatos alternativos registrados: Narayanaswamy
+  et al. 2014 (255 espécies, CNF); Chishty et al. 2018 (usou Yao como
+  referência; observou atividade de baixa temperatura possivelmente
+  excessiva); Wehrfritz et al. 2018 (extensão 76 espécies / 423
+  reações com NO e precursores de fuligem).
+- **Gate antes de encerrar o escopo inicial**:
+  - verificação do surrogate contra dados publicados (ECN Spray A =
+    fonte de dados de referência para diesel, Sandia);
+  - comportamento NTC reproduzido no 0-D antes de ir ao 3D;
+  - custo por passo medido (54 espécies é muito acima das 13 do H₂ —
+    número EXATO a medir, seção 6).
+- **Fora de escopo**: injeção real (R7), emissões, fuligem (a extensão
+  de Wehrfritz é candidata, não compromisso).
+
+### R7 — Injeção DI / spray — FORA DO ESCOPO INICIAL
+
+- **O que seria**: injeção direta de diesel (spray, queima não
+  premisturada).
+- **Por que fica fora**: exige dados que NÃO temos do ensaio — taxa de
+  injeção, momento de injeção, geometria do injetor, temperatura de
+  parede/injetor, composição detalhada do surrogate para fase
+  líquida/vapor. Inventar esses dados é proibido pela mesma regra do
+  resto do projeto. O degrau só é reaberto se esses dados forem
+  obtidos de fonte citada.
+
+## 3. Combustíveis e mecanismos
+
+Mecanismos usados SOMENTE como publicados — nenhuma constante é
+editada. As propriedades termoquímicas (polinômios NASA de Cp/h/s)
+vêm **dos próprios arquivos dos mecanismos** — nada é inventado; com
+isso Cp/γ deixam de ser constantes (efeito separado no R1).
+
+| Combustível | Mecanismo recomendado | Espécies/reações | Referência | Alimentação | Status dos dados |
+|---|---|---|---|---|---|
+| H₂ | Burke et al. 2012 (núcleo ~19 reações, de Li et al. 2004) | 13 espécies (arquivo CHEMKIN, incl. banho N₂/Ar/He/CO/CO₂) | Burke, M. P. et al., *Int. J. Chem. Kinet.* 44 (2012) 444–474, DOI 10.1002/kin.20603 | premistura gasosa homogênea; Φ computável da configuração atual (m_fuel, ar, T1, P1) | alimentação computável hoje; verificação vs dados publicados do próprio artigo |
+| H₂ (alternativo) | Ó Conaire et al. 2004 | não confirmado aqui | Ó Conaire, M. et al., *Combustion and Flame* (2004) — mecanismo H₂/O₂ amplamente usado em motores | idem | candidato; números a confirmar antes de uso |
+| CH₄ | GRI-Mech 3.0 | 53 / 325 | Smith, G. P. et al., GRI-Mech 3.0, Berkeley, 1999, http://combustion.berkeley.edu/gri-mech/ | premistura gasosa homogênea; Φ computável (m_fuel, ar, T1, P1) | alimentação computável hoje; validade declarada 1000–2500 K, 10 Torr–10 atm, φ 0,1–5 |
+| CH₄ (leve) | DRM19 (redução do GRI-Mech) | 19 / não confirmado aqui | citado como candidato | idem | candidato; desempenho NÃO afirmado sem medir |
+| Etanol | Marinov 1999 ou AramcoMech | não confirmado aqui | Marinov, N. M. (1999), mecanismo etanol clássico; versões do AramcoMech | premistura gasosa homogênea; Φ computável | candidatos A CONFIRMAR; contagem de espécies só entra após verificação da fonte |
+| Diesel (premisturado) | surrogate n-dodecano, Yao et al. 2017 | 54 / 269 (NTC; otimizado contra ECN Spray A) | Yao, T. et al., *Fuel* 191 (2017) 339–349, DOI 10.1016/j.fuel.2016.11.083; manuscrito aberto: discovery.ucl.ac.uk/id/eprint/1532208/ | premistura homogênea (R6) | alimentação premistura computável; DI = dados FALTANTES (abaixo) |
+| Diesel (alternativos) | Narayanaswamy et al. 2014 (255 esp., CNF); Chishty et al. 2018 (usou Yao como referência; observou atividade de baixa T possivelmente excessiva); Wehrfritz et al. 2018 (extensão 76/423, NO + precursores de fuligem) | como indicado | como citado | idem | candidatos; a escolha definitiva é feita com critério documentado no degrau |
+
+**Condições de alimentação — o que é computável hoje vs faltante:**
+
+- **H₂, CH₄, etanol (premistura gasosa)**: Φ é computável da
+  configuração atual do wiebepy — m_fuel, massa de ar, T1, P1. Nenhum
+  dado novo é necessário para os degraus R2–R5 (e R6 no modo
+  premisturado). A stoichiometria vem do próprio mecanismo.
+- **Diesel DI (R7) — dados FALTANTES, listados explicitamente**:
+  taxa de injeção (perfil de razão de injeção), momento (SOI),
+  geometria do injetor, temperatura de parede e do injetor,
+  composição do surrogate para o modelo de spray, e qualquer dado de
+  ROHR/emissões (o ensaio não os fornece — seção 5). Enquanto não
+  houver fonte citada para esses dados, R7 não sai do papel.
+
+## 4. Solver e compatibilidade (VERIFICAÇÃO PENDENTE)
+
+Candidato: **reactingFoam (OpenFOAM 13)**, reusando a infraestrutura
+existente do módulo (builder, runner, adapter WSL2, reporting). Nada
+disso está afirmado como certo — as verificações abaixo são
+prerequisito do R2/R3 e impedimentos registrados (seção 8):
+
+- **(a) Existência e compatibilidade no OF13**: o `reactingFoam` existe
+  no OpenFOAM Foundation 13? (no OF13 os solvers são modulares — é
+  preciso confirmar como a combustão é acoplada ao `foamRun`/solver
+  modular `fluid` dessa versão). Ele aceita `fvModels` (incl.
+  `dynamicMotionSolverList`) e movimento/topologia de malha? A
+  combinação reação + malha móvel é o ponto crítico do R3.
+- **(b) Termoquímica**: compatibilidade dos polinômios NASA
+  (`hPolynomial`, exigido pelo R1) com o modelo de química candidato
+  (família PSUChemistryModel / equivalente no OF13) — confirmar quais
+  combinações thermo+chemistry o OF13 realmente suporta antes de fixar
+  o caminho do R1.
+- **(c) Integração química**: esquema de integração da química
+  (semi-implícito / Euler implícito) e controle de passo — no modo
+  reativo o passo é governado pela rigidez química além do Courant;
+  confirmar os controles disponíveis no OF13 e o efeito no custo por
+  passo (multiplicado — magnitude a medir, seção 6).
+
+Se qualquer verificação falhar, o degrau correspondente é redefinido
+(ou adiado) com o impedimento registrado — nunca se contorna uma
+incompatibilidade silenciosamente.
+
+## 5. Verificação e diagnóstico (o que é honesto prometer)
+
+Os dados experimentais disponíveis são APENAS p×θ do ensaio
+P_exp-Carga-3_45% (diesel; rpm 3396,2; Rc 17; P1 127,6 kPa @ −120°;
+T1 308,15 K; Tw 440 K). NÃO há ROHR, emissões, taxa de injeção nem
+composição do surrogate. Conclusão honesta:
+
+- **O modo reativo nascente NÃO pode ser validado contra o ensaio** —
+  não há dado de combustão independente (a pressão do ensaio já foi
+  usada para calibrar a Wiebe; usá-la também para "validar" a química
+  repetiria o mesmo problema do modo prescrito, agravado).
+- **Verificação**: casos 0-D/autoignição — ignition delay de shock tube
+  da LITERATURA (dados publicados e citados das próprias referências
+  dos mecanismos, ex. as chamas diluídas de alta pressão do Burke
+  2012, a faixa 1000–2500 K do GRI-Mech, o ECN Spray A do Yao 2017) —
+  comparação com dados PUBLICADOS, citados; e consistência interna
+  (fechamento de energia, conservação de massa/elementos) no padrão
+  do `verification.md`.
+- **Diagnóstico contra o ensaio**: p×θ do caso reativo sobreposto ao
+  ensaio com as MESMAS ressalvas do modo prescrito (p̄ volumétrica ≠
+  pressão no sensor; surrogate ≠ diesel real; premistura ≠ DI) —
+  leitura diagnóstica, nunca "o modelo previu o ensaio".
+- Nenhum resultado de emissão, knock ou eficiência é reportado no modo
+  reativo nascente — não há dado para confrontar.
+
+## 6. Custo computacional — A MEDIR (protocolo)
+
+Nenhum número de custo do modo reativo é prometido. Referência única
+existente: o caso prescrito de referência (malha 24×36, janela
+−120°…+120°) leva **~150 s** (wall-clock, WSL2, registrado no
+`verification.md`).
+
+Protocolo de medição (executar ANTES de qualquer promessa):
+
+1. **Mesma malha 24×36** e mesma janela para todos os casos medidos.
+2. **Mesma janela angular** (−120°…+120°) e mesmo critério de passo
+   onde aplicável.
+3. Medir **s/°CA** (tempo total / graus percorridos) de:
+   a. `prescribed_wiebe` (baseline ~150 s re-medido na mesma sessão);
+   b. reativo H₂ (R2, malha fixa) e (R3, malha móvel);
+   c. reativo CH₄ (GRI-Mech e DRM19, se ambos medidos);
+   d. reativo diesel premisturado (Yao 2017).
+4. Registrar separadamente: custo de montagem química por passo,
+   número de subpassos de integração química, e custo de I/O — para
+   separar custo da química do custo do solver.
+5. Publicar os números na tabela de verificação do degrau (com
+   máquina/versão), não neste roadmap; este documento lista "a medir"
+   até a medição existir.
+6. Regra: se o custo medido inviabilizar um degrau, o degrau é
+   reescopo (malha menor, mecanismo mais leve, janela reduzida) com a
+   decisão registrada — nunca um número otimista no lugar da medição.
+
+## 7. Wiebe no modo reativo — comparação, nunca fonte
+
+No modo reativo a Wiebe não entra na física do caso. Ela reaparece
+APENAS no pós-processo comparativo:
+
+- **p×θ**: sobreposição do caso reativo vs caso prescrito vs ensaio,
+  com RMSE p×θ contra o ensaio nas mesmas métricas do
+  `verification.md` (p_max/erro, fase, viés, RMSE) — leitura
+  DIAGNÓSTICA.
+- **x(θ)**: fração queimada da Wiebe calibrada vs fração de calor
+  liberado integrada da química — comparar forma/fase/liberação
+  acumulada; usar para diagnosticar onde a química antecipa/atrasa em
+  relação à Wiebe calibrada.
+- O relatório do caso reativo declara explicitamente:
+  `source = chemistry` (nunca Wiebe), o mecanismo e sua referência, e
+  que a Wiebe exibida é comparação. Nenhum ajuste da Wiebe a partir do
+  caso reativo é feito automaticamente (ajuste posterior, se houver,
+  é decisão registrada do usuário).
+
+## 8. Impedimentos registrados
+
+Lista viva — cada item é resolvido (ou reescopado) antes do degrau que
+depende dele:
+
+1. **Compatibilidade do solver reativo no OF13** (seção 4a): existência
+   de `reactingFoam`/caminho reativo no OF13 modular, aceitação de
+   `fvModels`/malha móvel + reação. Pendente — bloqueia R3 (e orienta
+   R2).
+2. **Termoquímica × química** (seção 4b): combinação `hPolynomial` +
+   modelo de química suportada no OF13. Pendente — bloqueia R1 na
+   forma planejada.
+3. **Integração química e passo** (seção 4c): esquemas e controles
+   disponíveis; custo por passo multiplicado — magnitude a medir
+   (protocolo seção 6).
+4. **Mecanismo de etanol a escolher** (R5): Marinov 1999 vs AramcoMech
+   — critério de escolha documentado (faixa de validade vs condições
+   do motor, disponibilidade do arquivo, licença) é prerequisito;
+   contagens de espécies só após verificação da fonte.
+5. **Dados DI faltantes** (R7): taxa de injeção, SOI, T de parede/
+   injetor, composição do surrogate para spray — sem fonte citada, R7
+   permanece fora do escopo.
+6. **Licenças dos mecanismos**: GRI-Mech e AramcoMech têm termos
+   próprios de uso/redistribuição — verificar antes de embutir
+   qualquer arquivo no repositório; H₂ (Burke) e o surrogate (Yao,
+   UCL Discovery) igualmente, conforme a fonte do arquivo usado.
+7. **Custo computacional não medido**: todos os números de custo do
+   modo reativo estão "a medir" até o protocolo da seção 6 ser
+   executado.

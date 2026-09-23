@@ -243,6 +243,29 @@ def test_case_builder_writes_q_density_table(tmp_path):
     assert cc["heat_source"]["table_form"] == "q_density_W_per_m3"   # entrada de dicionário OF13
 
 
+def test_case_builder_region_toposetdict_em_system(tmp_path):
+    """Com distribution=region, o topoSetDict é gravado em
+    <caso>/system/ (onde a validação e o adapter o procuram) e NÃO em
+    <caso>/constant/system/ — antes da correção o modo region nunca
+    chegou a executar (verification.md §3e)."""
+    from wiebepy.cfd.case_builder import CaseBuilder
+    cfg_dict = dict(CFG_DICT)
+    cfg_dict["heat_source"] = {"distribution": "region",
+                               "region": "zonaTeste"}
+    cfg = CfdConfig.from_dict(cfg_dict)
+    b = CaseBuilder(cfg, ENGINE, solver_info={"version": "13"},
+                    heat_enabled=True, moving_override=True)
+    d = b.build(tmp_path / "caso_region")
+    ts = d / "system/topoSetDict"
+    assert ts.is_file()
+    assert not (d / "constant/system/topoSetDict").exists()
+    assert "cellZoneSet" in ts.read_text(encoding="utf-8")
+    assert "zonaTeste" in ts.read_text(encoding="utf-8")
+    # no modo region o fvModels ainda usa Q (limitação OF13, §3e)
+    fv = (d / "constant/fvModels").read_text(encoding="utf-8")
+    assert "\n    Q\n" in fv
+
+
 def _stages(n):
     betas = np.array([1.0 / n] * n)
     ts = []

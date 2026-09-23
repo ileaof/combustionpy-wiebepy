@@ -462,13 +462,17 @@ wiebeHeatSource
     }}
 }}"""), encoding="utf-8")
 
-        # topoSet: geração da região (distribution=region) — caixa axial
+        # topoSet: geração da região (distribution=region) — caixa axial.
+        # Este bloco roda dentro de _write_constant (d = constant/) — o
+        # topoSetDict pertence a system/, onde a validação e o adapter
+        # o procuram (d.parent = diretório do caso). A região é criada
+        # UMA vez no início da janela (cellZoneSet é estático).
         if self.heat_enabled and self.cfg.distribution == "region" \
                 and self.cfg.region:
             h0 = self.chamber_height_at(self.theta_start_rad)
             r = self.engine.bore / 2.0
             zmax = h0 * 0.5   # metade inferior: hipótese declarada do usuário
-            d.joinpath("system").joinpath("topoSetDict").write_text(
+            d.parent.joinpath("system").joinpath("topoSetDict").write_text(
                 _dict_file("dictionary", "system", "topoSetDict", f"""
 actions
 (

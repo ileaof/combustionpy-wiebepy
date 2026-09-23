@@ -332,6 +332,155 @@ temporal nesta faixa, e a queda de max_Co de 0,5 para 0,25 não altera
 as conclusões. (Os casos 001–006 rodaram a 0,5; 007/008/011/012 a 0,25;
 o padrão do construtor passou a ser 0,25.)
 
+## 3d. Rastreabilidade do case_012 (caso diagnóstico)
+
+**O que mudou do case_006 para o case_012** (única origem:
+`config_cfd_rc_efetivo.yaml`):
+
+| Item | case_006 (base) | case_012 (diagnóstico) | Origem |
+|---|---|---|---|
+| `engine.Rc` | 17,0 | **15,63540583** | CALIBRADO (ajuste PSO+RK4 com Rc livre, 2 estágios) |
+| `wiebe.model` | model_cfd_calibrated.json (1 estágio) | **model_cfd_duo_rc15635.json** (2 estágios) | CALIBRADO |
+| `numerics.max_Co` | 0,5 | 0,25 | numérico (crash §5b; sem efeito medido: item 9) |
+| diretorio | results/cfd/case_006 | results/cfd/case_012 | – |
+| Todos os demais | idênticos | idênticos | – |
+
+**Intactos entre os dois casos**: bore 86 mm, curso 70 mm, biela
+117,5 mm, rpm 3396,20, m_f 9,42754647351e-6 kg/ciclo, PCI
+39 191,3 kJ/kg (diesel do ensaio), T1 308,15 K, Tw 440 K
+(fixed_temperature), kEpsilon + wall functions, janela −120°…+120°,
+inicial 127,6 kPa / 308,15 K, malha 24×36, Δt 1e-6 s, `distribution:
+uniform`, fuel diesel (premixed_gas), comparação ensaio (rad/bar,
+offset 0).
+
+**Propriedades termodinâmicas (declaradas, não ajustadas)**:
+Cp = 1063 J/kgK, M = 28,96 kg/kmol → R = 287,07 J/kgK,
+γ = Cp/(Cp−R) = **1,370** — teste de equivalência com o κ = 1,37 do
+0-D (mesmo valor dos casos 005/006/009/010/011); μ = 5,5e-5 Pa·s,
+Pr = 0,7. Cv = Cp − R = 775,93 J/kgK.
+
+**Origem da fonte Wiebe (CALIBRADA no ensaio, não prevista)**:
+`--compare-stages` PSO+RK4, seed 42, 2 runs, 459 pontos do ensaio,
+janela ±2 rad, com Rc livre e N = 2 (artefatos em
+`results/calib_wiebe_stages123_freerc/`):
+
+| Estágio | β_j | θ0_j | Δθ_j | m_j | a_j |
+|---|---|---|---|---|---|
+| 1 | 0,65653322 | −14,4527° | 49,4203° | 2,87177 | 6,9078 |
+| 2 | 0,34346678 | +5,5369° | 12,1768° | 0,56855 | 6,9078 |
+
+Métricas do ajuste: RMSE 44,60 kPa, R² 0,99919, CV 50,8; verificação
+0-D independente (P1 = 127,6 kPa @ −120°): RMSE 57,9 kPa. O Rc
+15,63540583 é o MESMO parâmetro calibrado em par com estes estágios.
+A tabela da fonte é verificada na preparação:
+∫Q̇dt = 369,40 J vs m_f·PCI = 369,48 J (erro −0,02 %).
+
+**Balanço de energia do case_012** (janela −120°…+120°; ΔU na forma
+exata U = (cv/R)·p̄·V — p uniforme no campo, hConst/perfectGas;
+U inicial confere com m·cv·T₀ = 122,6 J):
+
+| Grandeza | Valor |
+|---|---|
+| Energia prescrita (fonte, tabela) | 369,40 J |
+| ΔU (U_final 261,24 − U_inicial 122,71) | +138,53 J |
+| Trabalho indicado ∮p̄ dV | +195,99 J |
+| Perda às paredes ∫q_wall dt | 35,13 J (13,90 J até o pico) |
+| **Fechamento (ΔU + W + perda)** | **369,65 J (+0,07 % vs prescrito)** |
+| T̄ mássica final (p̄·V/m·R) | 656,5 K |
+| Massa | 0,512867 g, variação 0,00e+00 |
+
+(o mesmo fechamento para o case_006 dá 139,89 + 192,53 + 36,99 =
+369,41 J vs 366,86 J prescritos na janela — +0,7 %.)
+
+**Janela do RMSE**: sobreposição completa ensaio ∩ CFD = **459 pontos**
+do ensaio (−114,5°…+114,5°), p̄ do CFD interpolada nos ângulos do
+ensaio; sem offset. As mesmas métricas (RMSE, viés, erro de pico,
+R²) são calculadas nesta janela para todos os casos da seção 3a/3c.
+
+**Verificações de malha e passo temporal**: medidas na configuração
+BASE (case_006): malha 24×36 → 36×54 (case_010) muda p̄(θ) em 4,4 kPa
+rms; max_Co 0,5 → 0,25 (case_011) muda 3,6 kPa rms — ambas
+desprezíveis frente aos efeitos investigados. O case_012 herda a
+mesma malha/numérica (com Co 0,25). A sensibilidade NÃO foi repetida
+na geometria Rc 15,635 (mesmo gerador de malha e mesma equação de
+volume; registrada como limitação, não como resultado estimado).
+
+**Calibrado vs previsto — separação explícita**:
+
+| Categoria | Grandezas |
+|---|---|
+| CALIBRADAS (ajustadas ao ensaio; não são previsões) | θ0_j, Δθ_j, m_j, β_j das 2 estágios; Rc efetivo 15,635 |
+| FIXADAS (entrada, do ensaio/documentação) | m_f, PCI, T1, P1 127,6 kPa, rpm, geometria bore/curso/biela, Tw 440 K, γ = 1,37 (equivalência) |
+| PREVISTAS pelo CFD (nenhum dado de saída usado no ajuste) | p̄(θ) completa, T̄(θ), campos 3D de U/T/p/k/ε, perda às paredes (35,13 J), trabalho indicado (195,99 J), fase do pico |
+| PRESCRIÇÃO (não é previsão de queima) | A FORMA da liberação de calor é a Wiebe calibrada — o CFD transporta a energia prescrita; a sobreposição final de curvas é em parte esperada por construção |
+
+**Leitura correta**: o case_012 mostra (a) que a cadeia numérica CFD é
+conservativa e malha/Δt-independente, (b) que o resíduo do case_006
+era o Rc efetivo, e (c) que a curva calibrada reproduz o ensaio — NÃO
+mostra que o modelo prevê a combustão (fonte prescrita; Rc efetivo
+contradiz a geometria documentada e não serve de projeto).
+
+## 3e. Conservação da fonte `region` com malha móvel (case_013)
+
+Caso controlado pedido antes de recomendar a distribuição `region`:
+**case_013 = case_006 com `heat_source: {distribution: region, region:
+zonaInferior}`** (única diferença; config em
+`examples/config_cfd_region.yaml`). A zona é uma caixa axial
+(boxToCell, seção plena do bore, z ∈ [−10 mm; h₀/2] com h₀ = altura da
+câmara em −120° = 60,85 mm → metade axial da câmara), criada UMA vez
+por `topoSet` (`cellZoneSet` estático, 10 368 de 20 736 células —
+malha 24×24×36). Rodou completo (foamRun rc=0, 140,7 s).
+
+**Resultado — SUBENTREGA forte, como previsto em §4:**
+
+| Grandeza | case_013 (region) | case_006 (uniform) |
+|---|---|---|
+| Entrega efetiva (ΔU + W + perda, U = (cv/R)·p̄·V) | **39,40 J = 10,7 %** do prescrito (369,4 J) | 369,41 J (+0,7 %) |
+| p_max | 4593,8 kPa @ −0,35° (igual ao motorado case_008 no pico) | ~5530 kPa |
+| Divergência vs motorado | começa em 5,44° CA (início da queima); máx. +205 kPa @ 18,57° | – |
+| Perda às paredes | 15,28 J | 36,99 J |
+| Massa | exatamente constante (0,512867 g) | idem |
+
+**Mecanismo confirmado no fonte do OF13** (`/opt/openfoam13/src/`):
+
+- `src/fvModels/general/heatSource/heatSource.C:85-96` — no modo `Q`,
+  a densidade é construída como
+  `Function1s::Scale(Constant("1/V", 1/zone_.V()), Constant("1", 1), Q(t))`:
+  o fator **1/zone_.V() é um `Constant`**, avaliado UMA vez na
+  construção do fvModel (t = −120° CAD), nunca atualizado.
+- `src/finiteVolume/fvMesh/fvCellZone/fvCellZone.C:38-43` +
+  `fvCellZoneI.H:34-37` — `zone_.V()` = Σ `mesh_.V()` das células da
+  zona, no instante da construção.
+- `heatSource.C:149-153` — a fonte é aplicada como
+  `eqnSource[cells[i]] -= mesh().V()[cells[i]]·q`, com os volumes
+  CELULARES CORRENTES.
+
+**Consistência quantitativa**: como a cellZone é estática (mesmos
+rótulos de células) e a compressão do gás é uniforme, o volume da zona
+escala com o volume total — V_zona(θ)/V_zona(−120°) = V(θ)/V(−120°) —
+e a entrega prevista com o fator congelado é
+∫Q̇(θ)·(V(θ)/V(−120°))·dθ = **38,36 J (10,4 %)**, fechando com os
+39,40 J medidos (Δ 2,6 %, interpolacão + perda às paredes). Perto do
+PMS o fator V(θ)/V(−120°) chega a 0,072: quase toda a queima é
+suprimida. A densidade local efetiva também fica errada
+(Q̇/V_zona(−120°) em vez de Q̇/V_zona(θ)) — o erro não é só de total,
+é espacial/temporal.
+
+**Veredito**: **NÃO usar `distribution: region` com malha móvel** — a
+limitação é do fvModel `heatSource` do OF13 (volume congelado na
+construção no modo `Q`), não do builder. A distribuição `uniform`
+(q''' = Q̇/V₀(θ), prescrita densidade por densidade) é conservativa com
+malha móvel — fechamento +0,7 % (case_006) e +0,07 % (case_012, §3d) —
+e permanece a única recomendada. `region` só voltaria a ser candidata
+com correção upstream (reavaliar 1/V a cada passo) ou com um fvModel
+próprio; o aviso de distribuição no builder já reflete isso.
+
+**Registro adicional**: o modo `region` estava inexecutável até esta
+verificação — o `topoSetDict` era gravado em `constant/system/` em vez
+de `system/` (bug do builder corrigido; teste de regressão adicionado
+à suíte). Sem a correção, o case_013 abortava na validação com
+"no such file: constant/system/topoSetDict".
+
 ## 5b. Impedimentos registrados (nenhum resultado estimado como simulado)
 
 * **RESOLVIDO — Casos motorados 007/008 e caso 012: foamRun aborta
@@ -385,8 +534,11 @@ do fvModel (`Function1s::Scale(Constant("1/V", 1/zone_.V()), …)` —
   exatamente o formalismo §7), no lugar do campo Q. Implementada em
   `case_builder.py` + `sources/wiebe_heat_release.py`
   (`table_text_density`), com verificação automática de fechamento.
-- Modo `region` mantém Q (volume da zona desconhecido na geração) com a
-  limitação registrada no aviso de distribuição.
+- Modo `region` mantém Q (volume da zona desconhecido na geração); a
+  subentrega prevista foi **medida no case_013: 39,40 J entregues dos
+  369,4 J prescritos (10,7 %)** — mecanismo confirmado no fonte
+  (1/V congelado em `Function1s::Constant`, `heatSource.C:89`) e
+  veredito de não recomendação com malha móvel em **§3e**.
 
 ## 5. Cobertura de testes automatizados
 
