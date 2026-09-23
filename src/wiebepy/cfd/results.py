@@ -135,6 +135,9 @@ def read_results(case_dir, engine=None, stages=None) -> Dict:
     integ, _ = _series(case_dir, "gasIntegral")
     mn, cols_mn = _series(case_dir, "gasMin")
     mx, cols_mx = _series(case_dir, "gasMax")
+    # R1 (multicomponente): integrais volumétricas de ρ·Yi — massa de
+    # cada espécie ao longo do ciclo (colunas rhoN2/rhoO2 etc.)
+    spm, cols_spm = _series(case_dir, "specieMass")
     f_whf = _fo_dat(case_dir, "wallHeatFlux")
     whf, cols_whf = _read_wall_heat_flux(f_whf) if f_whf else \
         (np.empty((0, 0)), [])
@@ -157,6 +160,13 @@ def read_results(case_dir, engine=None, stages=None) -> Dict:
                              if "p_mean" in out else np.empty(0))
     if integ.size:
         out["mass_kg"] = integ[:, -1]   # volIntegrate(rho)
+    if spm.size and cols_spm:
+        # R1: massa de cada espécie [kg] — colunas volIntegrate(rho<SP>)
+        out["specie_mass_kg"] = {}
+        for k in cols_spm:
+            if k.startswith("volIntegrate(rho") and k.endswith(")"):
+                sp = k[len("volIntegrate(rho"):-1]
+                out["specie_mass_kg"][sp] = spm[:, cols_spm.index(k)]
     if mn.size and cols_mn and mx.size and cols_mx:
         for nome, chave, mat, cols in (
                 ("T_min", "min(T)", mn, cols_mn),

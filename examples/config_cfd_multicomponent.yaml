@@ -1,0 +1,81 @@
+# =====================================================================
+# Caso de verificação R1 — case_014: GÁS INERTE MULTICOMPONENTE
+# (roadmap reativo §2: N2+O2 com NASA, SEM reação — noCombustion)
+#
+# Igual ao case_007, exceto paredes fixas a 440 K. A diferença de p̄(θ)
+# vs case_007 isola a perda às paredes NA COMPRESSÃO, sem combustão;
+# a diferença vs 0-D motored com Hohenberg compara a correlação com o
+# CFD na mesma fase.
+# =====================================================================
+engine:
+  bore_mm: 86.0
+  stroke_mm: 70.0
+  rod_length_mm: 117.5
+  Rc: 17.0
+  rpm: 3396.20
+  m_fuel_kg_per_cycle: 9.42754647351e-6
+  LHV_kJ_per_kg: 39191.3
+  T1_K: 308.15
+  Tw_K: 440.0
+
+cfd:
+  enabled: true
+  adapter: openfoam
+  mode: prescribed_wiebe
+  case_directory: results/cfd/case_014
+  workers: 1
+  wsl_distro: Ubuntu-22.04
+
+  geometry:
+    type: simplified_cylinder
+    moving_piston: true
+    n_radial: 24
+    n_axial: 36
+
+  interval:
+    angle_unit: deg
+    start: -120
+    end: 120
+
+  initial:
+    P_kPa: 127.6
+    T_K: 308.15
+
+  walls:
+    Tw_K: 440
+    model: fixed_temperature
+
+  turbulence:
+    model: kEpsilon
+    wall_functions: true
+
+  numerics:
+    deltaT_s: 1.0e-6
+    max_Co: 0.25
+    write_interval_deg: 10
+
+  heat_source:
+    distribution: uniform
+    region: null
+
+  fuel:
+    name: diesel
+    feed: premixed_gas
+
+  gas:
+    model: multicomponent_inert   # ignora Cp/molWeight/mu/Pr abaixo
+    Cp_J_kgK: 1063.0        # γ = 1,37 (equivalência com o 0-D)
+    molWeight_kg_kmol: 28.96
+    mu_Pa_s: 5.5e-05
+    Pr: 0.7
+
+  wiebe:
+    source: model
+    model: examples/model_cfd_calibrated.json
+
+  comparison:
+    criterion: same_rpm_same_energy
+    experimental: examples/data/ensaio_P_exp_carga3_45.txt
+    experimental_angle_unit: rad
+    experimental_pressure_unit: bar
+    experimental_offset_deg: 0.0

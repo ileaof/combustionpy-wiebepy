@@ -97,6 +97,7 @@ MODES = ("prescribed_wiebe", "reactive")
 ANGLE_UNITS = ("deg", "rad")
 FUELS = ("H2", "CH4", "ethanol", "diesel")
 DISTRIBUTIONS = ("uniform", "region")
+GAS_MODELS = ("simple", "multicomponent_inert")
 
 
 @dataclass
@@ -134,6 +135,13 @@ class CfdConfig:
     gas_molWeight: float = 28.96              # massa molar [kg/kmol]
     gas_mu: float = 5.5e-05                   # viscosidade [Pa·s]
     gas_Pr: float = 0.7                       # Prandtl [-]
+    # Modelo termoquímico (degrau R1 do roadmap reativo):
+    #   simple               = ar simplificado (Cp/mu constantes) — atual;
+    #   multicomponent_inert = mistura N2+O2 com polinômios NASA
+    #                          (janaf/sutherland), SEM reação (sem
+    #                          combustionProperties → noCombustion, R=0);
+    #                          Cp/molWeight/mu/Pr acima são IGNORADOS.
+    gas_model: str = "simple"
 
     deltaT_s: float = 1.0e-6                  # passo temporal [s]
     # 0,25 e não 0,5: com max_Co 0,5 os casos 008 (motrado) e 012 (Rc
@@ -207,6 +215,7 @@ class CfdConfig:
             gas_molWeight=float(gas.get("molWeight_kg_kmol", 28.96)),
             gas_mu=float(gas.get("mu_Pa_s", 5.5e-05)),
             gas_Pr=float(gas.get("Pr", 0.7)),
+            gas_model=gas.get("model", "simple"),
             wiebe_source=wiebe.get("source", "model"),
             wiebe_model=wiebe.get("model"),
             wiebe_parameters=wiebe.get("parameters"),
@@ -242,7 +251,8 @@ class CfdConfig:
                 "heat_source": {"distribution": self.distribution,
                                 "region": self.region},
                 "fuel": {"name": self.fuel_name, "feed": self.fuel_feed},
-                "gas": {"Cp_J_kgK": self.gas_Cp_J_kgK,
+                "gas": {"model": self.gas_model,
+                        "Cp_J_kgK": self.gas_Cp_J_kgK,
                         "molWeight_kg_kmol": self.gas_molWeight,
                         "mu_Pa_s": self.gas_mu, "Pr": self.gas_Pr},
                 "wiebe": {"source": self.wiebe_source,
@@ -324,6 +334,9 @@ class CfdConfig:
                      "fluxo de calor); omita Tw_K ou use fixed_temperature.")
         if not self.gas_Cp_J_kgK > 0 or not self.gas_molWeight > 0:
             e.append("cfd.gas.Cp_J_kgK e molWeight_kg_kmol devem ser > 0.")
+        if self.gas_model not in GAS_MODELS:
+            e.append(f"cfd.gas.model '{self.gas_model}' inválido "
+                     f"({GAS_MODELS}).")
         if not self.gas_mu > 0 or not 0 < self.gas_Pr <= 1.0:
             e.append("cfd.gas.mu_Pa_s deve ser > 0 e Pr em (0, 1].")
         if self.turbulence_model not in ("kEpsilon", "kOmegaSST", "laminar"):

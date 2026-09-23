@@ -78,6 +78,40 @@ def _timename(x: float) -> str:
     return f"{x:.6g}"
 
 
+# Espécies do R1 (roadmap reativo, seção 2): ar seco N2 + O2, razão molar
+# 3,76:1 (composição padrão do ar). Polinômios NASA (janaf, Tlow 200 /
+# Thigh 5000 / Tcommon 1000) e transporte de Sutherland COPIADOS dos
+# blocos N2 e O2 do arquivo do tutorial do OF13
+#   /opt/openfoam13/tutorials/multicomponentFluid/counterFlowFlame2D/
+#   constant/thermo.compressibleGas
+# (termoquímica GRI-Mech 3.0 distribuída com o OpenFOAM 13) — extraídos
+# mecanicamente, não redigitados. Nada é inventado aqui.
+SPECIES_R1 = {
+    "N2": {
+        "molWeight": 28.0134,
+        "Tlow": 200, "Thigh": 5000, "Tcommon": 1000,
+        "highCpCoeffs": (2.92664, 0.00148798, -5.68476e-07, 1.0097e-10,
+                         -6.75335e-15, -922.798, 5.98053),
+        "lowCpCoeffs": (3.29868, 0.00140824, -3.96322e-06, 5.64152e-09,
+                        -2.44486e-12, -1020.9, 3.95037),
+        "As": 1.401e-6, "Ts": 107,
+    },
+    "O2": {
+        "molWeight": 31.9988,
+        "Tlow": 200, "Thigh": 5000, "Tcommon": 1000,
+        "highCpCoeffs": (3.69758, 0.00061352, -1.25884e-07, 1.77528e-11,
+                         -1.13644e-15, -1233.93, 3.18917),
+        "lowCpCoeffs": (3.21294, 0.00112749, -5.75615e-07, 1.31388e-09,
+                        -8.76855e-13, -1005.25, 6.03474),
+        "As": 1.753e-6, "Ts": 139,
+    },
+}
+# frações mássicas do ar seco (razão molar N2:O2 = 3,76:1)
+_MOL_N2 = 3.76 * SPECIES_R1["N2"]["molWeight"]
+_Y_N2 = _MOL_N2 / (_MOL_N2 + SPECIES_R1["O2"]["molWeight"])
+_Y_O2 = 1.0 - _Y_N2
+
+
 class CaseBuilder:
     """Constrói o caso OpenFOAM no diretório dado."""
 
@@ -141,6 +175,11 @@ class CaseBuilder:
         self.motion = motion_report(self.kin, a0, self.theta_end_rad)
 
     # ------------------------------------------------------------ utilidades
+    @property
+    def multicomponent(self) -> bool:
+        """Gás multicomponente inerte (R1): N2+O2 com NASA, sem reação."""
+        return self.cfg.gas_model == "multicomponent_inert"
+
     def load_stages(self):
         return self.cfg.load_wiebe_stages()
 
@@ -328,6 +367,35 @@ boundaryField
     head   { type compressible::alphatWallFunction; Prt 0.85; value uniform 0; }
 }"""), encoding="utf-8")
 
+        # R1 (multicomponente inerte): frações mássicas iniciais do ar
+        # seco (N2:O2 = 3,76:1 molar); paredes sem gradiente (sem reação
+        # não há fluxo especia de parede a prescrever). N2 é a defaultSpecie
+        # (Y_N2 = 1 − Y_O2); escrevemos ambas explicitamente para que o
+        # estado inicial seja reprodutível sem depender da normalização.
+        if self.multicomponent:
+            for nome, y in (("N2", _Y_N2), ("O2", _Y_O2)):
+                d.joinpath(nome).write_text(_dict_file(
+                    "volScalarField", "", nome, f"""
+dimensions      [0 0 0 0 0 0 0];
+
+internalField   uniform {_fmt(y, 8)};
+
+boundaryField
+{{
+    piston
+    {{
+        type            zeroGradient;
+    }}
+    liner
+    {{
+        type            zeroGradient;
+    }}
+    head
+    {{
+        type            zeroGradient;
+    }}
+}}"""), encoding="utf-8")
+
     # ------------------------------------------------------------ constant/
     def _write_constant(self, d: Path) -> None:
         # Propriedades do gás — VALORES configuráveis, padrão ar
@@ -335,11 +403,82 @@ boundaryField
         # CFD resolve a energia e a troca térmica nas paredes por si.
         # γ_CFD = Cp/(Cp−R), R = 8314.46/molWeight — o teste de
         # equivalência termodinâmica (γ_CFD = κ do 0-D) sobrescreve Cp.
-        cp = self.cfg.gas_Cp_J_kgK
-        mw = self.cfg.gas_molWeight
-        d.joinpath("physicalProperties").write_text(_dict_file("dictionary",
-                                                               "constant",
-                                                               "physicalProperties", f"""
+        if self.multicomponent:
+            # R1 — mistura multicomponente inerte (N2+O2), formato do
+            # tutorial OF13 multicomponentFluid/counterFlowFlame2D
+            # (coefficientWilkeMulticomponentMixture + janaf/sutherland).
+            # SEM constant/combustionProperties: o combustionModel::New do
+            # OF13 cai em noCombustion (R=0, Qdot=0) — transporte de
+            # espécies sem reação (roadmap reativo §2, degrau R1).
+            cp_n2 = SPECIES_R1["N2"]
+            cp_o2 = SPECIES_R1["O2"]
+            d.joinpath("physicalProperties").write_text(_dict_file(
+                "dictionary", "constant", "physicalProperties", f"""
+thermoType
+{{
+    type            hePsiThermo;
+    mixture         coefficientWilkeMulticomponentMixture;
+    transport       sutherland;
+    thermo          janaf;
+    energy          sensibleEnthalpy;
+    equationOfState perfectGas;
+    specie          specie;
+}}
+
+species          ( N2 O2 );
+
+defaultSpecie    N2;
+
+N2
+{{
+    specie
+    {{
+        molWeight       {_fmt(cp_n2["molWeight"], 7)};
+    }}
+    thermodynamics
+    {{
+        Tlow            {cp_n2["Tlow"]};
+        Thigh           {cp_n2["Thigh"]};
+        Tcommon         {cp_n2["Tcommon"]};
+        highCpCoeffs    ( {cp_n2["highCpCoeffs"][0]:.6g} {cp_n2["highCpCoeffs"][1]:.6g} {cp_n2["highCpCoeffs"][2]:.6g} {cp_n2["highCpCoeffs"][3]:.6g} {cp_n2["highCpCoeffs"][4]:.6g} {cp_n2["highCpCoeffs"][5]:.6g} {cp_n2["highCpCoeffs"][6]:.6g} );
+        lowCpCoeffs     ( {cp_n2["lowCpCoeffs"][0]:.6g} {cp_n2["lowCpCoeffs"][1]:.6g} {cp_n2["lowCpCoeffs"][2]:.6g} {cp_n2["lowCpCoeffs"][3]:.6g} {cp_n2["lowCpCoeffs"][4]:.6g} {cp_n2["lowCpCoeffs"][5]:.6g} {cp_n2["lowCpCoeffs"][6]:.6g} );
+    }}
+    transport
+    {{
+        As              {cp_n2["As"]:.4g};
+        Ts              {cp_n2["Ts"]:.6g};
+    }}
+}}
+
+O2
+{{
+    specie
+    {{
+        molWeight       {_fmt(cp_o2["molWeight"], 7)};
+    }}
+    thermodynamics
+    {{
+        Tlow            {cp_o2["Tlow"]};
+        Thigh           {cp_o2["Thigh"]};
+        Tcommon         {cp_o2["Tcommon"]};
+        highCpCoeffs    ( {cp_o2["highCpCoeffs"][0]:.6g} {cp_o2["highCpCoeffs"][1]:.6g} {cp_o2["highCpCoeffs"][2]:.6g} {cp_o2["highCpCoeffs"][3]:.6g} {cp_o2["highCpCoeffs"][4]:.6g} {cp_o2["highCpCoeffs"][5]:.6g} {cp_o2["highCpCoeffs"][6]:.6g} );
+        lowCpCoeffs     ( {cp_o2["lowCpCoeffs"][0]:.6g} {cp_o2["lowCpCoeffs"][1]:.6g} {cp_o2["lowCpCoeffs"][2]:.6g} {cp_o2["lowCpCoeffs"][3]:.6g} {cp_o2["lowCpCoeffs"][4]:.6g} {cp_o2["lowCpCoeffs"][5]:.6g} {cp_o2["lowCpCoeffs"][6]:.6g} );
+    }}
+    transport
+    {{
+        As              {cp_o2["As"]:.4g};
+        Ts              {cp_o2["Ts"]:.6g};
+    }}
+}}"""), encoding="utf-8")
+        # (o restante de constant/ — momentumTransport, dynamicMeshDict,
+        # fvModels, topoSet — é comum aos dois modelos de gás e escrito
+        # abaixo, sem early-return: o caso multicomponente móvel precisa
+        # do dynamicMeshDict tanto quanto o simple)
+        else:
+            cp = self.cfg.gas_Cp_J_kgK
+            mw = self.cfg.gas_molWeight
+            d.joinpath("physicalProperties").write_text(_dict_file(
+                "dictionary", "constant", "physicalProperties", f"""
 thermoType
 {{
     type            heRhoThermo;
@@ -492,9 +631,44 @@ actions
         a1 = self.theta_end_rad
         turb = c.turbulence_model != "laminar"
 
+        # solver do caso: ``fluid`` (ar simplificado) ou
+        # ``multicomponentFluid`` (R1 — transporte de espécies; sem
+        # constant/combustionProperties o OF13 usa noCombustion, R=0)
+        solver_name = "multicomponentFluid" if self.multicomponent \
+            else "fluid"
+        # R1: conservação de massa por espécie (gate do degrau) — os
+        # functionObjects `multiply` criam ρ·Yi ANTES do volFieldValue
+        # (execução na ordem declarada); a integral volumétrica de ρ·Yi é
+        # a massa da espécie (sem reação: constante ao longo do ciclo).
+        species_fos = ""
+        if self.multicomponent:
+            species_fos = """
+    massN2
+    {
+        type            multiply;
+        libs            ("libfieldFunctionObjects.so");
+        fields          (rho N2);
+        result          rhoN2;
+    }
+    massO2
+    {
+        type            multiply;
+        libs            ("libfieldFunctionObjects.so");
+        fields          (rho O2);
+        result          rhoO2;
+    }
+    specieMass
+    {
+        type            volFieldValue;
+        libs            ("libfieldFunctionObjects.so");
+        cellZone        all;
+        operation       volIntegrate;
+        writeFields     no;
+        fields          (rhoN2 rhoO2);
+    }"""
         d.joinpath("controlDict").write_text(_dict_file(
             "dictionary", "system", "controlDict", f"""
-solver          fluid;
+solver          {solver_name};
 
 userTime
 {{
@@ -575,7 +749,7 @@ functions
         operation       max;
         writeFields     no;
         fields          (T p);
-    }}
+    }}{species_fos}
     wallHeatFlux
     {{
         type            wallHeatFlux;
@@ -584,26 +758,30 @@ functions
     }}
 }}"""), encoding="utf-8")
 
+        # R1: termo de transporte de espécies (formato do tutorial
+        # multicomponentFluid); inócuo no caso simple
+        div_yi = "    div(phi,Yi_h)   Gauss limitedLinear 1;\n" \
+            if self.multicomponent else ""
         d.joinpath("fvSchemes").write_text(_dict_file(
-            "dictionary", "system", "fvSchemes", """
+            "dictionary", "system", "fvSchemes", f"""
 ddtSchemes
-{
+{{
     default         Euler;
-}
+}}
 
 gradSchemes
-{
+{{
     default         Gauss linear;
-}
+}}
 
 divSchemes
-{
+{{
     default         none;
     div(phi,U)      Gauss upwind;
     div(phi,h)      Gauss upwind;
     div(phi,e)      Gauss upwind;
     div(phi,(p|rho)) Gauss upwind;
-    div(phi,k)      Gauss upwind;
+{div_yi}    div(phi,k)      Gauss upwind;
     div(phi,epsilon) Gauss upwind;
     div(phi,omega)  Gauss upwind;
     div(phi,R)      Gauss upwind;
@@ -611,29 +789,46 @@ divSchemes
     div(phi,Ekp)    Gauss linear;
     div(R)          Gauss linear;
     div(((rho*nuEff)*dev2(T(grad(U))))) Gauss linear;
-}
+}}
 
 laplacianSchemes
-{
+{{
     default         Gauss linear corrected;
-}
+}}
 
 interpolationSchemes
-{
+{{
     default         linear;
-}
+}}
 
 // exigido pelos modelos kOmega (distância à parede); inócuo nos demais
 wallDist
-{
+{{
     method          meshWave;
-}
+}}
 
 snGradSchemes
-{
+{{
     default         corrected;
-}"""), encoding="utf-8")
+}}"""), encoding="utf-8")
 
+        # R1: blocos do solver de espécies (Yi e YiFinal, formato do
+        # tutorial multicomponentFluid); inócuo no caso simple
+        sol_yi = """
+    "Yi"
+    {
+        solver          PBiCGStab;
+        preconditioner  DILU;
+        tolerance       1e-06;
+        relTol          0.1;
+    }
+
+    "YiFinal"
+    {
+        $Yi;
+        relTol          0;
+    }
+""" if self.multicomponent else ""
         d.joinpath("fvSolution").write_text(_dict_file(
             "dictionary", "system", "fvSolution", f"""
 solvers
@@ -681,7 +876,7 @@ solvers
         $U;
         relTol          0;
     }}
-}}
+{sol_yi}}}
 
 PIMPLE
 {{
@@ -830,6 +1025,31 @@ mergePatchPairs
                           "do modelo 0-D e a correlação de Hohenberg não "
                           "são transferidos para o CFD; a troca térmica "
                           "nas paredes é calculada pelo solver."},
+            **({"gas_thermo": {
+                "model": "multicomponent_inert",
+                "species": ["N2", "O2"],
+                "y_N2": _Y_N2, "y_O2": _Y_O2,
+                "thermo_type": ("hePsiThermo + "
+                                "coefficientWilkeMulticomponentMixture + "
+                                "janaf/sutherland + sensibleEnthalpy + "
+                                "perfectGas"),
+                "reaction": "noCombustion (sem constant/combustionProperties "
+                            "— R=0, Qdot=0; transporte de espécies sem "
+                            "reação)",
+                "provenance": ("Polinômios NASA (janaf 200-5000 K) e "
+                               "transporte de Sutherland de N2/O2 copiados "
+                               "do tutorial OF13 "
+                               "tutorials/multicomponentFluid/"
+                               "counterFlowFlame2D/constant/"
+                               "thermo.compressibleGas (termoquímica "
+                               "GRI-Mech 3.0 distribuída com o OpenFOAM 13)."),
+                "notice": ("Degrau R1 do roadmap reativo: Cp(T), mu(T) e "
+                           "mistura N2+O2 reais (ar seco, razão molar "
+                           "3,76:1); os campos Cp/molWeight/mu/Pr da seção "
+                           "gas_model acima são IGNORADOS neste caso. Sem "
+                           "reação — as frações mássicas só são "
+                           "transportadas, nunca transformadas.")}}
+              if self.multicomponent else {}),
             "interval": {"angle_unit": "CA_deg", "start": self.cfg.interval_start,
                          "end": self.cfg.interval_end, **deriv},
             "configuration": self.cfg.to_dict_public(),

@@ -724,3 +724,97 @@ def test_case_state_machine(tmp_path):
     write_state(d, CaseState.PREPARED)
     assert read_state(d) == CaseState.PREPARED
     assert read_state(d).label == "Preparado"
+
+# ------------------------------------------------- R1: multicomponente
+def _cfg_multicomponente() -> CfdConfig:
+    d = dict(CFG_DICT)
+    d["gas"] = {"model": "multicomponent_inert"}
+    return CfdConfig.from_dict(d)
+
+
+def test_case_builder_multicomponente_physical_properties(tmp_path):
+    """R1 (roadmap reativo §2): gás multicomponente inerte N2+O2 com
+    polinômios NASA (janaf/sutherland), formato do tutorial OF13
+    multicomponentFluid/counterFlowFlame2D."""
+    from wiebepy.cfd.case_builder import CaseBuilder
+    b = CaseBuilder(_cfg_multicomponente(), ENGINE,
+                    solver_info={"version": "13"}, heat_enabled=True,
+                    moving_override=True)
+    d = b.build(tmp_path / "r1")
+    pp = (d / "constant/physicalProperties").read_text(encoding="utf-8")
+    assert "coefficientWilkeMulticomponentMixture" in pp
+    assert "janaf" in pp and "sutherland" in pp
+    assert "species          ( N2 O2 );" in pp
+    assert "defaultSpecie    N2" in pp
+    # proveniência: massa molar de N2/O2 do tutorial OF13 (GRI thermo)
+    assert "28.0134" in pp and "31.9988" in pp
+    # polinômios NASA copiados (bloco N2, coeficiente independente high)
+    assert "-922.798" in pp
+    # SEM combustionProperties: o combustionModel::New do OF13 cai em
+    # noCombustion (R=0) — transporte de espécies sem reação
+    assert not (d / "constant/combustionProperties").exists()
+    # o restante de constant/ continua escrito (dynamicMeshDict é
+    # obrigatório para o pistão móvel do caso de verificação)
+    assert (d / "constant/dynamicMeshDict").exists()
+    assert (d / "constant/momentumTransport").exists()
+    # o caso simple continua intacto (regressão)
+    b2 = CaseBuilder(CfdConfig.from_dict(CFG_DICT), ENGINE,
+                     solver_info={"version": "13"}, heat_enabled=True,
+                     moving_override=True)
+    d2 = b2.build(tmp_path / "simple")
+    pp2 = (d2 / "constant/physicalProperties").read_text(encoding="utf-8")
+    assert "pureMixture" in pp2
+    t0 = d2 / "-120"
+    assert not (t0 / "N2").exists()
+
+
+def test_case_builder_multicomponente_solver_e_campos(tmp_path):
+    """R1: controlDict usa multicomponentFluid; 0/ tem N2 e O2
+    (frações mássicas do ar seco, razão molar 3,76:1); fvSchemes tem
+    div(phi,Yi_h); fvSolution tem Yi/YiFinal; functionObjects de massa
+    por espécie; case_config registra modelo e proveniência."""
+    from wiebepy.cfd.case_builder import CaseBuilder
+    b = CaseBuilder(_cfg_multicomponente(), ENGINE,
+                    solver_info={"version": "13"}, heat_enabled=True,
+                    moving_override=True)
+    d = b.build(tmp_path / "r1")
+    cd = (d / "system/controlDict").read_text(encoding="utf-8")
+    assert "solver          multicomponentFluid;" in cd
+    # conservação de massa por espécie: multiply (rho·Yi) + volIntegrate
+    assert "massN2" in cd and "massO2" in cd and "specieMass" in cd
+    # frações mássicas: N2 = 3,76·M_N2/(3,76·M_N2 + M_O2) = 0,76695…
+    # (campos ficam no diretório do tempo inicial, ex. -120/)
+    t0 = d / "-120"
+    n2 = (t0 / "N2").read_text(encoding="utf-8")
+    o2 = (t0 / "O2").read_text(encoding="utf-8")
+    y_n2 = 3.76 * 28.0134 / (3.76 * 28.0134 + 31.9988)
+    assert f"uniform {y_n2:.6f}"[:14] in n2
+    assert "uniform 0.2330" in o2
+    fs = (d / "system/fvSchemes").read_text(encoding="utf-8")
+    assert "div(phi,Yi_h)   Gauss limitedLinear 1;" in fs
+    fsol = (d / "system/fvSolution").read_text(encoding="utf-8")
+    assert '"Yi"' in fsol and '"YiFinal"' in fsol
+    import yaml as _yaml
+    info = _yaml.safe_load((d / "case_config.yaml").read_text(
+        encoding="utf-8"))
+    gt = info["gas_thermo"]
+    assert gt["model"] == "multicomponent_inert"
+    assert gt["species"] == ["N2", "O2"]
+    assert "GRI-Mech" in gt["provenance"]
+    assert "IGNORADOS" in gt["notice"]
+
+
+def test_cfd_config_gas_model_validacao():
+    """gas.model aceita simple (default) e multicomponent_inert; valor
+    desconhecido é erro de validação."""
+    c = CfdConfig.from_dict({})
+    assert c.gas_model == "simple"
+    # base válida (wiebe do CFG_DICT) + gas.model multicomponente
+    d = dict(CFG_DICT)
+    d["gas"] = {"model": "multicomponent_inert"}
+    c = CfdConfig.from_dict(d)
+    assert c.gas_model == "multicomponent_inert"
+    assert c.validate() == []
+    d["gas"] = {"model": "nao_existe"}
+    c = CfdConfig.from_dict(d)
+    assert any("gas.model" in e for e in c.validate())

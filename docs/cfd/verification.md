@@ -481,8 +481,146 @@ de `system/` (bug do builder corrigido; teste de regressão adicionado
 à suíte). Sem a correção, o case_013 abortava na validação com
 "no such file: constant/system/topoSetDict".
 
+## 3f. R1 — gás inerte multicomponente (case_014)
+
+Primeiro degrau do roadmap reativo (`reactive_roadmap.md` §2, R1):
+gás **N2+O2 com polinômios NASA** (janaf) e transporte sutherland, SEM
+reação. Config `examples/config_cfd_multicomponent.yaml` = config do
+case_008 (motored, paredes 440 K, janela −120..120 CA, malha 24×24×36,
+pistão móvel) com `gas.model: multicomponent_inert` e
+`case_directory: results/cfd/case_014`.
+
+**Implementação** (suíte: 56 testes CFD, todos passando):
+
+- `cfd/config.py` — novo campo `gas.model` com valores `simple`
+  (padrão; comportamento idêntico ao atual) e `multicomponent_inert`;
+  validação rejeita valores desconhecidos. Com `multicomponent_inert`,
+  `gas.Cp/molWeight/mu/Pr` são **IGNORADOS** (aviso registrado no
+  `case_config.yaml` de cada caso gerado).
+- `cfd/case_builder.py` — com `multicomponent_inert`:
+  `system/controlDict` usa `solver multicomponentFluid;`;
+  `constant/physicalProperties` no formato do tutorial OF13
+  `multicomponentFluid/counterFlowFlame2D` (`hePsiThermo` +
+  `coefficientWilkeMulticomponentMixture` + sutherland + janaf +
+  sensibleEnthalpy + perfectGas, `defaultSpecie N2`, lista
+  `species ( N2 O2 );`); campos `N2`/`O2` em 0/ (frações mássicas do
+  ar seco, razão molar 3,76:1 → Y_N2 = 0,766992, Y_O2 = 0,233008);
+  `div(phi,Yi_h)  Gauss limitedLinear 1;` em fvSchemes; entradas
+  `"Yi"`/`"YiFinal"` em fvSolution. **NÃO é escrito
+  `constant/combustionProperties`** — o `combustionModel::New` do OF13
+  cai em `noCombustion` (R = 0, Qdot = 0), confirmado no log:
+  *"Combustion model not active: combustionProperties not found" →
+  "Selecting combustion model none"*.
+- **Proveniência dos coeficientes**: NASA + sutherland de N2 e O2
+  copiados mecanicamente de
+  `/opt/openfoam13/tutorials/multicomponentFluid/counterFlowFlame2D/constant/thermo.compressibleGas`
+  (termoquímica GRI-Mech distribuída com o OF13) — não digitados de
+  memória; a origem está citada no comentário do gerador e no
+  `case_config.yaml`.
+- `cfd/results.py` — novo campo `specie_mass_kg` (massa de cada
+  espécie ∫ρ·Yi dV ao longo do ciclo), via functionObjects `multiply`
+  (rhoN2 = ρ·N2, rhoO2 = ρ·O2) + `volFieldValue volIntegrate`
+  (`specieMass`) no controlDict, no padrão gasAvg/gasIntegral.
+- `tests/test_cfd.py` — 4 testes novos: physicalProperties
+  multicomponente (janaf/sutherland/defaultSpecie/molWeight/NASA, sem
+  combustionProperties, com dynamicMeshDict) + regressão do caso
+  simple; solver/campos/functionObjects/case_config; validação de
+  `gas.model`.
+
+**Correção durante a implementação** (registrada como os demais):
+a 1ª tentativa de execução abortou com *"keyword species is undefined
+in dictionary .../physicalProperties"* — o tutorial define a lista de
+espécies via `#include "thermo.compressibleGas"` e a lista
+`species ( ... );` é OBRIGATÓRIA no nível superior do
+physicalProperties. Corrigido no builder (lista explícita
+`species ( N2 O2 );`) com asserção no teste. Corrigido também um
+early-return no `_write_constant` que pulava
+momentumTransport/dynamicMeshDict/fvModels no ramo multicomponente
+(o dynamicMeshDict é obrigatório para o pistão móvel).
+
+### Resultados (case_014 vs case_008)
+
+**(a) Sem reação — confirmado.** O caso completa a janela
+−120..120 CA (log com `End`; `check_completion` OK). Não há
+combustionProperties → modelo `none` → **nenhuma fonte de calor**:
+a única física é compressão/expansão + troca térmica com paredes.
+
+**(b) p×θ vs case_008** (grades adaptativas diferentes — 684 vs 708
+pontos, porque as propriedades dependem de T — interpoladas em grade
+comum de 700 pontos; ambos os casos com max_Co 0,25):
+
+| Grandeza | case_008 (Cp/mu constantes) | case_014 (NASA/sutherland) | Δ |
+|---|---|---|---|
+| rms(p̄) | – | – | **50,5 kPa** (≈ 1,1 % do pico) |
+| máx |Δp̄| | – | – | **+129 kPa @ ≈ PMS** (≈ 2,8 %) |
+| p̄_max | 4593,8 kPa @ −0,35° | **4721,3 kPa @ −0,33°** | +2,8 % |
+| T̄_max | 798,4 K | 820,4 K | +22,0 K (+2,8 %) |
+| perda às paredes | 13,6 J | 13,2 J | ≈ igual |
+
+**Explicação (efeito registrado, não corrigido)**: o caso simple usa
+Cp = 1063 J/kgK constante, calibrado para γ = 1,37 (equivalência com o
+0-D). Com NASA, o γ real do ar seco varia de ≈ 1,40 (300 K) a ≈ 1,37
+(800 K) — acima de 1,37 em quase toda a compressão — o que eleva p̄ e
+T̄ no pico (+2,8 %, coerente entre p e T). O transporte sutherland dá
+mu ≈ 1,8–4×10⁻⁵ Pa·s (T-dependente) contra 5,5×10⁻⁵ constante —
+camada limite mais fina; a perda total às paredes quase não muda
+(13,2 vs 13,6 J), mas a distribuição temporal de p muda o suficiente
+para o rms de 50,5 kPa. Diferença é efeito físico esperado da
+substituição do gás, não erro numérico.
+
+**(c) Conservação de massa — gate cumprido.** Integrando ρ (gasIntegral)
+e ρ·Yi (specieMass, nova cadeia multiply → volIntegrate):
+
+| Grandeza | inicial | final | drift relativo |
+|---|---|---|---|
+| massa total | 5,075287×10⁻⁴ kg | 5,075287×10⁻⁴ kg | **0,0** |
+| massa N2 | 3,892704×10⁻⁴ kg | 3,892704×10⁻⁴ kg | **0,0** |
+| massa O2 | 1,182582×10⁻⁴ kg | 1,182582×10⁻⁴ kg | **0,0** |
+
+Drift ZERO ao longo de TODO o ciclo (mín = máx = inicial), no limite
+da precisão de escrita dos .dat (~10⁻⁷ relativo). Y_N2/Y_O2 médios
+coincidem com os teóricos do ar seco (0,766992/0,233008) — composição
+permanece uniforme, como esperado sem reação.
+
+**(d) Fechamento de energia motorado** (1ª lei: ΔU + W_by + |Qw| ≈ 0,
+W_by = ∫p̄ dV, |Qw| = perda às paredes integrada):
+
+- **Método (diferente do simple — registrado honestamente)**: com gás
+  multicomponente, **U = (cv/R)·p̄·V NÃO é mais válido** (pressupunha
+  cv e R constantes de uma única constituição). Método usado: com
+  composição uniforme (confirmada em (c)), U = m·ū(T̄_m), com ū da
+  mistura avaliada pelos MESMOS polinômios NASA
+  (u_i = h_i − R_s,i·T) e **T̄_mássica exata do gás ideal**
+  T̄_m = p̄·V/(m·R_mix), R_mix = ΣYi·R_s,i = 288,19 J/(kg·K). Erro da
+  aproximação u(T̄_m) em vez de ∫ρu(T)dV é de 1ª ordem em Var(T) via
+  du/dT = cv(T) (≈ 3×10⁻⁴ J/(kg·K²) na faixa) — ≈ milésimos de J,
+  desprezível frente ao residuo.
+- **case_014**: ΔU = −4,3 J (T̄_m: 308,4 → 296,6 K), W_by = −7,8 J,
+  |Qw| = 13,2 J → **residuo = +1,1 J (8,1 % da maior parcela)**.
+- **case_008** (referência, método antigo U = (cv/R)·p̄·V): residuo
+  +1,1 J (8,2 % da maior parcela). O fechamento do caso
+  multicomponente é equivalente ao do caso simple.
+
+**(e) Custo**: foamRun 183 s de clock (case_014) vs 137 s (case_008) —
+**+33 %** (186,9 s no runner). Custo adicional = equações de transporte
+das espécies + viscosidade Wilke avaliada por célula a cada passo.
+Aceitável para o degrau; mecanismos reativos (R2+) custarão bem mais.
+
+**Veredito**: R1 cumprido — o caminho reativo do OF13
+(`multicomponentFluid` + fallback `noCombustion`) está operacional,
+com termoquímica real (Cp(T), mu(T), composição) e gates de massa e
+energia fechados. Próximo degrau (R2, H₂ autoignição) destravado.
+
 ## 5b. Impedimentos registrados (nenhum resultado estimado como simulado)
 
+* **PRÉ-EXISTENTE (fora do escopo R1, verificado por stash)** —
+  `tests/test_gui.py::test_cfd_muda_numero_de_estagios` falha
+  (`TypeError: object of type 'NoneType' has no len()` em
+  `session_state["cfd_form"]["wiebe_stages"]`) TAMBÉM sem as mudanças
+  R1 (confirmado com `git stash` dos arquivos alterados) — introduzida
+  pelo commit 3bc1cfd (GUI CFD, caso padrão case_006). Não é da etapa
+  R1; restante da suíte: 368 testes passando (364 existentes + 4 novos
+  de R1).
 * **RESOLVIDO — Casos motorados 007/008 e caso 012: foamRun aborta
   (rc=134) com `FOAM FATAL ERROR: Negative initial temperature T0`
   (−42 K em 007 @ +12,3°; −921 K em 008; −2534 K em 012 @ −23,55°)**

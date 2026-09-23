@@ -50,20 +50,27 @@ os critérios de gate do degrau anterior. Cada degrau declara
 explicitamente o que fica FORA de escopo — o que não está listado como
 entrega não é prometido.
 
-### R1 — Gás inerte multicomponente (sem reação)
+### R1 — Gás inerte multicomponente (sem reação) — **IMPLEMENTADO E VERIFICADO** (ref. §3f do verification.md)
 
 - **O que adiciona**: substituir o gás simplificado (perfectGas, Cp/mu
   constantes) por termoquímica multicomponente — polinômios NASA
-  (`hPolynomial`) e múltiplas constituições — sem nenhuma reação. O
-  caso é inerte: a composição não muda, só as propriedades passam a
-  depender de T e da composição.
-- **Gate antes de subir para R2**:
-  - p×V motored com Cp constante reproduz o caso atual (regressão);
-  - p×V motored com `hPolynomial` converge e a diferença vs Cp
-    constante é quantificada e explicada (Cp/γ deixam de ser
-    constantes — efeito registrado, não corrigido);
-  - massa de cada espécie conservada ao longo do ciclo;
-  - fechamento de energia no padrão do `verification.md` (seção 2).
+  (janaf) com transporte sutherland e mistura
+  `coefficientWilkeMulticomponentMixture` — sem nenhuma reação. O caso
+  é inerte: a composição não muda, só as propriedades passam a
+  depender de T e da composição. Config `gas.model:
+  multicomponent_inert`; sem `constant/combustionProperties` (o OF13
+  cai em `noCombustion`, R = 0).
+- **Gate antes de subir para R2** (cumprido — números em §3f):
+  - p×V motored com Cp constante reproduz o caso atual (regressão;
+    suíte de testes, caso simple intacto);
+  - p×V motored com NASA converge e a diferença vs Cp constante é
+    quantificada e explicada (rms 50,5 kPa, máx +129 kPa no pico,
+    +2,8 % — Cp/γ deixam de ser constantes — efeito registrado, não
+    corrigido);
+  - massa de cada espécie conservada ao longo do ciclo (drift 0 no
+    limite da precisão de escrita, total e N2/O2);
+  - fechamento de energia no padrão do `verification.md` (residuo
+    +1,1 J = 8,1 % da maior parcela; U via NASA — método registrado).
 - **Fora de escopo**: qualquer espécie combustível, reação, ignição.
 
 ### R2 — H₂ autoignição, câmara fechada homogênea

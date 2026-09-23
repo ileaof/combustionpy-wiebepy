@@ -181,6 +181,10 @@ def test_cfd_muda_numero_de_estagios():
     at = _app()
     at.switch_page("app_pages/cfd.py").run()
     _sem_erros(at)
+    # a tabela editável de estágios só existe na origem "modelo atual" —
+    # o padrão da página é "model.json" (case_006; fonte calibrada)
+    at.radio[0].set_value("modelo atual").run()
+    _sem_erros(at)
     f0 = at.session_state["cfd_form"]
     n0 = len(f0["wiebe_stages"])
     at.segmented_control(key="cfd_wiebe_n").set_value(3).run()
