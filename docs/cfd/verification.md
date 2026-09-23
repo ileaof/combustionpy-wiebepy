@@ -209,9 +209,21 @@ p×θ e p×V do case_006: `results/cfd/case_006/curvas_p_theta_pv.png`.
 O degrau adiabático (case_009) isola a transferência de calor: sem
 perdas o p_max vai a +0,7 %, mas o RMSE piora (91,5 → 115,0) e o viés
 sobe (+19,6 → +61,7) — paredes a 440 K aproximam mais o ensaio do
-que paredes adiabáticas. Curvas/métricas do 007/008 (compressão
-motrada sem queima) não foram produzidas: ambos abortaram (ver 5b
-abaixo — impedimento registrado, nenhum resultado estimado).
+que paredes adiabáticas. Curvas p×θ e p×V do case_012 (diagnóstico):
+`results/cfd/case_012/curvas_p_theta_pv.png`.
+
+Degraus motorados (completados após a correção max_Co 0,25 — §5b):
+
+| Caso | Configuração | p_max (fase) | RMSE vs 0-D motorado | Perda às paredes |
+|---|---|---|---|---|
+| 007 | motorado adiabático | 4712,7 kPa @ 0,00° | 55,9 kPa (viés +29,8) | 0 J |
+| 008 | motorado, paredes 440 K | 4593,8 kPa @ −0,35° | **8,2 kPa** (viés +4,7) | 13,60 J (Hohenberg 0-D: 15,95 J) |
+
+Referência 0-D motrada (estágio inerte + Hohenberg): p_max 4580,8 kPa
+@ −0,40°, perda 15,95 J. O case_008 reproduz a compressão pura com
+desvio ~0,2 % do p_max — o CFD resolve corretamente a física
+termofluidodinâmica sem queima; a diferença 007 vs 008 (4712,7 →
+4593,8 kPa, −2,5 %) é o efeito isolado da perda às paredes.
 
 **6. Análise por faixa angular do resíduo do case_006 — o erro do CFD
 é o erro do 0-D.**
