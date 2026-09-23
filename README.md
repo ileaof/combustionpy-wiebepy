@@ -393,6 +393,60 @@ de forma **diagnóstica** (mesma rotação, mesma energia) — o que ele diz
 é onde o modelo diverge do ensaio e por quê, não "o modelo foi
 validado".
 
+#### Rodando um exemplo na interface gráfica (GUI)
+
+Abertura (requer `pip install -e ".[gui]"`):
+
+```bash
+wiebepy --gui                          # abre no navegador (localhost:8501)
+streamlit run src/wiebepy/gui/app.py   # equivalente
+```
+
+Escolha a página **CFD** no menu lateral. O passo a passo, com os
+botões na ordem:
+
+1. **Verificar o ambiente** (uma vez): no expander *Diagnóstico do
+   ambiente (doctor)*, botão **Executar diagnóstico** — equivale ao
+   `wiebepy cfd doctor` (confere WSL2, OpenFOAM, foamRun, mpirun).
+2. **Escolher o diretório do caso** — o primeiro ajuste de todo caso
+   novo: em *Configuração do caso*, troque **"Diretório do caso"** para
+   um diretório NOVO (ex.: `results/cfd/caso_gui_001`). ⚠️ O padrão
+   aponta para o case_006 arquivado — clicar **Preparar caso** com esse
+   diretório **sobrescreve** o caso arquivado.
+3. **Conferir os campos** — eles já abrem casados com o case_006:
+   fonte Wiebe em origem `model.json` = `examples/model_cfd_calibrated.json`
+   (a calibrada; a manual é `model_cfd.json` — não use), Rc 17, janela
+   −120…+120°, P 127,6 kPa / T 308,15 K, paredes 440 K, kEpsilon,
+   pistão móvel, 24×36 células, distribuição `uniform`, combustível
+   diesel, PCI 39191,3, rpm 3396,2. Confirme ainda:
+   - **"Distribuição WSL2"** = `Ubuntu-22.04` (a distro do solver);
+   - **"Processos MPI do SOLVER"** = 1 (paralelismo do solver, não do
+     wiebepy);
+   - **Estágios Wiebe**: com origem `model.json` o calor vem do arquivo
+     calibrado; com origem *modelo atual* a tabela editável 1–5 estágios
+     aparece (a edição NÃO altera o modelo 0-D).
+4. **Preparar caso** → gera o caso OpenFOAM para inspeção (estado
+   *Preparado*). A configuração é validada antes: erros aparecem como
+   mensagem vermelha e o caso não é gerado.
+5. **Validar** → estado *Validado* — o **Executar** exige isso (gate).
+6. **Executar** → painel com o **log do solver ao vivo**; ~2–3 min na
+   malha 24×36. **Cancelar execução** interrompe inclusive os processos
+   MPI, preservando logs e resultados parciais.
+7. **Relatório HTML** → gera/atualiza o `report.html` no diretório do
+   caso (habilitado só no estado *Concluído*).
+8. **Ver os resultados**: o expander *Resultados (0-D extraído do caso
+   3D)* mostra p̄ máx, T̄ máx, trabalho indicado, perda nas paredes, a
+   energia prescrita pela Wiebe com o erro da tabela, e o gráfico
+   p̄×θ/T̄×θ. O relatório completo (proveniência, balanço de energia,
+   limites) fica no `report.html`.
+
+Dois detalhes que a GUI resolve sozinha: o `max_Co` não aparece no
+formulário — o padrão seguro (0,25) é usado sempre (0,5 aborta neste
+motor, §5b do `verification.md`); e o *Estado do caso* fica sempre
+visível no topo da página. O mesmo lembrete vale: a comparação com o
+ensaio no relatório é **diagnóstica, nunca validação**, e *processo
+terminou ≠ convergiu* — confira o fechamento de energia.
+
 #### Instalação das dependências CFD (WSL2 + OpenFOAM 13)
 
 O **solver não vem do pip** — `pip install -e ".[cfd]"` instala só
