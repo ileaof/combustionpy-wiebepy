@@ -277,16 +277,27 @@ model.save("model.json")</code></pre>
   3D são condicionados à curva Wiebe informada. O restante do programa
   não depende do CFD, e desabilitá-lo não apaga resultados.</p>
   <ol>
-    <li><strong>Instalar o solver</strong> (uma vez): <code>wsl --install -d Ubuntu-22.04</code> e o OpenFOAM 13 dentro dela — guia em <code>docs/cfd/install.md</code>. Sem solver, só os comandos CFD ficam indisponíveis (o <em>doctor</em> diagnostica).</li>
+    <li><strong>Instalar o solver</strong> (uma vez): o OpenFOAM <em>não</em> vem do pip — <code>pip install -e ".[cfd]"</code> instala só dependências Python (PyYAML).
+      <ol type="a">
+        <li><strong>WSL2</strong> — PowerShell como administrador (Windows 11):
+          <code>wsl --install -d Ubuntu-22.04</code>, depois <code>wsl --version</code> deve listar kernel WSL2 (não WSL1). Se reclamar de virtualização, ative na UEFI/BIOS.</li>
+        <li><strong>OpenFOAM 13</strong> dentro do Ubuntu 22.04 (guia oficial <a href="https://openfoam.org/download/linux">openfoam.org/download/linux</a>):
+          <code>sudo sh -c "wget -O - https://dl.openfoam.org/gpg.key | apt-key add -"</code>;
+          <code>sudo add-apt-repository http://dl.openfoam.org/ubuntu</code>;
+          <code>sudo apt update &amp;&amp; sudo apt install openfoam13</code>.</li>
+        <li><strong>Verificar</strong>: <code>wiebepy cfd doctor</code> lista as distribuições WSL2 e, para cada uma, o OpenFOAM detectado (<code>/opt/openfoam*</code>, <code>foamRun</code>, gcc, mpirun) e a versão. A execução usa <code>wsl.exe -d &lt;distro&gt;</code> e o caso é lido/escrito direto no projeto via <code>/mnt/c/...</code> — não é preciso copiar. Sem WSL2/solver, só os comandos CFD ficam indisponíveis (diagnóstico, nunca fallback silencioso). Guia completo (incl. Linux nativo): <code>docs/cfd/install.md</code>.</li>
+      </ol></li>
     <li><strong>Configurar</strong>: motor (mesmos parâmetros dos modos 0-D), janela angular (válvulas fechadas), condições iniciais, paredes, turbulência, combustível e origem dos estágios Wiebe (modelo atual ou <code>model.json</code>).</li>
     <li><strong>Preparar</strong> → caso gerado para inspeção (estado <em>Preparado</em>).</li>
     <li><strong>Validar</strong> → verifica arquivos, geometria e solver (estado <em>Validado</em>).</li>
     <li><strong>Executar</strong> → log do solver ao vivo; <strong>Cancelar execução</strong> interrompe inclusive os processos MPI, preservando logs e resultados parciais. <em>Processo terminou ≠ convergiu</em>: confira o fechamento de energia no relatório.</li>
     <li><strong>Relatório HTML</strong> → arquivo autônomo com proveniência completa (versões, parâmetros, malha, limites científicos) e os resultados p̄×θ, T̄×θ, trabalho indicado, perda às paredes e balanço de energia. Os resultados nunca são apresentados como predição independente de combustão — a fonte é a Wiebe prescrita.</li>
   </ol>
-  <p>O modo reativo (combustão com mecanismo químico) existe apenas como
-  arquitetura — aparece como indisponível e nunca é substituído
-  silenciosamente pela fonte Wiebe. Detalhes: <code>docs/cfd/</code>.</p>
+  <p>O modo reativo (combustão com mecanismo químico) está <strong>adiado
+  para uma etapa posterior</strong> — não é proibido: aparece como
+  indisponível até a implementação própria e nunca é substituído
+  silenciosamente pela fonte Wiebe. Proposta incremental:
+  <code>docs/cfd/reactive_roadmap.md</code>.</p>
 </section>
 
 <section id="problemas">

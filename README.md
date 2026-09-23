@@ -332,6 +332,40 @@ wiebepy cfd status   --case results/cfd/case_001   # cancel/status/report idem
 wiebepy cfd report   --case results/cfd/case_001   # relatório HTML autônomo
 ```
 
+#### Instalação das dependências CFD (WSL2 + OpenFOAM 13)
+
+O **solver não vem do pip** — `pip install -e ".[cfd]"` instala só
+dependências Python (PyYAML). O OpenFOAM vem da instalação oficial:
+
+1. **WSL2** (PowerShell como administrador, Windows 11) — ative a
+   virtualização na UEFI/BIOS se o passo abaixo reclamar:
+
+   ```powershell
+   wsl --install -d Ubuntu-22.04
+   wsl --version          # deve listar kernel WSL2 (não WSL1)
+   ```
+
+2. **OpenFOAM 13** dentro do Ubuntu 22.04 (guia oficial
+   <https://openfoam.org/download/linux>):
+
+   ```bash
+   sudo sh -c "wget -O - https://dl.openfoam.org/gpg.key | apt-key add -"
+   sudo add-apt-repository http://dl.openfoam.org/ubuntu
+   sudo apt update && sudo apt install openfoam13
+   ```
+
+3. **Python** (no Windows, onde o wiebepy roda):
+   `pip install -e ".[cfd]"` — e, se for usar a GUI, `.[gui]`.
+
+4. **Verificação**: `wiebepy cfd doctor` lista as distribuições WSL2 e,
+   para cada uma, se o OpenFOAM foi detectado (`/opt/openfoam*`,
+   `foamRun`, gcc, mpirun) e a versão. A execução usa
+   `wsl.exe -d <distro>` e lê/escreve o caso direto no projeto via
+   `/mnt/c/...` — não é preciso copiar casos. Sem WSL2/solver, o
+   wiebepy inteiro funciona; só os comandos `cfd` falham, com
+   diagnóstico (nunca fallback silencioso). Guia completo (incl.
+   Linux nativo e verificação pós-instalação): `docs/cfd/install.md`.
+
 `prepare` aceita `--no-heat` (caso motrado, sem fonte de calor) e
 `--fixed-piston` (volume constante). Estado do caso (Preparado →
 Validado → Executando → Concluído/Falhou/Cancelado) fica em
@@ -370,9 +404,19 @@ NÃO prevê cinética química, frente de chama ou emissões; a comparação
 CFD–ensaio é **diagnóstica, nunca validação** (calibração ≠ validação);
 "concluído" reporta término do solver, não convergência física.
 
-O modo reativo (combustível com mecanismo químico) existe apenas como
-arquitetura — nunca é apresentado como funcional nem substituído
-silenciosamente pela fonte Wiebe.
+O modo reativo (combustível com mecanismo químico) está **adiado para
+uma etapa posterior** — não é proibido, tampouco apresentado hoje como
+funcional: os campos de mecanismo/composição existem na arquitetura
+(`mechanism` nos combustíveis, `mode: reactive` na configuração) e
+permanecem desativados até a implementação própria, sem substituição
+silenciosa pela fonte Wiebe. A proposta incremental (mecanismos,
+alimentação, solver, dados faltantes) está em `docs/cfd/reactive_roadmap.md`.
+
+![CFD case_012 — pressão × ângulo e pressão × volume](docs/cfd/case_012_curvas_pv.png)
+*CFD (prescribed_wiebe) × ensaio × 0-D — caso diagnóstico case_012
+(Rc efetivo 15,635, fonte 2 estágios, γ=1,37, paredes 440 K):
+RMSE 43,6 kPa, R² 0,99923, pico −1,0 % — diagnóstico, não validação
+(veja `docs/cfd/resumo_executivo.html`).*
 
 ## 6. Otimização
 

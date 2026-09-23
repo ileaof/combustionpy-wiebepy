@@ -1,7 +1,7 @@
 # Arquitetura do módulo CFD (opcional) do wiebepy
 
 Status: **implementado (modo 4.1 — Wiebe prescrita)** · Modo 4.2 (reativo):
-**apenas arquitetura, não implementado** · Última revisão: 2026-09-23
+**adiado para etapa posterior (roadmap em reactive_roadmap.md)** · Última revisão: 2026-09-23
 
 ## 1. Objetivos e limites
 
@@ -213,6 +213,10 @@ embutido). A validação de `cfd.fuel.name` aceita o registro combinado
   referência do ensaio Diesel, kEpsilon + malha refinada eleva a
   perda às paredes de 16 J (laminar) para 44,1 J vs alvo Hohenberg
   53,7 J (verification.md §3b).
-- Modo 4.2 (reativo): **apenas arquitetura** — nunca apresentado como
-  funcional; nunca substituir silenciosamente a fonte Wiebe por
-  combustão reativa (ou vice-versa).
+- Modo 4.2 (reativo): **adiado para etapa posterior** (não proibido) —
+  hoje não é apresentado como funcional; nunca substituir silenciosamente
+  a fonte Wiebe por combustão reativa (ou vice-versa). Proposta
+  incremental de implementação (mecanismos publicados, alimentação,
+  solver, dados faltantes, etapas): `docs/cfd/reactive_roadmap.md`. No
+  modo reativo a química fornece o calor e a Wiebe serve apenas para
+  comparação/ajuste posterior — as duas fontes nunca coexistem.

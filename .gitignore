@@ -10,3 +10,4 @@ results/
 results_*/
 *.png
 !docs/*.png
+!docs/cfd/*.png
