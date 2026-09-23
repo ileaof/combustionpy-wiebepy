@@ -318,6 +318,12 @@ def main(argv: Optional[List[str]] = None) -> None:
 
 
 def _main(argv: Optional[List[str]] = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    # subcomando CFD opcional (wiebepy cfd …) — não altera as opções
+    # existentes; o módulo cfd só é importado neste caminho
+    if args and args[0] == "cfd":
+        from ..cfd.cli import main_cfd
+        return main_cfd(args[1:])
     parser = build_parser()
     a = parser.parse_args(argv)
     if a.help_model:

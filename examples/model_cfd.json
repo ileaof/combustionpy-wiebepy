@@ -1,0 +1,16 @@
+{
+  "format": "wiebepy-model",
+  "version": "1.0.0",
+  "n_stages": 1,
+  "angle_unit": "rad",
+  "a_fixed": 6.908,
+  "stages": [
+    {
+      "beta": 1.0,
+      "theta0": -0.17453292519943295,
+      "duration": 0.7853981633974483,
+      "m": 2.0,
+      "a": 6.908
+    }
+  ]
+}

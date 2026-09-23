@@ -1,0 +1,81 @@
+# =====================================================================
+# Exemplo de configuração CFD do wiebepy (módulo opcional).
+#
+# Com este arquivo o restante do wiebepy funciona normalmente (fração
+# queimada, pressão, ajuste, comparação): a seção cfd só é usada pelos
+# comandos `wiebepy cfd …` e pela página CFD da GUI. Para desabilitar,
+# basta enabled: false (padrão) — nenhuma dependência CFD é importada.
+#
+# Física do caso: modo prescribed_wiebe — calor prescrito pela função
+# Wiebe calibrada; NÃO prevê cinética química, frente de chama ou
+# emissões. Ver docs/cfd/architecture.md.
+# =====================================================================
+
+# ---------------------------------------------------------------- motor
+# Mesma seção usada pelos modos de fração queimada e pressão (§8):
+# a geometria do CFD reutiliza estes parâmetros.
+engine:
+  bore_mm: 86.0
+  stroke_mm: 70.0
+  rod_length_mm: 117.5
+  Rc: 17.0
+  rpm: 3396.20
+  m_fuel_kg_per_cycle: 9.42754647351e-6
+  LHV_kJ_per_kg: 39191.3
+  T1_K: 308.15
+  Tw_K: 440.0
+
+# ------------------------------------------------------------------ cfd
+cfd:
+  enabled: true
+  adapter: openfoam
+  mode: prescribed_wiebe        # 'reactive' não está implementado
+  case_directory: results/cfd/case_001
+  workers: 1                    # processos MPI do SOLVER (não do wiebepy)
+  wsl_distro: Ubuntu-22.04      # Windows: distribuição com o OpenFOAM
+
+  geometry:
+    type: simplified_cylinder
+    moving_piston: true
+    n_radial: 16
+    n_axial: 24
+
+  interval:                     # janela simulada (válvulas fechadas)
+    angle_unit: deg
+    start: -120
+    end: 120
+
+  initial:
+    P_kPa: 250
+    T_K: 800
+
+  walls:
+    Tw_K: 440
+    model: fixed_temperature
+
+  turbulence:
+    model: laminar              # laminar | kEpsilon | kOmegaSST
+    wall_functions: false
+
+  numerics:
+    deltaT_s: 1.0e-6            # passo inicial (o solver adapta pelo Co)
+    max_Co: 0.5
+    write_interval_deg: 10
+
+  heat_source:
+    distribution: uniform       # uniform (referência) | region
+    region: null
+
+  fuel:
+    name: CH4                   # H2 | CH4 | ethanol | diesel
+    feed: premixed_gas
+
+  wiebe:                        # parâmetros Wiebe DE UM modelo calibrado
+    source: model               # model (model.json) | parameters
+    model: examples/model_cfd.json   # gerado pelo wiebepy (`--optimize`)
+    # parameters:               # alternativa: lista inline (nesta unidade)
+    #   - {beta: 1.0, theta0: -5, duration: 40, m: 2.0}
+
+  comparison:
+    criterion: same_rpm_same_energy   # critério registrado (§11)
+    experimental: null                # CSV (θ [rad], P [kPa]) opcional

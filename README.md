@@ -244,6 +244,7 @@ Páginas (menu no topo) e botão **Ajuda** (abre este guia, `Help.html`):
 | Comparação | ajusta vários N; tabela com CV, ΔAIC/ΔBIC, Durbin-Watson; recomendação; detalhe de cada N |
 | Exportar | os mesmos arquivos da CLI num `.zip` (com gráficos PNG) |
 | Desempenho | hardware detectado e benchmark rápido dos backends |
+| CFD | página dedicada (opcional): configura o caso, prepara/valida/executa/cancela com log ao vivo, estados (Preparado/Validado/Executando/Concluído/Cancelado/Falhou), resultados p̄×θ e T̄×θ e relatório HTML — sem remover nenhuma página existente |
 
 Na interface os runs rodam em sequência (para permitir progresso por
 iteração e cancelamento); o paralelismo vem do backend (Numba multithread
@@ -296,6 +297,34 @@ indicado e IMEP na janela), runs, avisos, a comparação (se houver) e os 10
 gráficos (pressão, P–V linear e log-log, resíduo, taxa de liberação de calor
 por estágio, fração queimada, taxa normalizada, temperatura, calor perdido e
 volume).
+
+### CFD (opcional — escoamento 3D com OpenFOAM)
+
+Módulo **independente e opcional** (`pip install -e ".[cfd]"`; a física e
+os fluxos acima não mudam nada com CFD ligado ou desligado): simulação 3D
+compressível transiente do cilindro com **liberação de calor global
+prescrita pela Wiebe calibrada** (modo *prescribed*), combustíveis H₂,
+CH₄ (puro — não é gás natural), etanol e diesel (surrogate). **Não prevê
+cinética química, frente de chama ou emissões.** Solver: OpenFOAM
+Foundation 13 (`foamRun`, solver `fluid`), no Windows via WSL2 — o
+programa continua 100 % utilizável sem WSL2/solver (sem fallback
+silencioso). Detalhes de arquitetura e da fonte de calor conservativa:
+`docs/cfd/architecture.md`; instalação: `docs/cfd/install.md`;
+verificação executada (balanço de energia fecha em ±2 %):
+`docs/cfd/verification.md`.
+
+```bash
+wiebepy cfd doctor                 # diagnóstico WSL2/OpenFOAM
+wiebepy cfd prepare  --config examples/config_cfd.yaml   # sem executar
+wiebepy cfd validate --case results/cfd/case_001
+wiebepy cfd run      --case results/cfd/case_001 --follow
+wiebepy cfd status   --case results/cfd/case_001   # cancel/status/report idem
+wiebepy cfd report   --case results/cfd/case_001   # relatório HTML autônomo
+```
+
+O modo reativo (combustível com mecanismo químico) existe apenas como
+arquitetura — nunca é apresentado como funcional nem substituído
+silenciosamente pela fonte Wiebe.
 
 ## 6. Otimização
 

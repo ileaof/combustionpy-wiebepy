@@ -62,6 +62,9 @@ DEFAULTS: Dict[str, Any] = {
                  "theta_min_rad": -2.0, "theta_max_rad": 2.0,
                  "particles": 60, "iterations": 400},
     "engine": {},     # motor (chaves do Double Wiebe ou de EngineConfig)
+    # módulo CFD opcional (sempre presente e DESLIGADO por padrão; com
+    # enabled: false nada é importado/executado — ver wiebepy/cfd)
+    "cfd": None,
 }
 
 SECOES = tuple(DEFAULTS)

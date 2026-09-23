@@ -59,6 +59,7 @@
     <li><a href="#desempenho">CPU paralela e GPU</a></li>
     <li><a href="#saidas">Arquivos gerados</a></li>
     <li><a href="#api">Uso em Python</a></li>
+    <li><a href="#cfd">CFD (opcional)</a></li>
     <li><a href="#problemas">Solução de problemas</a></li>
   </ol>
 </nav>
@@ -264,6 +265,28 @@ xb, dxb = model.evaluate(theta), model.derivative(theta)
 resultado = model.fit(theta_exp, xb_exp, backend="auto", runs=10)
 print(resultado.stages, resultado.metrics["xb"]["rmse"], resultado.warnings)
 model.save("model.json")</code></pre>
+</section>
+
+<section id="cfd">
+  <h2>10b. CFD (opcional) — escoamento 3D no cilindro</h2>
+  <p>Página <strong>CFD</strong> (opcional): gera e executa casos
+  <strong>OpenFOAM 13</strong> (no Windows, via WSL2) com a liberação de
+  calor <strong>prescrita pela Wiebe calibrada</strong> — 1 a 5 estágios,
+  combustíveis H₂, CH₄ (puro), etanol e diesel. <strong>Não prevê
+  cinética química, frente de chama nem emissões</strong>; os resultados
+  3D são condicionados à curva Wiebe informada. O restante do programa
+  não depende do CFD, e desabilitá-lo não apaga resultados.</p>
+  <ol>
+    <li><strong>Instalar o solver</strong> (uma vez): <code>wsl --install -d Ubuntu-22.04</code> e o OpenFOAM 13 dentro dela — guia em <code>docs/cfd/install.md</code>. Sem solver, só os comandos CFD ficam indisponíveis (o <em>doctor</em> diagnostica).</li>
+    <li><strong>Configurar</strong>: motor (mesmos parâmetros dos modos 0-D), janela angular (válvulas fechadas), condições iniciais, paredes, turbulência, combustível e origem dos estágios Wiebe (modelo atual ou <code>model.json</code>).</li>
+    <li><strong>Preparar</strong> → caso gerado para inspeção (estado <em>Preparado</em>).</li>
+    <li><strong>Validar</strong> → verifica arquivos, geometria e solver (estado <em>Validado</em>).</li>
+    <li><strong>Executar</strong> → log do solver ao vivo; <strong>Cancelar execução</strong> interrompe inclusive os processos MPI, preservando logs e resultados parciais. <em>Processo terminou ≠ convergiu</em>: confira o fechamento de energia no relatório.</li>
+    <li><strong>Relatório HTML</strong> → arquivo autônomo com proveniência completa (versões, parâmetros, malha, limites científicos) e os resultados p̄×θ, T̄×θ, trabalho indicado, perda às paredes e balanço de energia. Os resultados nunca são apresentados como predição independente de combustão — a fonte é a Wiebe prescrita.</li>
+  </ol>
+  <p>O modo reativo (combustão com mecanismo químico) existe apenas como
+  arquitetura — aparece como indisponível e nunca é substituído
+  silenciosamente pela fonte Wiebe. Detalhes: <code>docs/cfd/</code>.</p>
 </section>
 
 <section id="problemas">

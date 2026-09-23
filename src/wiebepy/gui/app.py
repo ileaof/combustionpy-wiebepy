@@ -5,9 +5,9 @@ app.py — Interface gráfica do wiebepy (Streamlit).
     wiebepy --gui                       (após pip install -e ".[gui]")
     streamlit run src/wiebepy/gui/app.py
 
-Páginas (app_pages/): dados, modelo, ajuste, comparação, exportação e
-desempenho. A física, a otimização e o paralelismo vêm do pacote wiebepy
-— a GUI só monta a interface.
+Páginas (app_pages/): dados, modelo, ajuste, comparação, exportação,
+desempenho e CFD (opcional — OpenFOAM). A física, a otimização e o
+paralelismo vêm do pacote wiebepy — a GUI só monta a interface.
 """
 import streamlit as st
 
@@ -39,6 +39,7 @@ page = st.navigation(
                 icon=":material/download:"),
         st.Page("app_pages/desempenho.py", title="Desempenho",
                 icon=":material/speed:"),
+        st.Page("app_pages/cfd.py", title="CFD", icon=":material/cloud:"),
     ],
     position="top",
 )
