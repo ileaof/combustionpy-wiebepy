@@ -15,16 +15,19 @@ Fontes:
                                   foamToVTK, opcional).
 
 Convenções:
-  • o "tempo" do OpenFOAM é o ângulo de manivela (CA, graus) —
-    userTime engine; t físico [s] = CA/(6·RPM);
+  • modo prescrito: o "tempo" do OpenFOAM é o ângulo de manivela (CA,
+    graus) — userTime engine; t físico [s] = CA/(6·RPM);
+  • modo reativo (R2): o tempo do OpenFOAM é FÍSICO [s] (sem userTime
+    engine — volume fixo não tem manivela); usado diretamente;
   • pressão média volumétrica do cilindro ≠ pressão em sonda ≠ pressão
     medida — distinguimos explicitamente (§16);
   • volume V(CA) vem da cinemática biela-manivela (mesma equação do
     0-D), consistente com o movimento imposto ao pistão.
 
 ``check_completion`` distingue "processo terminou" de "simulação
-convergiu/cobriu a janela": exige 'End' no log do foamRun E último CA
-registrado ≥ fim da janela.
+convergiu/cobriu a janela": exige 'End' no log do foamRun E último
+tempo registrado ≥ fim da janela (CA em graus no modo prescrito,
+tempo físico em segundos no modo reativo).
 """
 from __future__ import annotations
 
@@ -124,12 +127,27 @@ def physical_time_s(ca_deg: np.ndarray, rpm: float) -> np.ndarray:
     return np.asarray(ca_deg, dtype=float) / (6.0 * rpm)
 
 
+def _case_mode(case_dir: Path) -> str:
+    """Modo do caso lido do case_config.yaml (prescrito por padrão)."""
+    yml = Path(case_dir) / "case_config.yaml"
+    if yml.exists():
+        try:
+            import yaml
+            cfg = yaml.safe_load(yml.read_text(encoding="utf-8")) or {}
+            return str(cfg.get("mode") or "prescribed_wiebe")
+        except Exception:                                   # noqa: BLE001
+            pass
+    return "prescribed_wiebe"
+
+
 def read_results(case_dir, engine=None, stages=None) -> Dict:
     """Extrai as curvas do caso. ``engine`` (EngineConfig) dá rotação,
     geometria e volume; ``stages`` (opcional) permite recomputar a fonte
-    Wiebe prescrita para comparação."""
+    Wiebe prescrita para comparação. No modo reativo o tempo já é
+    físico [s] e o fechamento químico ∫Q̇ dV dt é extraído (portão R2c)."""
     case_dir = Path(case_dir)
     out: Dict = {}
+    reativo = _case_mode(case_dir) == "reactive"
 
     avg, cols_avg = _series(case_dir, "gasAvg")
     integ, _ = _series(case_dir, "gasIntegral")
@@ -147,11 +165,17 @@ def read_results(case_dir, engine=None, stages=None) -> Dict:
             return np.empty(0)
         return mat[:, cols.index(key)]
 
-    # médias volumétricas — CA é a coluna Time
+    # médias volumétricas — a coluna Time é CA [°] no modo prescrito e
+    # tempo FÍSICO [s] no modo reativo
     if avg.size:
-        ca = avg[:, cols_avg.index("Time")]
-        out["ca_deg"] = ca
-        out["t_s"] = physical_time_s(ca, engine.rpm if engine else 1.0)
+        tempo = avg[:, cols_avg.index("Time")]
+        if reativo:
+            out["time_s"] = tempo
+        else:
+            out["ca_deg"] = tempo
+        out["t_s"] = (tempo.copy() if reativo
+                      else physical_time_s(tempo,
+                                           engine.rpm if engine else 1.0))
         for campo in ("p", "T", "rho"):
             k = f"volAverage({campo})"
             if k in cols_avg:
@@ -175,14 +199,19 @@ def read_results(case_dir, engine=None, stages=None) -> Dict:
                 ("p_max", "max(p)", mx, cols_mx)):
             if chave in cols:
                 out[nome] = mat[:, cols.index(chave)]
-        if "Time" in cols_mn and "ca_deg" not in out:
-            out["ca_deg"] = mn[:, cols_mn.index("Time")]
-            out["t_s"] = physical_time_s(out["ca_deg"],
-                                         engine.rpm if engine else 1.0)
+        if "Time" in cols_mn and "ca_deg" not in out and "time_s" not in out:
+            if reativo:
+                out["time_s"] = mn[:, cols_mn.index("Time")]
+            else:
+                out["ca_deg"] = mn[:, cols_mn.index("Time")]
+            out["t_s"] = (out["time_s"].copy() if reativo
+                          else physical_time_s(out["ca_deg"],
+                                               engine.rpm if engine else 1.0))
     if whf.size and cols_whf:
         out["wall_heat_flux_cols"] = cols_whf
         out["wall_heat_flux_W"] = whf        # Time + potência por parede [W]
-    # volume do cilindro em cada CA (cinemática do 0-D — mesma equação)
+    # volume do cilindro em cada CA (cinemática do 0-D — mesma equação);
+    # modo reativo: volume FIXO (não há manivela nem trabalho indicado)
     if "ca_deg" in out and engine is not None:
         from ..pressure.engine import volume
         V, _, _ = volume(np.radians(out["ca_deg"]), engine.Rc, engine)
@@ -197,17 +226,30 @@ def read_results(case_dir, engine=None, stages=None) -> Dict:
     if "wall_heat_flux_W" in out:
         whf = out["wall_heat_flux_W"]
         pot = whf[:, 1:].sum(axis=1)
-        ca = whf[:, 0]
+        tempo = whf[:, 0]
         out["wall_loss_W"] = pot
-        out["wall_loss_ca_deg"] = ca
-        dt_s = physical_time_s(np.gradient(ca), engine.rpm if engine
-                               else 1.0)
-        out["wall_loss_J"] = float(np.trapezoid(pot, physical_time_s(
-            ca, engine.rpm if engine else 1.0))) if ca.size > 1 else 0.0
+        out["wall_loss_ca_deg" if not reativo else "wall_loss_time_s"] = tempo
+        t_fis = (tempo.copy() if reativo
+                 else physical_time_s(tempo, engine.rpm if engine else 1.0))
+        out["wall_loss_J"] = float(np.trapezoid(pot, t_fis)) \
+            if tempo.size > 1 else 0.0
 
-    # fonte Wiebe prescrita (para comparação no relatório)
-    if engine is not None and stages is not None and out.get("ca_deg") \
-            is not None and len(out.get("ca_deg", [])):
+    # R2 (reativo): potência química liberada ∫Q̇ dV [W] (volFieldValue
+    # QdotIntegral) e o fechamento de energia ∫Q̇ dV dt = ΔU (volume
+    # fixo) — portão R2c, confrontado com ΔU = m·(u₂ − u₁) pós-execução.
+    if reativo:
+        qd, cols_qd = _series(case_dir, "QdotIntegral")
+        if qd.size and "volIntegrate(Qdot)" in cols_qd:
+            out["qdot_chem_W"] = qd[:, cols_qd.index("volIntegrate(Qdot)")]
+            out["qdot_time_s"] = qd[:, cols_qd.index("Time")]
+            if out["qdot_time_s"].size > 1:
+                tr = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
+                out["chem_energy_J"] = float(
+                    tr(out["qdot_chem_W"], out["qdot_time_s"]))
+
+    # fonte Wiebe prescrita (para comparação no relatório) — modo prescrito
+    if not reativo and engine is not None and stages is not None \
+            and out.get("ca_deg") is not None and len(out.get("ca_deg", [])):
         from .sources.wiebe_heat_release import qdot_time_series
         ca = out["ca_deg"]
         th = np.linspace(math.radians(float(np.min(ca))),
@@ -223,7 +265,8 @@ def read_results(case_dir, engine=None, stages=None) -> Dict:
 
 def check_completion(case_dir, cfg) -> Tuple[bool, str]:
     """'processo terminou' ≠ 'simulação concluída': exige log 'End' e
-    último CA registrado ≥ fim da janela (tolerância de gravação)."""
+    último tempo registrado ≥ fim da janela — CA [°] no modo prescrito,
+    tempo físico [s] no modo reativo (tolerância de gravação)."""
     case_dir = Path(case_dir)
     log = case_dir / "logs" / "foamRun.log"
     if not log.exists():
@@ -232,15 +275,24 @@ def check_completion(case_dir, cfg) -> Tuple[bool, str]:
     if "End" not in texto:
         return False, ("O solver terminou sem a mensagem final 'End' — "
                        "execução provavelmente interrompida.")
+    reativo = getattr(cfg, "mode", "prescribed_wiebe") == "reactive"
     fim = float(cfg.interval_end)
+    # tolerância de gravação: 2 % da janela; mínimo de 1° no prescrito
+    # (gravação por adjustableRunTime) e fino no reativo (tempo físico —
+    # janelas de R2 são ~1e-3 s, um mínimo de 1 s seria inócuo)
+    if reativo:
+        tol = max(1e-12, 0.02 * abs(fim))
+    else:
+        tol = max(1.0, 0.02 * abs(fim))
     avg, cols = _series(case_dir, "gasAvg")
     if avg.size == 0:
         return False, "Sem série temporal em postProcessing (gasAvg)."
-    ca = avg[:, cols.index("Time")]
-    ultimo = float(ca[-1])
-    if ultimo < fim - max(1.0, 0.02 * abs(fim)):
-        return False, (f"Último ponto registrado (CA {ultimo:.2f}°) não "
-                       f"cobre o fim da janela ({fim:.2f}°).")
+    tempo = avg[:, cols.index("Time")]
+    ultimo = float(tempo[-1])
+    unidade = "s" if reativo else "°"
+    if ultimo < fim - tol:
+        return False, (f"Último ponto registrado ({ultimo:.6g} {unidade}) "
+                       f"não cobre o fim da janela ({fim:.6g} {unidade}).")
     return True, "Janela simulada coberta e solver encerrado com 'End'."
 
 

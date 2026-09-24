@@ -84,11 +84,46 @@ def test_config_defaults_and_validation():
     assert cfg.validate() == []
 
 
-def test_config_reactive_is_not_available():
-    d = dict(CFG_DICT)
-    d["mode"] = "reactive"
-    erros = CfdConfig.from_dict(d).validate()
-    assert any("não está implementado" in e for e in erros)
+def test_config_reactive_validacao():
+    """Modo reativo (R2): volume fixo, mecanismo obrigatório e regras
+    bloqueantes (pistão móvel é R3; PaSR é degrau futuro)."""
+    base = {"mode": "reactive",
+            "reaction": {"mechanism": "inexistente_mecanismo"}}
+    erros = CfdConfig.from_dict(base).validate()
+    assert any("moving_piston=false" in e for e in erros)
+    assert any("não encontrado" in e for e in erros)
+    # mecanismo existente + volume fixo valida
+    mecanismo = str(Path(__file__).resolve().parent.parent
+                    / "examples" / "cfd" / "mechanisms" / "burke2012")
+    ok = CfdConfig.from_dict({"mode": "reactive",
+                              "geometry": {"moving_piston": False},
+                              "reaction": {"mechanism": mecanismo}})
+    assert ok.validate() == []
+    # pistão móvel com reação é bloqueante (R3 — verificação pendente)
+    ruim = CfdConfig.from_dict({"mode": "reactive",
+                                "geometry": {"moving_piston": True},
+                                "reaction": {"mechanism": mecanismo}})
+    assert cfg_has_error(ruim, "moving_piston=false")
+    # modelo de combustão diferente de laminar é bloqueante no R2
+    ruim = CfdConfig.from_dict({"mode": "reactive",
+                                "geometry": {"moving_piston": False},
+                                "reaction": {"mechanism": mecanismo,
+                                             "combustion_model": "PaSR"}})
+    assert cfg_has_error(ruim, "laminar")
+    # φ ≤ 0 é bloqueante
+    ruim = CfdConfig.from_dict({"mode": "reactive",
+                                "geometry": {"moving_piston": False},
+                                "reaction": {"mechanism": mecanismo,
+                                             "equivalence_ratio": 0.0}})
+    assert cfg_has_error(ruim, "equivalence_ratio deve ser > 0")
+    # composição explícita que não soma 1 é bloqueante
+    ruim = CfdConfig.from_dict({"mode": "reactive",
+                                "geometry": {"moving_piston": False},
+                                "reaction": {"mechanism": mecanismo,
+                                             "composition":
+                                                 {"H2": 0.5, "O2": 0.5,
+                                                  "N2": 0.5}}})
+    assert cfg_has_error(ruim, "devem somar 1")
 
 
 def test_config_interval_validation():
@@ -567,6 +602,142 @@ def test_config_valida_unidades_experimentais():
 
 
 # ------------------------------------------------------------ case builder
+def test_case_builder_reactive_r2(tmp_path):
+    """Modo reativo (R2): volume fixo, química fornece o calor.
+
+    Verificações estruturais do caso gerado:
+      • SEM fvModels e SEM dynamicMeshDict (as duas fontes de calor nunca
+        coexistem; malha fixa — ignição espontânea pela cinética);
+      • reactions/speciesThermo COPIADOS do mecanismo (bytes idênticos);
+      • physicalProperties/combustionProperties/chemistryProperties no
+        formato dos tutoriais reativos do OF13;
+      • campos 0/ com uma fração mássica por espécie do mecanismo;
+      • controlDict em tempo FÍSICO [s] com adjustTimeStepToChemistry,
+        Qdot e QdotIntegral.
+    """
+    from wiebepy.cfd.case_builder import CaseBuilder
+    mecanismo = Path(__file__).resolve().parent.parent / "examples" / "cfd" \
+        / "mechanisms" / "burke2012"
+    cfg_dict = {
+        "enabled": True,
+        "mode": "reactive",
+        "geometry": {"moving_piston": False},
+        "initial": {"P_kPa": 250, "T_K": 800},
+        "interval": {"start": 0.0, "end": 2.0e-3},
+        "numerics": {"write_interval_deg": 1.0e-4},
+        "turbulence": {"model": "laminar"},
+        "reaction": {"mechanism": str(mecanismo),
+                     "equivalence_ratio": 1.0},
+    }
+    cfg = CfdConfig.from_dict(cfg_dict)
+    assert cfg.validate() == []
+    b = CaseBuilder(cfg, ENGINE, solver_info={"version": "13"})
+    caso = b.build(tmp_path / "reactivo")
+
+    # fontes de calor: NENHUMA das duas
+    assert not (caso / "constant" / "fvModels").exists()
+    assert not (caso / "constant" / "dynamicMeshDict").exists()
+    # mecanismo copiado byte a byte (nunca redigitado)
+    for f in ("reactions", "speciesThermo"):
+        assert (caso / "constant" / f).read_bytes() \
+            == (mecanismo / f).read_bytes()
+    phys = (caso / "constant" / "physicalProperties").read_text("utf-8")
+    assert "multicomponentMixture" in phys and 'defaultSpecie    N2;' in phys
+    assert '#include "speciesThermo"' in phys
+    chem = (caso / "constant" / "chemistryProperties").read_text("utf-8")
+    assert "#include \"reactions\"" in chem and "seulex" in chem
+    comb = (caso / "constant" / "combustionProperties").read_text("utf-8")
+    assert "combustionModel  laminar;" in comb
+
+    # campos iniciais no diretório do tempo inicial (0 s) — 13 espécies
+    esp = b._mech["species"]
+    t0 = caso / "0"
+    for f in ("p", "T", "U") + tuple(esp) + ("Ydefault",):
+        assert (t0 / f).exists(), f
+    # φ = 1 com ar: X = (2/6,76; 1/6,76; 3,76/6,76) — frações mássicas
+    # derivadas das massas molares do PRÓPRIO speciesThermo
+    mw = b._mech["molWeight"]
+    X = {"H2": 2 / 6.76, "O2": 1 / 6.76, "N2": 3.76 / 6.76}
+    mixm = sum(x * mw[s] for s, x in X.items())
+    for sp, x in X.items():
+        y_esp = x * mw[sp] / mixm
+        y_txt = (t0 / sp).read_text("utf-8")
+        linha = [l for l in y_txt.splitlines()
+                 if l.startswith("internalField")][0]
+        y_arquivo = float(linha.split("uniform")[1].rstrip(";"))
+        assert math.isclose(y_arquivo, y_esp, rel_tol=1e-6)
+    # soma das frações mássicas = 1
+    assert math.isclose(sum(b._Y0.values()), 1.0, rel_tol=1e-12)
+
+    # controlDict: tempo físico, sem userTime engine
+    cd = (caso / "system" / "controlDict").read_text("utf-8")
+    assert "userTime" not in cd
+    assert "solver          multicomponentFluid;" in cd
+    assert "startTime       0;" in cd
+    assert "endTime         0.002;" in cd
+    assert "maxDeltaT       0.001;" in cd
+    assert "#includeFunc adjustTimeStepToChemistry" in cd
+    assert "QdotIntegral" in cd and "volIntegrate" in cd
+    # documentação do caso
+    info = yaml.safe_load((caso / "case_config.yaml").read_text("utf-8"))
+    assert info["mode"] == "reactive"
+    assert info["features"]["heat_source"] is False
+    assert info["interval"]["time_unit"] == "s"
+    assert info["chamber"]["model"] == "fixed_volume"
+    assert "H2" in info["reaction"]["initial_composition"]["mass_fractions_Y"]
+    # validação estática do caso passa (sem solver — adapter mockado abaixo)
+    from wiebepy.cfd.config import write_state
+    write_state(caso, CaseState.PREPARED)
+    import wiebepy.cfd.validation as val
+    class _Adaptador:
+        def check_runnable(self):
+            return []
+    import unittest.mock as mock
+    with mock.patch.object(val, "get_adapter", return_value=_Adaptador()):
+        ok, erros, avisos = val.validate_case(caso, "openfoam")
+    assert ok, erros
+
+
+def test_case_builder_reactive_composicao_explicita(tmp_path):
+    """composition explícita (frações mássicas) sobrepõe φ e é normalizada."""
+    from wiebepy.cfd.case_builder import CaseBuilder
+    mecanismo = Path(__file__).resolve().parent.parent / "examples" / "cfd" \
+        / "mechanisms" / "burke2012"
+    cfg = CfdConfig.from_dict({
+        "mode": "reactive", "geometry": {"moving_piston": False},
+        "reaction": {"mechanism": str(mecanismo),
+                     "composition": {"H2": 0.0285, "O2": 0.2262,
+                                     "N2": 0.7453}}})
+    b = CaseBuilder(cfg, ENGINE, solver_info={"version": "13"})
+    y = b._Y0
+    assert math.isclose(sum(y.values()), 1.0, rel_tol=1e-9)
+    assert math.isclose(y["H2"], 0.0285, rel_tol=1e-6)
+    # espécie fora do mecanismo é bloqueante
+    cfg2 = CfdConfig.from_dict({
+        "mode": "reactive", "geometry": {"moving_piston": False},
+        "reaction": {"mechanism": str(mecanismo),
+                     "composition": {"CH4": 1.0}}})
+    with pytest.raises(ValueError, match="fora do mecanismo"):
+        CaseBuilder(cfg2, ENGINE, solver_info={"version": "13"})
+
+
+def test_case_builder_reactive_campos_pares_incompletos(tmp_path):
+    """Mecanismo incompleto (sem reactions) é bloqueante com mensagem
+    explícita — nenhuma inferência silenciosa."""
+    from wiebepy.cfd.case_builder import CaseBuilder
+    mecanismo = Path(__file__).resolve().parent.parent / "examples" / "cfd" \
+        / "mechanisms" / "burke2012"
+    quebrado = tmp_path / "mecanismo_quebrado"
+    quebrado.mkdir()
+    (quebrado / "speciesThermo").write_text("species 1 ( N2 );\nN2\n{\n}\n",
+                                            encoding="utf-8")
+    cfg = CfdConfig.from_dict({
+        "mode": "reactive", "geometry": {"moving_piston": False},
+        "reaction": {"mechanism": str(quebrado)}})
+    with pytest.raises(ValueError, match="ausente"):
+        CaseBuilder(cfg, ENGINE, solver_info={"version": "13"})
+
+
 def test_case_builder_generates_openfoam_case(tmp_path):
     from wiebepy.cfd.case_builder import CaseBuilder
     cfg = CfdConfig.from_dict(CFG_DICT)

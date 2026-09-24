@@ -1,0 +1,138 @@
+/*--------------------------------*- C++ -*------------------*\
+  =========                 |
+   \      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+    \    /   O peration     | Website:  https://openfoam.org
+     \  /   A nd           | Version:  13
+      \/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "chemkin";
+    object      transportProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Sutherland coefficients fitted to Chapman-Enskog (Lennard-Jones)
+// viscosity of the GRI-Mech 3.0 transport database (via Burke2012.yaml
+// from SDToolbox/Caltech); Neufeld et al. (1972) correlation; fit over
+// 300-3500 K, max error 6 %. See README.md.
+"H"
+{
+    transport
+    {
+        As 1.00348e-06;
+        Ts 218.9;
+    }
+}
+
+"H2"
+{
+    transport
+    {
+        As 8.36566e-07;
+        Ts 161.5;
+    }
+}
+
+"O"
+{
+    transport
+    {
+        As 2.3884e-06;
+        Ts 177.7;
+    }
+}
+
+"OH"
+{
+    transport
+    {
+        As 2.46248e-06;
+        Ts 177.7;
+    }
+}
+
+"H2O"
+{
+    transport
+    {
+        As 2.35933e-06;
+        Ts 582.6;
+    }
+}
+
+"O2"
+{
+    transport
+    {
+        As 2.05698e-06;
+        Ts 193.3;
+    }
+}
+
+"HO2"
+{
+    transport
+    {
+        As 2.08912e-06;
+        Ts 193.3;
+    }
+}
+
+"H2O2"
+{
+    transport
+    {
+        As 2.12078e-06;
+        Ts 193.3;
+    }
+}
+
+"N2"
+{
+    transport
+    {
+        As 1.77645e-06;
+        Ts 187.4;
+    }
+}
+
+"AR"
+{
+    transport
+    {
+        As 2.40994e-06;
+        Ts 212.8;
+    }
+}
+
+"HE"
+{
+    transport
+    {
+        As 1.85778e-06;
+        Ts 159.8;
+    }
+}
+
+"CO"
+{
+    transport
+    {
+        As 1.74695e-06;
+        Ts 187.7;
+    }
+}
+
+"CO2"
+{
+    transport
+    {
+        As 1.87556e-06;
+        Ts 299.9;
+    }
+}
+
+// ************************************************************************* //

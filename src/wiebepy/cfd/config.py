@@ -9,7 +9,7 @@ padrão — ver io/config.py):
     cfd:
       enabled: false
       adapter: openfoam          # único adapter implementado
-      mode: prescribed_wiebe     # prescribed_wiebe | reactive (não implementado)
+      mode: prescribed_wiebe     # prescribed_wiebe | reactive
       case_directory: results/cfd/case_001
       workers: 4                 # processos do SOLVER (MPI), não do wiebepy
       wsl_distro: Ubuntu-22.04   # Windows: distribuição WSL2 com o solver
@@ -20,10 +20,10 @@ padrão — ver io/config.py):
         # bore, stroke, rod_length, Rc, rpm vêm da seção ``engine`` existente
         # (EngineConfig); podem ser sobrescritos aqui se desejado.
 
-      interval:                  # janela simulada (válvulas fechadas)
-        angle_unit: deg          # deg | rad
-        start: -120
-        end: 120
+      interval:                  # janela simulada; NO MODO PRESCRITO é por
+        angle_unit: deg          # CA (ângulo de manivela, userTime engine)
+        start: -120              # e NO MODO REATIVO é tempo físico [s]
+        end: 120                 # (volume fixo não tem manivela — R2)
 
       initial: {P_kPa: 250, T_K: 800}
       walls: {Tw_K: 440, model: fixed_temperature}
@@ -40,6 +40,33 @@ padrão — ver io/config.py):
         source: model            # model (model.json do wiebepy) | parameters
         model: results/model.json
         # parameters: [{beta, theta0, duration, m}, …]
+
+      # ——— modo reativo (roadmap reativo; degrau R2) ————————————————
+      # A QUÍMICA fornece o calor (sem fvModels heat_source, sem Wiebe —
+      # as duas fontes de calor NUNCA coexistem; Wiebe é só para
+      # comparação/pós-ajuste no modo prescrito).
+      reaction:
+        mechanism: examples/cfd/mechanisms/burke2012  # diretório com os
+                                    # dicts convertidos pelo chemkinToFoam
+                                    # (reactions + thermo + transport)
+        combustion_model: laminar   # laminar (R2) | PaSR | EDC (futuros)
+        equivalence_ratio: 1.0      # razão de equivalência φ com ar (O2 +
+                                    # 3,76 N2) — ou composition explícita
+        # composition: {H2: 0.0285, O2: 0.2262, N2: 0.7453}  # frações
+        #             mássicas explícitas (alternativa a equivalence_ratio)
+        chemistry:
+          solver: ode               # ode | EulerImplicit | ISAT
+          method: seulex            # método do odeSolver do OF13 (válidos:
+                                    # Euler, EulerSI, RKCK45, RKDP45, RKF45,
+                                    # Rosenbrock12/23/34, SIBS, Trapezoid,
+                                    # rodas23, rodas34, seulex)
+          initial_chemical_time_step: 1.0e-05
+          max_chemical_time_step: 1.0e-03
+          absolute_tolerance: 1.0e-12
+          relative_tolerance: 1.0e-04
+          # No modo reativo o TEMPO do solver é FÍSICO [s] (não há
+          # userTime engine sem pistão): interval é interpretado em
+          # segundos e write_interval_s grava campos por tempo físico.
 
       comparison:
         criterion: same_rpm_same_energy   # registro do critério (doc)
@@ -168,6 +195,30 @@ class CfdConfig:
     experimental_pressure_unit: str = "kPa"   # kPa | bar | MPa | Pa | psi
     experimental_offset_deg: float = 0.0      # alinhamento de fase [°CA]
 
+    # ——— modo reativo (R2: ignição espontânea, volume fixo) ————————
+    # No modo reativo a QUÍMICA fornece o calor (heat_source/wiebe NÃO
+    # são escritos — regra inviolável do roadmap reativo); o tempo do
+    # solver é FÍSICO [s] (sem userTime engine: volume fixo não tem
+    # manivela) e interval/write_interval são interpretados em segundos.
+    reaction_mechanism: Optional[str] = None  # diretório com os dicts
+                                              # convertidos (reactions,
+                                              # thermo, transport)
+    reaction_combustion_model: str = "laminar"  # laminar (R2)
+    chem_solver: str = "ode"                  # ode | EulerImplicit | ISAT
+    # método do odeSolver do OF13 — padrão seulex (o usado pelo tutorial
+    # reativo OF13 multicomponentFluid/nc7h16 para cinética rígida; o OF13
+    # NÃO tem Rosenbrock43 — válidos: Euler, EulerSI, RKCK45, RKDP45,
+    # RKF45, Rosenbrock12/23/34, SIBS, Trapezoid, rodas23, rodas34,
+    # seulex, ver ODESolverNew.C)
+    chem_method: str = "seulex"
+    chem_initial_dt: float = 1.0e-5           # passo químico inicial [s]
+    chem_max_dt: float = 1.0e-3               # passo químico máximo [s]
+    chem_abs_tol: float = 1.0e-12             # tolerância absoluta
+    chem_rel_tol: float = 1.0e-4              # tolerância relativa
+    equivalence_ratio: float = 1.0            # φ com ar (O2 + 3,76 N2)
+    composition: Optional[Dict[str, float]] = None  # frações mássicas
+                                    # explícitas (sobrepõe φ quando dada)
+
     # ------------------------------------------------------------- leitura
     @classmethod
     def from_dict(cls, d: Optional[Dict]) -> "CfdConfig":
@@ -184,6 +235,8 @@ class CfdConfig:
         wiebe = d.get("wiebe") or {}
         comp = d.get("comparison") or {}
         gas = d.get("gas") or {}
+        rxn = d.get("reaction") or {}
+        rxn_chem = rxn.get("chemistry") or {}
         return cls(
             enabled=bool(d.get("enabled", False)),
             adapter=d.get("adapter", "openfoam"),
@@ -227,6 +280,18 @@ class CfdConfig:
                 comp.get("experimental_pressure_unit") or "kPa"),
             experimental_offset_deg=float(
                 comp.get("experimental_offset_deg", 0.0) or 0.0),
+            reaction_mechanism=rxn.get("mechanism"),
+            reaction_combustion_model=rxn.get("combustion_model", "laminar"),
+            equivalence_ratio=float(rxn.get("equivalence_ratio", 1.0)),
+            composition=rxn.get("composition"),
+            chem_solver=rxn_chem.get("solver", "ode"),
+            chem_method=rxn_chem.get("method", "seulex"),
+            chem_initial_dt=float(rxn_chem.get(
+                "initial_chemical_time_step", 1.0e-5)),
+            chem_max_dt=float(rxn_chem.get("max_chemical_time_step",
+                                           1.0e-3)),
+            chem_abs_tol=float(rxn_chem.get("absolute_tolerance", 1.0e-12)),
+            chem_rel_tol=float(rxn_chem.get("relative_tolerance", 1.0e-4)),
         )
 
     def to_dict_public(self) -> Dict:
@@ -265,7 +330,20 @@ class CfdConfig:
                                "experimental_pressure_unit":
                                    self.experimental_pressure_unit,
                                "experimental_offset_deg":
-                                   self.experimental_offset_deg}}
+                                   self.experimental_offset_deg},
+                "reaction": {"mechanism": self.reaction_mechanism,
+                             "combustion_model":
+                                 self.reaction_combustion_model,
+                             "equivalence_ratio": self.equivalence_ratio,
+                             "composition": self.composition,
+                             "chemistry": {
+                                 "solver": self.chem_solver,
+                                 "method": self.chem_method,
+                                 "initial_chemical_time_step":
+                                     self.chem_initial_dt,
+                                 "max_chemical_time_step": self.chem_max_dt,
+                                 "absolute_tolerance": self.chem_abs_tol,
+                                 "relative_tolerance": self.chem_rel_tol}}}
 
     # ---------------------------------------------------------- derivados
     def derived(self, engine_cfg) -> Dict:
@@ -306,9 +384,7 @@ class CfdConfig:
                      f"(válidos: {ADAPTERS}).")
         if self.mode not in MODES:
             e.append(f"cfd.mode '{self.mode}' inválido ({MODES}).")
-        elif self.mode == "reactive":
-            e.append("cfd.mode 'reactive' ainda não está implementado "
-                     "(combustão reativa é uma extensão futura).")
+        reativo = self.mode == "reactive"
         if not self.case_directory:
             e.append("cfd.case_directory é obrigatório.")
         if self.workers < 1:
@@ -332,32 +408,11 @@ class CfdConfig:
         if self.wall_model == "adiabatic" and self.Tw_K != 440.0:
             e.append("cfd.walls.model=adiabatic não usa Tw_K (paredes sem "
                      "fluxo de calor); omita Tw_K ou use fixed_temperature.")
-        if not self.gas_Cp_J_kgK > 0 or not self.gas_molWeight > 0:
-            e.append("cfd.gas.Cp_J_kgK e molWeight_kg_kmol devem ser > 0.")
-        if self.gas_model not in GAS_MODELS:
-            e.append(f"cfd.gas.model '{self.gas_model}' inválido "
-                     f"({GAS_MODELS}).")
-        if not self.gas_mu > 0 or not 0 < self.gas_Pr <= 1.0:
-            e.append("cfd.gas.mu_Pa_s deve ser > 0 e Pr em (0, 1].")
         if self.turbulence_model not in ("kEpsilon", "kOmegaSST", "laminar"):
             e.append("cfd.turbulence.model deve ser kEpsilon, kOmegaSST "
                      "ou laminar.")
         if not self.deltaT_s > 0 or not self.max_Co > 0:
             e.append("cfd.numerics.deltaT_s e max_Co devem ser > 0.")
-        if not self.write_interval_deg > 0:
-            e.append("cfd.numerics.write_interval_deg deve ser > 0.")
-        if self.distribution not in DISTRIBUTIONS:
-            e.append(f"cfd.heat_source.distribution '{self.distribution}' "
-                     f"inválida ({DISTRIBUTIONS}).")
-        if self.distribution == "region" and not self.region:
-            e.append("distribution=region exige cfd.heat_source.region "
-                     "(nome do cellZone).")
-        if self.fuel_name not in fuel_names():
-            e.append(f"cfd.fuel.name '{self.fuel_name}' inválida "
-                     f"(válidos: {fuel_names()}).")
-        if self.fuel_feed not in ("premixed_gas",):
-            e.append("cfd.fuel.feed: apenas 'premixed_gas' no modo de calor "
-                     "prescrito (injeção líquida/spray é futura).")
         if self.experimental:
             if self.experimental_angle_unit not in ("rad", "deg"):
                 e.append("cfd.comparison.experimental_angle_unit deve ser "
@@ -366,18 +421,97 @@ class CfdConfig:
             if self.experimental_pressure_unit not in PRESSURE_FACTORS_KPA:
                 e.append("cfd.comparison.experimental_pressure_unit inválida "
                          f"({list(PRESSURE_FACTORS_KPA)}).")
-        if self.wiebe_source not in ("model", "parameters"):
-            e.append("cfd.wiebe.source deve ser 'model' (model.json) ou "
-                     "'parameters' (lista inline).")
-        if self.wiebe_source == "model" and not self.wiebe_model:
-            e.append("cfd.wiebe.source=model exige cfd.wiebe.model "
-                     "(caminho de um model.json gerado pelo wiebepy).")
-        if self.wiebe_source == "parameters" and not self.wiebe_parameters:
-            e.append("cfd.wiebe.source=parameters exige a lista "
-                     "cfd.wiebe.parameters.")
-        if self.wiebe_source == "model" and self.wiebe_model:
-            if not Path(self.wiebe_model).exists():
-                e.append(f"cfd.wiebe.model não encontrado: {self.wiebe_model}")
+
+        # ——— regras do modo REATIVO (a química fornece o calor) ————————
+        if reativo:
+            if self.moving_piston:
+                e.append("cfd.mode=reactive com volume FIXO (degrau R2 do "
+                         "roadmap) exige cfd.geometry.moving_piston=false; "
+                         "malha móvel com reação é o degrau R3 (verificação "
+                         "de compatibilidade pendente).")
+            if self.reaction_combustion_model not in ("laminar",):
+                e.append("cfd.reaction.combustion_model: apenas 'laminar' "
+                         "no degrau R2 (PaSR/EDC são degraus futuros).")
+            if not self.reaction_mechanism:
+                e.append("cfd.reaction.mechanism é obrigatório no modo "
+                         "reativo (diretório com os dicts convertidos pelo "
+                         "chemkinToFoam: reactions, thermo, transport).")
+            elif not Path(self.reaction_mechanism).is_dir():
+                e.append(f"cfd.reaction.mechanism não encontrado: "
+                         f"{self.reaction_mechanism}")
+            if not self.equivalence_ratio > 0:
+                e.append("cfd.reaction.equivalence_ratio deve ser > 0.")
+            if self.composition:
+                for sp, y in self.composition.items():
+                    if not float(y) >= 0:
+                        e.append(f"cfd.reaction.composition[{sp}] deve ser "
+                                 "≥ 0 (fração mássica).")
+                if 0 < sum(float(v) for v in self.composition.values()) \
+                        and not 0.99 <= sum(
+                            float(v) for v in self.composition.values()) \
+                        <= 1.01:
+                    e.append("cfd.reaction.composition: as frações mássicas "
+                             "devem somar 1 (± 1 %).")
+            if self.chem_solver not in ("ode", "EulerImplicit", "ISAT"):
+                e.append("cfd.reaction.chemistry.solver deve ser ode, "
+                         "EulerImplicit ou ISAT.")
+            # métodos válidos do odeSolver do OF13 (ODESolverNew.C)
+            if self.chem_method not in (
+                    "Euler", "EulerSI", "RKCK45", "RKDP45", "RKF45",
+                    "Rosenbrock12", "Rosenbrock23", "Rosenbrock34", "SIBS",
+                    "Trapezoid", "rodas23", "rodas34", "seulex"):
+                e.append("cfd.reaction.chemistry.method inválido para o "
+                         "odeSolver do OF13 (válidos: Euler, EulerSI, "
+                         "RKCK45, RKDP45, RKF45, Rosenbrock12/23/34, SIBS, "
+                         "Trapezoid, rodas23, rodas34, seulex).")
+            if not self.chem_initial_dt > 0 or not self.chem_max_dt > 0:
+                e.append("cfd.reaction.chemistry.initial/max_chemical_time_"
+                         "step devem ser > 0.")
+            if self.chem_max_dt < self.chem_initial_dt:
+                e.append("cfd.reaction.chemistry.max_chemical_time_step "
+                         "deve ser ≥ initial_chemical_time_step.")
+            if not self.chem_abs_tol > 0 or not 0 < self.chem_rel_tol < 1:
+                e.append("cfd.reaction.chemistry.absolute_tolerance deve "
+                         "ser > 0 e relative_tolerance em (0, 1).")
+            # No modo reativo as seções heat_source/wiebe/fuel/gas NÃO são
+            # usadas (a química fornece o calor; NUNCA coexistem) — não
+            # geram erro, mas não são gravadas no caso (case_builder).
+        else:
+            # ——— regras do modo PRESCRITO (fonte Wiebe) ————————————————
+            if not self.gas_Cp_J_kgK > 0 or not self.gas_molWeight > 0:
+                e.append("cfd.gas.Cp_J_kgK e molWeight_kg_kmol devem ser > 0.")
+            if self.gas_model not in GAS_MODELS:
+                e.append(f"cfd.gas.model '{self.gas_model}' inválido "
+                         f"({GAS_MODELS}).")
+            if not self.gas_mu > 0 or not 0 < self.gas_Pr <= 1.0:
+                e.append("cfd.gas.mu_Pa_s deve ser > 0 e Pr em (0, 1].")
+            if not self.write_interval_deg > 0:
+                e.append("cfd.numerics.write_interval_deg deve ser > 0.")
+            if self.distribution not in DISTRIBUTIONS:
+                e.append(f"cfd.heat_source.distribution '{self.distribution}' "
+                         f"inválida ({DISTRIBUTIONS}).")
+            if self.distribution == "region" and not self.region:
+                e.append("distribution=region exige cfd.heat_source.region "
+                         "(nome do cellZone).")
+            if self.fuel_name not in fuel_names():
+                e.append(f"cfd.fuel.name '{self.fuel_name}' inválida "
+                         f"(válidos: {fuel_names()}).")
+            if self.fuel_feed not in ("premixed_gas",):
+                e.append("cfd.fuel.feed: apenas 'premixed_gas' no modo de calor "
+                         "prescrito (injeção líquida/spray é futura).")
+            if self.wiebe_source not in ("model", "parameters"):
+                e.append("cfd.wiebe.source deve ser 'model' (model.json) ou "
+                         "'parameters' (lista inline).")
+            if self.wiebe_source == "model" and not self.wiebe_model:
+                e.append("cfd.wiebe.source=model exige cfd.wiebe.model "
+                         "(caminho de um model.json gerado pelo wiebepy).")
+            if self.wiebe_source == "parameters" and not self.wiebe_parameters:
+                e.append("cfd.wiebe.source=parameters exige a lista "
+                         "cfd.wiebe.parameters.")
+            if self.wiebe_source == "model" and self.wiebe_model:
+                if not Path(self.wiebe_model).exists():
+                    e.append(f"cfd.wiebe.model não encontrado: "
+                             f"{self.wiebe_model}")
         return e
 
     def load_wiebe_stages(self, angle_unit_deg: bool = True):

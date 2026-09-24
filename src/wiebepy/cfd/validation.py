@@ -105,6 +105,20 @@ def validate_case(case_dir, adapter_name: str = "openfoam",
             erros.append("Caso declara fonte de calor, mas "
                          "constant/fvModels está ausente.")
 
+    # modo reativo (R2): a química fornece o calor — o mecanismo precisa
+    # estar no caso (reactions/speciesThermo copiados do chemkinToFoam) e
+    # NÃO pode haver fonte de calor (as duas fontes nunca coexistem)
+    if (cfg_efetiva.get("mode") == "reactive"):
+        for rel in ("constant/chemistryProperties",
+                    "constant/combustionProperties",
+                    "constant/reactions", "constant/speciesThermo"):
+            if not (case_dir / rel).exists():
+                erros.append(f"Modo reativo exige {rel} no caso.")
+        if (case_dir / "constant/fvModels").exists():
+            erros.append("Modo reativo com constant/fvModels presente — as "
+                         "duas fontes de calor NUNCA coexistem (a química "
+                         "fornece o calor; ver roadmap reativo).")
+
     # conservação da energia da fonte
     chk = cfg_efetiva.get("heat_source", {}).get("energy_check") or {}
     if chk:
