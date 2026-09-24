@@ -117,8 +117,13 @@ def _estagios_fonte_deg() -> list | None:
     return out
 
 
-def _cfg_do_form() -> "CfdConfig":
-    f = _form()
+def _cfg_do_form(f=None) -> "CfdConfig":
+    from wiebepy.cfd.config import CfdConfig
+    # f pode ser um SNAPSHOT capturado no clique: dentro da thread de
+    # fundo st.session_state não reflete a sessão (o padrão do projeto é
+    # snapshot fora da thread — ver _iniciar_cfd_job).
+    if f is None:
+        f = _form()
     origem = f["wiebe_origem"]
     if origem == "model.json":
         wiebe = {"source": "model", "model": f["wiebe_model"]}
@@ -188,11 +193,12 @@ def _solver_install(distro):
     return None, distro
 
 
-def _runner():
+def _runner(f=None):
     from wiebepy.cfd.runner import CfdRunner
     from wiebepy.pressure.engine import EngineConfig
-    f = _form()
-    cfg = _cfg_do_form()
+    if f is None:
+        f = _form()
+    cfg = _cfg_do_form(f)
     inst, distro = _solver_install(f["wsl_distro"])
     engine = EngineConfig.from_dict({"engine": _engine_cfg()})
     return CfdRunner(cfg, engine=engine, distro=distro,
@@ -454,36 +460,39 @@ with st.container(horizontal=True):
                           disabled=ocupado or state != CaseState.COMPLETED)
 
 if rodar:
-    cfg = _cfg_do_form()
+    fs = dict(_form())                 # snapshot fora da thread
+    cfg = _cfg_do_form(fs)
     erros = cfg.validate()
     if erros:
         for e in erros:
             st.error(f"Configuração inválida: {e}", icon=":material/error:")
     else:
         def _prep(job):
-            runner = _runner()
+            runner = _runner(fs)
             return str(runner.prepare(heat_enabled=True))
         _iniciar_cfd_job("preparação do caso", _prep)
         st.rerun()
 
 if validar:
+    fs = dict(_form())
     def _val(job):
         from wiebepy.cfd.validation import validate_case
         ok, erros, avisos = validate_case(str(case_dir),
-                                          distro=_form()["wsl_distro"])
+                                          distro=fs["wsl_distro"])
         return {"ok": ok, "erros": erros, "avisos": avisos}
     _iniciar_cfd_job("validação do caso", _val)
 
 if executar:
+    fs = dict(_form())
     def _run(job):
         from wiebepy.cfd.validation import validate_case
         ok, erros, _ = validate_case(str(case_dir),
-                                     distro=_form()["wsl_distro"],
+                                     distro=fs["wsl_distro"],
                                      set_validated=False)
         if not ok:
             raise RuntimeError("Caso não validado: " + "; ".join(erros))
-        runner = _runner()
-        return runner.run(str(case_dir), workers=int(_form()["workers"]),
+        runner = _runner(fs)
+        return runner.run(str(case_dir), workers=int(fs["workers"]),
                           on_output=(lambda l: job["log"].append(l)))
     _iniciar_cfd_job("execução CFD", _run)
 
@@ -496,12 +505,19 @@ if cancelar:
         st.warning("Nenhuma execução ativa neste caso.")
 
 if relatorio:
+    fs = dict(_form())
+    pdata_snap = st.session_state.get("pdata")   # fora da thread
     def _rep(job):
         from wiebepy.core.parameters import as_stages
         from wiebepy.cfd.reporting import write_report
         from wiebepy.cfd.results import read_results
         from wiebepy.pressure.engine import EngineConfig
-        engine = EngineConfig.from_dict({"engine": _engine_cfg()})
+        engine = EngineConfig.from_dict(
+            {"engine": {k: fs[k] for k in ("bore_mm", "stroke_mm",
+                                           "rod_length_mm", "Rc", "rpm",
+                                           "m_fuel_kg_per_cycle",
+                                           "LHV_kJ_per_kg", "T1_K",
+                                           "Tw_K")}})
         info = yaml.safe_load((case_dir / "case_config.yaml").read_text(
             encoding="utf-8")) or {}
         try:
@@ -511,7 +527,7 @@ if relatorio:
         res = read_results(case_dir, engine=engine, stages=stages)
         # dados experimentais: prioridade ao ensaio carregado (aba Dados)
         exp = None
-        pd_ = st.session_state.get("pdata")
+        pd_ = pdata_snap
         if pd_ is not None:
             import numpy as _np
             from wiebepy.pressure.engine import volume
@@ -566,7 +582,7 @@ with st.expander("Diagnóstico do ambiente (doctor)"):
         st.code(doctor().format(), language=None)
 
 res_prontos = state == CaseState.COMPLETED
-if res_prontos or state in (CaseState.CANCELED, CaseState.FAILED):
+if res_prontos or state in (CaseState.CANCELLED, CaseState.FAILED):
     with st.expander("Resultados (0-D extraídos do caso 3D)",
                      expanded=res_prontos):
         if state != CaseState.COMPLETED:
