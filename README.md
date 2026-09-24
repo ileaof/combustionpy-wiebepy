@@ -425,6 +425,18 @@ botões na ordem:
    - **Estágios Wiebe**: com origem `model.json` o calor vem do arquivo
      calibrado; com origem *modelo atual* a tabela editável 1–5 estágios
      aparece (a edição NÃO altera o modelo 0-D).
+   - **Gás, numérica e comparação** (equivalência completa com a CLI —
+     mesmas chaves `cfd.gas`/`cfd.numerics`/`cfd.comparison`):
+     *Modelo do gás* `simple` com Cp 1063,0 J/(kg·K) e M 28,96 ⇒
+     γ=1,370 = κ do 0-D (o padrão antigo Cp 1005 ⇒ γ=1,400); `simple`
+     também expõe μ e Pr; *max_Co* 0,25 (0,5 abortou neste motor,
+     §5b do `verification.md`), Δt 1e-6 s, escrita a cada 10° CA; e o
+     expander *Comparação com o ensaio (diagnóstica)* com o ensaio de
+     referência (`examples/data/ensaio_P_exp_carga3_45.txt`, rad/bar,
+     offset 0) — a sobreposição entra no `report.html`. Em
+     *Modelo do gás* = `multicomponent_inert` (degrau R1) Cp/μ/Pr ficam
+     desabilitados: N₂+O₂ com NASA janaf da mistura. Para descartar a
+     comparação, esvazie o campo do arquivo.
 4. **Preparar caso** → gera o caso OpenFOAM para inspeção (estado
    *Preparado*). A configuração é validada antes: erros aparecem como
    mensagem vermelha e o caso não é gerado.
@@ -440,12 +452,13 @@ botões na ordem:
    p̄×θ/T̄×θ. O relatório completo (proveniência, balanço de energia,
    limites) fica no `report.html`.
 
-Dois detalhes que a GUI resolve sozinha: o `max_Co` não aparece no
-formulário — o padrão seguro (0,25) é usado sempre (0,5 aborta neste
-motor, §5b do `verification.md`); e o *Estado do caso* fica sempre
-visível no topo da página. O mesmo lembrete vale: a comparação com o
-ensaio no relatório é **diagnóstica, nunca validação**, e *processo
-terminou ≠ convergiu* — confira o fechamento de energia.
+Dois detalhes que a GUI resolve sozinha: os campos de gás/numérica/
+comparação abrem com os padrões da receita case_006 (não há mais a
+divergência Cp 1005 ⇒ γ=1,400 que cases preparados na GUI tinham antes
+desta equivalência); e o *Estado do caso* fica sempre visível no topo
+da página. O mesmo lembrete vale: a comparação com o ensaio no
+relatório é **diagnóstica, nunca validação**, e *processo terminou ≠
+convergiu* — confira o fechamento de energia.
 
 #### Instalação das dependências CFD (WSL2 + OpenFOAM 13)
 

@@ -196,3 +196,60 @@ def test_cfd_muda_numero_de_estagios():
     at.segmented_control(key="cfd_wiebe_n").set_value(5).run()
     _sem_erros(at)
     assert len(at.session_state["cfd_form"]["wiebe_stages"]) == 5
+
+
+def test_cfd_equivalencia_gui_cli():
+    """A GUI expõe gás/numérica/comparação e os padrões reproduzem a
+    receita case_006 (γ=1,370, max_Co 0,25, ensaio diagnóstico)."""
+    at = _app()
+    at.switch_page("app_pages/cfd.py").run()
+    _sem_erros(at)
+    f = at.session_state["cfd_form"]
+    assert f["gas_model"] == "simple"
+    assert f["gas_Cp"] == 1063.0            # γ=1,370 com M=28,96
+    assert f["gas_molWeight"] == 28.96
+    assert f["deltaT_s"] == 1e-6 and f["max_Co"] == 0.25
+    assert f["write_interval_deg"] == 10.0
+    assert f["exp_file"].endswith("ensaio_P_exp_carga3_45.txt")
+    labels = [w.label for w in at.number_input]
+    for rot in ("max_Co [-]", "Δt [s]", "Escrita a cada [°CA]",
+                "Cp do gás [J/(kg·K)]", "Massa molar [kg/kmol]"):
+        assert rot in labels, rot
+    # a configuração montada pelo formulário (mesma forma de _cfg_do_form)
+    # é aceita e validada pela CLI sem erros
+    from wiebepy.cfd.config import CfdConfig
+    cfg = CfdConfig.from_dict({
+        "mode": "prescribed_wiebe",
+        "case_directory": f["case_directory"],
+        "workers": int(f["workers"]),
+        "wsl_distro": f["wsl_distro"] or None,
+        "geometry": {"type": "simplified_cylinder",
+                     "moving_piston": bool(f["moving_piston"]),
+                     "n_radial": int(f["n_radial"]),
+                     "n_axial": int(f["n_axial"])},
+        "interval": {"angle_unit": "deg", "start": float(f["interval_start"]),
+                     "end": float(f["interval_end"])},
+        "initial": {"P_kPa": float(f["P0_kPa"]), "T_K": float(f["T0_K"])},
+        "walls": {"Tw_K": float(f["Tw_K"]), "model": "fixed_temperature"},
+        "turbulence": {"model": f["turbulence_model"],
+                       "wall_functions": True},
+        "heat_source": {"distribution": f["distribution"], "region": None},
+        "fuel": {"name": f["fuel_name"], "feed": "premixed_gas"},
+        "gas": {"model": f["gas_model"], "Cp_J_kgK": float(f["gas_Cp"]),
+                "molWeight_kg_kmol": float(f["gas_molWeight"]),
+                "mu_Pa_s": float(f["gas_mu"]), "Pr": float(f["gas_Pr"])},
+        "numerics": {"deltaT_s": float(f["deltaT_s"]),
+                     "max_Co": float(f["max_Co"]),
+                     "write_interval_deg": float(f["write_interval_deg"])},
+        "wiebe": {"source": "model", "model": f["wiebe_model"]},
+        "comparison": {"criterion": "same_rpm_same_energy",
+                       "experimental": f["exp_file"],
+                       "experimental_angle_unit": f["exp_angle_unit"],
+                       "experimental_pressure_unit": f["exp_pressure_unit"],
+                       "experimental_offset_deg": float(f["exp_offset_deg"])},
+    })
+    assert cfg.validate() == [], cfg.validate()
+    assert cfg.gas_Cp_J_kgK == 1063.0
+    assert cfg.max_Co == 0.25
+    assert cfg.gas_model == "simple"
+    assert cfg.experimental.endswith("ensaio_P_exp_carga3_45.txt")

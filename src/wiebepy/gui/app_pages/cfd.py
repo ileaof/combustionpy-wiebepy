@@ -73,6 +73,19 @@ def _form() -> dict:
             "Rc": 17.0, "rpm": 3396.20,
             "m_fuel_kg_per_cycle": 9.42754647351e-6,
             "LHV_kJ_per_kg": 39191.3, "T1_K": 308.15,
+            # gás (equivalência GUI↔CLI, cfd.gas): default = case_006
+            # (Cp 1063 + M 28,96 ⇒ γ=1,370 = κ do 0-D; §3c do
+            # verification.md). model: simple | multicomponent_inert (R1)
+            "gas_model": "simple", "gas_Cp": 1063.0,
+            "gas_molWeight": 28.96, "gas_mu": 5.5e-05, "gas_Pr": 0.7,
+            # numérica (cfd.numerics): padrões seguros — max_Co 0,5
+            # abortou neste motor (verification.md §5b)
+            "deltaT_s": 1.0e-6, "max_Co": 0.25, "write_interval_deg": 10.0,
+            # comparação com o ensaio (cfd.comparison; relatório
+            # diagnóstico): case_006
+            "exp_file": "examples/data/ensaio_P_exp_carga3_45.txt",
+            "exp_angle_unit": "rad", "exp_pressure_unit": "bar",
+            "exp_offset_deg": 0.0,
         }
     return st.session_state.cfd_form
 
@@ -120,7 +133,7 @@ def _cfg_do_form() -> "CfdConfig":
         stages = [{k: s[k] for k in ("beta", "theta0", "duration", "m")}
                   for s in stages]
         wiebe = {"source": "parameters", "parameters": stages}
-    return CfdConfig.from_dict({
+    cfg_dict = {
         "mode": "prescribed_wiebe",
         "case_directory": f["case_directory"],
         "workers": int(f["workers"]),
@@ -137,8 +150,24 @@ def _cfg_do_form() -> "CfdConfig":
                        "wall_functions": _TURB[f["turbulence_model"]]},
         "heat_source": {"distribution": f["distribution"], "region": None},
         "fuel": {"name": f["fuel_name"], "feed": "premixed_gas"},
+        # equivalência GUI↔CLI: mesmas chaves de examples/config_*.yaml
+        "gas": {"model": f["gas_model"], "Cp_J_kgK": float(f["gas_Cp"]),
+                "molWeight_kg_kmol": float(f["gas_molWeight"]),
+                "mu_Pa_s": float(f["gas_mu"]), "Pr": float(f["gas_Pr"])},
+        "numerics": {"deltaT_s": float(f["deltaT_s"]),
+                     "max_Co": float(f["max_Co"]),
+                     "write_interval_deg": float(f["write_interval_deg"])},
         "wiebe": wiebe,
-    })
+    }
+    if (f["exp_file"] or "").strip():
+        cfg_dict["comparison"] = {
+            "criterion": "same_rpm_same_energy",
+            "experimental": f["exp_file"].strip(),
+            "experimental_angle_unit": f["exp_angle_unit"],
+            "experimental_pressure_unit": f["exp_pressure_unit"],
+            "experimental_offset_deg": float(f["exp_offset_deg"]),
+        }
+    return CfdConfig.from_dict(cfg_dict)
 
 
 def _engine_cfg() -> dict:
@@ -340,6 +369,60 @@ with st.expander("Configuração do caso", expanded=True):
                         for s in f["wiebe_stages"]]
                     st.session_state.pop(f"cfd_editor_{n}", None)
                     st.rerun()
+
+    st.markdown("**Gás, numérica e comparação** (equivalência GUI↔CLI)")
+    gcol, ncol = st.columns(2)
+    with gcol:
+        f["gas_model"] = st.select_slider(
+            "Modelo do gás", ["simple", "multicomponent_inert"],
+            f["gas_model"],
+            help="simple = Cp/γ constantes (referência case_006); "
+                 "multicomponent_inert = N₂+O₂ com NASA janaf (degrau R1 "
+                 "do roadmap reativo; sem reação).")
+        f["gas_Cp"] = st.number_input(
+            "Cp do gás [J/(kg·K)]", f["gas_Cp"],
+            disabled=f["gas_model"] != "simple",
+            help="1063,0 ⇒ γ=1,370 (κ do 0-D; case_006). Ignorado no modo "
+                 "multicomponente.")
+        f["gas_molWeight"] = st.number_input(
+            "Massa molar [kg/kmol]", f["gas_molWeight"],
+            disabled=f["gas_model"] != "simple",
+            help="28,96 = ar seco. Ignorado no modo multicomponente "
+                 "(N₂+O₂ definidos pela mistura).")
+        f["gas_mu"] = st.number_input(
+            "Viscosidade [Pa·s]", f["gas_mu"], format="%.2e",
+            disabled=f["gas_model"] != "simple",
+            help="Ignorado no modo multicomponente (sutherland do GRI).")
+        f["gas_Pr"] = st.number_input(
+            "Pr [-]", f["gas_Pr"],
+            disabled=f["gas_model"] != "simple",
+            help="Ignorado no modo multicomponente.")
+    with ncol:
+        f["deltaT_s"] = st.number_input(
+            "Δt [s]", f["deltaT_s"], format="%.2e",
+            help="Passo de tempo do solver.")
+        f["max_Co"] = st.number_input(
+            "max_Co [-]", f["max_Co"],
+            help="0,5 ABORTOU neste motor (T negativo perto do PMS — "
+                 "verification.md §5b); 0,25 é o padrão seguro.")
+        f["write_interval_deg"] = st.number_input(
+            "Escrita a cada [°CA]", f["write_interval_deg"],
+            help="Intervalo entre tempos salvos (writeInterval em °CA).")
+    with st.expander("Comparação com o ensaio (diagnóstica)", expanded=False):
+        st.caption("Sobreposição da pressão medida no relatório HTML. "
+                   "Comparação DIAGNÓSTICA — nunca validação (calibrar ≠ "
+                   "validar). Deixe o caminho vazio para desativar.")
+        f["exp_file"] = st.text_input("Arquivo do ensaio (θ,P)", f["exp_file"])
+        c3, c4, c5 = st.columns(3)
+        f["exp_angle_unit"] = c3.select_slider(
+            "Unidade do ângulo", ["rad", "deg"], f["exp_angle_unit"])
+        f["exp_pressure_unit"] = c4.select_slider(
+            "Unidade da pressão", ["kPa", "bar", "MPa", "Pa", "psi"],
+            f["exp_pressure_unit"])
+        f["exp_offset_deg"] = c5.number_input(
+            "Deslocamento [°CA]", f["exp_offset_deg"],
+            help="Offset angular aplicado ao ensaio (sincronismo do "
+                 "encoder).")
 
 # ========================================================== estado e ações
 case_dir = Path(_form()["case_directory"])
