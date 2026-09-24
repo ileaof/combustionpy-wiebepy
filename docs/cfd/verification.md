@@ -15,6 +15,8 @@ paramétrico 6144 células (16×24×16, axissimétrico circular)
 | 5 | Comparação 0-D (caso 4) | p̄×θ CFD dentro de ±2 % do 0-D com a mesma fonte e a mesma perda calculada pelo CFD (seção 3) |
 | 6 | Comparação experimental (ensaio P_exp-Carga-3_45%, DIESEL) | Realizada como **diagnóstico** no relatório: p×θ e diagrama P–V com sobreposição (seção 3a) — NÃO é validação (p̄ volumétrica ≠ pressão no sensor; a fonte já usa estes dados na calibração) |
 | 7 | Perda às paredes: turbulência e refinamento (cases 002–004) | kEpsilon 41,0 J; kOmegaSST 33,7 J; kEpsilon + malha refinada **44,1 J** vs alvo Hohenberg 53,7 J — p_max +13,1 % → **+9,2 %** (seção 3b) |
+| 8 | R1 — gás inerte multicomponente NASA (`case_014`) | Massa conservada (drift 0); fechamento motorado equivalente ao simple (residuo +1,1 J); custo +33 % (seção 3f) |
+| 9 | R2 — H₂ autoignição, câmara fechada adiabática (`r2_verificacao`) | 4 portões confrontados: 0-D vs dados publicados (razões 0,38–5,98, assinatura documentada no próprio artigo); τ_CFD/τ_0D = 0,991; fechamento Q̇/(−ΔH_quím) = 1,0017; p̄ sem oscilação (1,0e-5 da variação) (seção 3g) |
 
 ## 2. Caso case_001 — balanço de energia (laminar, sensibilidade)
 
@@ -625,6 +627,110 @@ Aceitável para o degrau; mecanismos reativos (R2+) custarão bem mais.
 com termoquímica real (Cp(T), mu(T), composição) e gates de massa e
 energia fechados. Próximo degrau (R2, H₂ autoignição) destravado.
 
+## 3g. R2 — H₂ autoignição em câmara fechada (case `r2_verificacao`)
+
+Segundo degrau do roadmap reativo (`reactive_roadmap.md` §2, R2):
+mistura H₂/ar estequiométrica **homogênea**, câmara de volume FIXO
+(malha fixa 24×36, 20 736 células), paredes adiabáticas, ignição
+espontânea pela cinética — mecanismo **Burke et al. 2012** (13
+espécies, 27 reações; conversão `chemkinToFoam` documentada em
+`examples/cfd/mechanisms/burke2012/README.md`). Condição inicial
+T₀ = 1050 K, p₀ = 202,65 kPa (2 atm), φ = 1 (mistura Slack: X_H2 0,296
+/ X_O2 0,148 / X_N2 0,556 = ar estequiométrico, razão N₂/O₂ = 3,757).
+Config `examples/config_cfd_r2_verificacao.yaml`; caso
+`results/cfd/r2_verificacao` (gitignored; janela 0–3 ms). **Escopo
+diagnóstico: verificação do CÓDIGO, nunca validação do mecanismo.**
+
+### Portões confrontados (2026-09-24)
+
+**(a) Atraso de ignição 0-D vs dados publicados.** Reator Cantera 0-D
+de volume constante (mesma conversão ck2yaml `Burke2012.yaml` dos
+arquivos Chemkin do suplemento; critério dT/dt máx, grade uniforme
+1 µs; rtol 1e-10/atol 1e-18) confrontado com **9 pontos digitalizados
+da Fig. A-17** do preprint de Burke et al. 2012 (p. 116): Slack,
+Combust. Flame 28 (1977) 241 (2 atm) + Bhaskaran/Gupta/Just, Combust.
+Flame 21 (1973) 45 (2,5 atm); banho N₂, φ=1 — os blocos de taxa
+associados ao banho N₂ do mecanismo são exatamente os ativados
+(`pipeline/dados_publicados/slack1977_bhaskaran_figA17.yaml`,
+proveniência e incertezas declaradas: ±0,005 em 1000/T ≈ ±15 K;
+±0,15–0,2 década em τ; leitura de gráfico, NÃO dado medido por nós).
+
+| T (K) | p (atm) | τ_0D (µs) | τ_medido (µs) | razão |
+|---|---|---|---|---|
+| 990 | 2,0 | 2537,5 | 424,0 | 5,98 |
+| 1037 | 2,0 | 86,5 | 67,0 | 1,29 |
+| 1099 | 2,0 | 26,5 | 54,0 | 0,49 |
+| 1120 | 2,0 | 21,5 | 44,0 | 0,49 |
+| 1164 | 2,0 | 14,5 | 27,0 | 0,54 |
+| 1182 | 2,0 | 12,5 | 22,0 | 0,57 |
+| 1203 | 2,0 | 11,5 | 17,0 | 0,68 |
+| 1244 | 2,0 | 8,5 | 12,2 | 0,70 |
+| 1323 | 2,5 | 4,5 | 11,7 | 0,38 |
+
+τ(dT/dt) e τ(d[OH]/dt) concordam dentro de 5% (critério do dado
+original: aumento rápido da pressão). Os desvios coincidem com os
+**documentados no próprio artigo**: impurezas de hidrocarbonetos ~1
+ppb sensíveis no atraso e "at baixas T os atrasos experimentais são
+várias vezes MENORES que as predições" (efeitos de facilidade, §8
+p. 38 do preprint — o ponto 990 K reproduz exatamente essa assinatura,
+5,98×). Tolerância declarada do portão: fator ~2 entre 1037 e 1244 K
+(1,29→0,70, monotônica em direção à igualdade — comportamento do
+modelo do próprio artigo, não do nosso conversor).
+
+**(b) Atraso de ignição CFD vs 0-D.** Mesmas condições iniciais:
+**τ_CFD = 100,6 µs** (dT̄/dt máx = 3,62e8 K/s; pico de ∫Q̇dV em
+103,1 µs) vs **τ_0D = 101,5 µs** (dT/dt; 100,5 µs por d[OH]/dt) —
+**razão 0,991 (~1 %)**, dentro da tolerância declarada (20 %).
+
+**(c) Fechamento de energia** (volume fixo, adiabático —
+`cfd.walls.model=adiabatic` obrigatório no modo reativo): com h do
+Cantera INCLUINDO a entalpia de formação,
+
+- ∫∫Q̇ dV dt (série `QdotIntegral`) = **31,141 J**
+- −ΔH_química = −Δ(Σᵢ mᵢ·h_i°(298,15)) das MASSAS medidas
+  (`specieMass`, 13 espécies) = **31,088 J**
+- **Q̇/(−ΔH_quím) = 1,0017 (DENTRO da tolerância ±2 %)** — o Q̇ do
+  OF13 é consistente com a variação real de composição;
+- diagnóstico adiabático: ΔE_tot = +0,15 J em base |E_tot| = 8,59 J
+  (E_tot = Σᵢ mᵢhᵢ(T̄) − p̄V; com volume fixo e paredes adiabáticas
+  dE_tot/dt = 0 — T̄ final 2982,7 K é a temperatura adiabática de
+  chama a volume constante; Δp̄·V = +7,87 J vai para ΔH_total).
+
+Nota honesta: a energia total do combustível (m_H2 = 3,516e-7 kg ×
+LHV ≈ 42 J) NÃO é toda liberada — a composição final em 2983 K fica em
+equilíbrio com H₂ residual (4,5e-8 kg), OH (2,8e-7 kg) e O₂ residual;
+o −ΔH_quím medido (31,1 J) é a energia realmente convertida, e é com
+ela que o fechamento é avaliado.
+
+**(d) Estabilidade do passo químico.** Máximo reverso de p̄(t) fora da
+janela de ignição: **3,12 Pa = 1,0e-5 da variação total** (309 kPa) —
+sem oscilação não física. Homogeneidade final (uniformidade da câmara,
+pré-requisito do fechamento): T ∈ [2969,0; 2982,7] K (dispersão 0,46 %),
+p ∈ [510697; 512802] Pa (0,41 %).
+
+### Custo e limitações registradas
+
+- **Colapso do passo pós-ignição**: `adjustTimeStepToChemistry` segue
+  as escalas químicas do gás queimado — dt colapsou de ~2 µs (pré-
+  ignição) para ~2 ns logo após o pico (t ≈ 102 µs), recuperando
+  gradualmente até ~7 µs e completando os 3 ms (t ~ 200 µs → 3 ms em
+  ritmo acelerado). Custo total: ~2 h de clock (1 worker). Para janelas
+  de motor (graus CA), o pós-queima em T alta dominará o custo —
+  reescopo do endTime por caso, nunca endereço automático de 3 ms.
+- **Série FO**: 2554 amostras (uma por passo; `volFieldValue` escreve
+  a série .dat a cada passo — desejado para resolução de dT̄/dt; os
+  CAMPOS só em writeTime, ver seção 5b).
+- Sem malha móvel, sem geometria de motor, sem comparação com ensaio
+  (DIAGNÓSTICO). O degrau R2 não valida o mecanismo Burke 2012 —
+  verifica que o caminho CFD reproduz o mesmo 0-D e fecha energia.
+
+**Veredito**: R2 cumprido — os 4 portões confrontados com números
+(a: razões 0,38–5,98 com assinatura documentada no próprio artigo;
+b: 100,6 vs 101,5 µs, 1 %; c: 1,0017 vs 1,000 ± 0,02; d: 1,0e-5 de
+reversos). Próximo degrau (R3, malha móvel + reação) destravado
+**após a verificação de compatibilidade exigida** (§ R3 — não
+afirmada: reativo + `dynamicMeshDict` no OF13 é pendência registrada).
+
 ## 5b. Impedimentos registrados (nenhum resultado estimado como simulado)
 
 * **PRÉ-EXISTENTE (fora do escopo R1, verificado por stash)** —
@@ -667,6 +773,25 @@ energia fechados. Próximo degrau (R2, H₂ autoignição) destravado.
   0,25: **completou** (614,6 s) — resultado na seção 3c item 11.
   Reforça que 0,5 é marginal neste motor em qualquer malha, não apenas
   nos casos motorados.
+
+* **RESOLVIDO — FO `Qdot` congelava o campo entre writeTimes (R2,
+  2026-09-24)**: no OF13 o functionObject do tipo `Qdot` é quem
+  RECALCULA o campo `Qdot`; com `executeControl writeTime` no
+  controlDict o campo só era atualizado nos writeTimes (1e-4 s, 2e-4 s,
+  ...) e o FO `QdotIntegral` integrava valor BIT-A-BIT constante
+  (2,65274987e+06 W ao longo de ~2000 passos) — a 1ª execução do caso
+  R2 somou 256 J "liberados" com 42 J de combustível disponível.
+  Detectado pelo portão R2c (∫∫Q̇dVdt vs −ΔH_química = 1707 — FORA);
+  as MASSAS medidas provavam que o combustível real queimado era
+  ~3,07e-7 kg (~37 J LHV). Correção no builder:
+  `executeControl timeStep;` (campo vivo a cada passo) +
+  `writeControl writeTime;` (sem dump do campo a cada passo); caso
+  regenerado e reexecutado — fechamento 1,0017 (seção 3g). Registrado
+  como impedimento 9 no roadmap reativo. Todos os números do portão
+  citados vêm da REEXECUÇÃO; a dinâmica de ignição reproduziu-se
+  identicamente entre as duas execuções (τ_CFD 100,6 µs e reversos de
+  p̄ 3,12 Pa nos dois casos — mesma malha, mesmas condições, mesmo
+  mecanismo).
 
 ## 4. Bug descoberto e corrigido (fonte de calor do OF13)
 

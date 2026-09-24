@@ -429,6 +429,13 @@ class CfdConfig:
                          "roadmap) exige cfd.geometry.moving_piston=false; "
                          "malha móvel com reação é o degrau R3 (verificação "
                          "de compatibilidade pendente).")
+            # portão R2c (∫Q̇dVdt = ΔU) só fecha com paredes adiabáticas —
+            # com parede a T fixa há troca com a parede e o fechamento muda
+            if self.wall_model != "adiabatic":
+                e.append("cfd.mode=reactive (degrau R2) exige "
+                         "cfd.walls.model=adiabatic: o portão de fechamento "
+                         "de energia ∫Q̇dVdt = ΔU só vale sem troca de calor "
+                         "com as paredes.")
             if self.reaction_combustion_model not in ("laminar",):
                 e.append("cfd.reaction.combustion_model: apenas 'laminar' "
                          "no degrau R2 (PaSR/EDC são degraus futuros).")

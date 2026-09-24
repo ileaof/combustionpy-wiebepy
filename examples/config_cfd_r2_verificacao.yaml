@@ -1,0 +1,69 @@
+# =====================================================================
+# Caso de VERIFICAÇÃO R2 — portões (b), (c), (d) do roadmap reativo.
+#
+# Condição: 1050 K / 2 atm / φ=1, banho N2 (mistura Slack 1977:
+# H2 29,6 % / O2 14,8 % / N2 55,6 % — a mistura ar estequiométrico do
+# builder reproduz exatamente X = (0,296; 0,148; 0,556)).
+# Referência 0-D (Cantera, Burke2012.yaml, mesmo mecanismo): atraso de
+# ignição τ = 101,5 µs (dT/dt máx; 101,0 µs por [OH]) —
+# examples/cfd/mechanisms/burke2012/pipeline/verificar_0d_ignicao.py.
+#
+# Portões (docs/cfd/reactive_roadmap.md, R2):
+#   (b) τ_CFD consistente com τ_0-D;
+#   (c) ∫∫Q̇ dV dt = ΔU (paredes ADIABÁTICAS — obrigatório aqui);
+#   (d) p̄(t) sem oscilação não física.
+# Volume FIXO (pistão fixo); tempo em SEGUNDOS físicos.
+# =====================================================================
+
+engine:
+  bore_mm: 86.0
+  stroke_mm: 70.0
+  rod_length_mm: 117.5
+  Rc: 17.0
+  rpm: 3396.20
+  m_fuel_kg_per_cycle: 9.42754647351e-6
+  LHV_kJ_per_kg: 39191.3
+  T1_K: 308.15
+  Tw_K: 440.0
+
+cfd:
+  enabled: true
+  adapter: openfoam
+  mode: reactive                # R2: a QUÍMICA fornece o calor (sem Wiebe)
+  case_directory: results/cfd/r2_verificacao
+  workers: 1
+  wsl_distro: Ubuntu-22.04
+
+  geometry:
+    type: simplified_cylinder
+    moving_piston: false        # volume fixo — malha móvel é o degrau R3
+    n_radial: 24
+    n_axial: 36
+
+  interval:                     # tempo FÍSICO [s] no modo reativo
+    start: 0.0
+    end: 0.003
+
+  initial:                      # estado (T5, P5) da condição de referência
+    P_kPa: 202.65               # 2 atm
+    T_K: 1050.0
+
+  walls:
+    model: adiabatic            # portão (c): sem troca de calor com paredes
+
+  turbulence:
+    model: laminar              # câmara homogênea em repouso
+
+  numerics:
+    write_interval_deg: 1.0e-4  # [s] no modo reativo (30 escritas)
+
+  reaction:
+    mechanism: examples/cfd/mechanisms/burke2012   # Burke et al. 2012
+    equivalence_ratio: 1.0      # banho N2/O2 = 3,757 ≈ ar ⇒ X = Slack
+    chemistry:
+      solver: ode
+      method: seulex            # único ODESolver testado no OF13 (R2)
+      initial_chemical_time_step: 1.0e-6   # τ ≈ 100 µs — resolver a indução
+      max_chemical_time_step: 1.0e-4
+      absolute_tolerance: 1.0e-12
+      relative_tolerance: 1.0e-4

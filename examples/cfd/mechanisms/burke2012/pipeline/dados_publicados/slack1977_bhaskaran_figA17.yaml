@@ -1,0 +1,42 @@
+# Portão R2(a) — dataset Fig. A-17 do preprint de Burke et al. 2012.
+#
+# Mistura: H2 29,6 % / O2 14,8 % / N2 bal. (φ = 1, banho N2 — o MESMO
+# banho do bloco de reações convertido pelo chemkinToFoam; a variante AR
+# do mecanismo NÃO está ativa no caso OF13, portanto datasets em Ar
+# (Pang 2009, fig. A-16) ficam FORA do confronto do R2a).
+# Pressão: 2,0 atm (círculos, Slack 1977) e 2,5 atm (losangos,
+# Bhaskaran et al. 1973) — onde os símbolos se sobrepõem a atribuição de
+# pressão é incerta e registrada como 2,0–2,5.
+# Critério experimental: aumento rápido da pressão (caption fig. 17/A-17).
+#
+# PROVENIÊNCIA: pontos digitados visualmente da Fig. A-17 do preprint do
+# laboratório Burke (página 116 do PDF; render local figs/page116.png,
+# grade z_A17_full.png). INCERTEZA DE LEITURA declarada: ±0,005 em
+# 1000/T (≈±15 K) e ±0,15–0,2 década em τ. NÃO são os valores tabulados
+# dos papers originais (pagos); usar para VERIFICAÇÃO do código com
+# tolerância fator 2, nunca como validação do mecanismo (o próprio
+# Burke et al. 2012, seção 8, adverte sobre sensibilidade a impurezas).
+dataset: slack1977_bhaskaran1973_figA17
+fonte: >
+  Slack, M. W. Combust. Flame 28 (1977) 241 (2 atm); Bhaskaran, K. A.;
+  Gupta, M. C.; Just, Th. Combust. Flame 21 (1973) 45 (2,5 atm).
+  Pontos digitados da Fig. A-17 (p. 116) do preprint Burke et al. 2012
+  ("Comprehensive H2/O2 kinetic model for high-pressure combustion",
+  Int. J. Chem. Kinet. 44 (2012) 444–474, DOI 10.1002/kin.20630).
+condicoes:
+  mistura: "H2 29,6 % / O2 14,8 % / N2 balance"
+  phi: 1.0
+  criterio: "aumento rápido da pressão"
+  unidade_tau: us
+pontos:
+  - {T_K:  990, P_atm: 2.0, phi: 1.0, tau_us:  424.0}   # círculo borda direita
+  - {T_K: 1037, P_atm: 2.0, phi: 1.0, tau_us:   67.0}
+  - {T_K: 1099, P_atm: 2.0, phi: 1.0, tau_us:   54.0}
+  - {T_K: 1120, P_atm: 2.0, phi: 1.0, tau_us:   44.0}
+  - {T_K: 1164, P_atm: 2.0, phi: 1.0, tau_us:   27.0}
+  - {T_K: 1182, P_atm: 2.0, phi: 1.0, tau_us:   22.0}
+  - {T_K: 1203, P_atm: 2.0, phi: 1.0, tau_us:   17.0}   # sobreposição 2,0/2,5
+  - {T_K: 1244, P_atm: 2.0, phi: 1.0, tau_us:   12.2}
+  - {T_K: 1323, P_atm: 2.5, phi: 1.0, tau_us:   11.7}   # losango Bhaskaran
+diluente:
+  N2: 3.7568   # N2/O2 = 55,6/14,8 (banho N2; o 0-D monta X a partir de φ)

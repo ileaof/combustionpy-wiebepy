@@ -866,6 +866,7 @@ odeCoeffs
         libs            ("libfieldFunctionObjects.so");
         fields          (rho N2);
         result          rhoN2;
+        writeControl    writeTime;
     }
     massO2
     {
@@ -873,6 +874,7 @@ odeCoeffs
         libs            ("libfieldFunctionObjects.so");
         fields          (rho O2);
         result          rhoO2;
+        writeControl    writeTime;
     }
     specieMass
     {
@@ -884,12 +886,16 @@ odeCoeffs
         fields          (rhoN2 rhoO2);
     }"""
         elif self.reactive:
-            # R2: massas das espécies-chave da verificação (consumo de
-            # H2/O2, formação de H2O; N2 inerte como sanity check) —
-            # mesmos functionObjects `multiply` + volIntegrate do R1.
+            # R2: massas de TODAS as espécies do mecanismo (o fechamento de
+            # energia ∫Q̇dVdt = ΔU exige Σ_i m_i h_i com a composição
+            # COMPLETA — intermediários OH/HO2/H2O2 têm massa no pico de
+            # ignição; H2/O2/N2/H2O sozinhos seriam insuficientes) —
+            # mesmos functionObjects `multiply` + volIntegrate do R1;
+            # writeControl writeTime (sem ele o OF13 grava ρ·Yi TODO passo:
+            # um diretório de tempo por passo — registrado no caso R2).
             massa = ""
             campos = []
-            for sp in ("H2", "O2", "N2", "H2O"):
+            for sp in self._mech["species"]:
                 massa += f"""
     mass{sp}
     {{
@@ -897,6 +903,7 @@ odeCoeffs
         libs            ("libfieldFunctionObjects.so");
         fields          (rho {sp});
         result          rho{sp};
+        writeControl    writeTime;
     }}"""
                 campos.append(f"rho{sp}")
             species_fos = massa + """
@@ -939,7 +946,14 @@ odeCoeffs
         # R2: ajuste do passo às escalas de tempo QUÍMICAS (OF13:
         # etc/caseDicts/functions/control/adjustTimeStepToChemistry) e
         # Q̇ — campo (Qdot) e integral volumétrica ∫Q̇ dV [W] para o
-        # fechamento de energia ∫Q̇ dV dt = ΔU (portão R2c).
+        # fechamento de energia (portão R2c).
+        #
+        # CUIDADO (caso R2, 2026-09-24): o FO tipo Qdot é quem RECALCULA o
+        # campo Qdot — com executeControl writeTime o campo ficava CONGELADO
+        # entre writeTimes e o QdotIntegral integrava valor parado (256 J
+        # "liberados" com 42 J de combustível no caso). executeControl
+        # timeStep mantém o campo vivo; writeControl writeTime evita gravar
+        # o campo TODO passo.
         reativos_fos = ""
         if self.reactive:
             reativos_fos = """
@@ -949,7 +963,7 @@ odeCoeffs
     {
         type            Qdot;
         libs            ("libcombustionModels.so");
-        executeControl  writeTime;
+        executeControl  timeStep;
         writeControl    writeTime;
     }
     QdotIntegral
@@ -1045,6 +1059,7 @@ functions
         type            wallHeatFlux;
         libs            ("libfieldFunctionObjects.so");
         patches         (piston liner head);
+        writeControl    writeTime;    // sem isso grava o campo TODO passo
     }}
 }}"""), encoding="utf-8")
 

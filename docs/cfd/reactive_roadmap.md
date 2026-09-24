@@ -73,7 +73,7 @@ entrega não é prometido.
     +1,1 J = 8,1 % da maior parcela; U via NASA — método registrado).
 - **Fora de escopo**: qualquer espécie combustível, reação, ignição.
 
-### R2 — H₂ autoignição, câmara fechada homogênea
+### R2 — H₂ autoignição, câmara fechada homogênea — **IMPLEMENTADO, portões CONFRONTADOS (2026-09-24)**
 
 - **O que adiciona**: primeira reação — mistura H₂/ar definida
   homogênea, câmara de volume FIXO (malha fixa), ignição espontânea
@@ -85,16 +85,71 @@ entrega não é prometido.
   Candidato alternativo: Ó Conaire et al. 2004 (Combustion and Flame),
   mecanismo H₂/O₂ amplamente usado em motores — citado como candidato,
   sem números não confirmados.
-- **Gate antes de subir para R3**:
-  - atraso de ignição (0-D, integrador homogêneo) reproduz dados
-    publicados de shock tube citados na referência do mecanismo —
-    comparação com dados PUBLICADOS (verificação, seção 5);
-  - o mesmo atraso no CFD (malha fixa, homogênea) é consistente com o
-    0-D dentro de tolerância declarada;
-  - fechamento de energia: energia liberada pela química = ΔU
-    (volume fixo) dentro de tolerância registrada;
-  - passo de integração química estabilizado (sem oscilação não
-    física em p̄(t)).
+- **Estado (2026-09-24)**: modo `reactive` implementado no case_builder/
+  config (câmara fixa em Vc, sem fvModels, sem dynamicMeshDict,
+  `reactions`/`speciesThermo` copiados byte a byte do mecanismo
+  convertido — ver `examples/cfd/mechanisms/burke2012/README.md`).
+  Caso gerado e executado no OF13/WSL2 (`foamRun -solver
+  multicomponentFluid`, "End" limpo, `adjustTimeStepToChemistry`
+  ativo). **Portões R2a/R2b/R2c/R2d CONFRONTADOS (2026-09-24, ver
+  lista abaixo e `docs/cfd/verification.md` §3g).** Dois bugs de
+  infraestrutura de FO corrigidos durante a verificação (impedimentos
+  8 e 9 — gravação do campo a cada passo; campo Qdot congelado).
+  - **R2a (0-D vs dados publicados)**: reator Cantera 0-D (volume
+    constante, critério dT/dt máx) contra 9 pontos digitalizados da
+    Fig. A-17 do preprint de Burke et al. 2012 (Slack 1977, 2 atm +
+    Bhaskaran 1973, 2,5 atm; banho N₂, φ=1 — razões τ_0D/τ_medido:
+    5,98 @990 K, 1,29 @1037 K, 0,49–0,70 @1099–1244 K, 0,38 @1323 K).
+    Os desvios coincidem com os DOCUMENTADOS no próprio artigo
+    (impurezas ~1 ppb / efeitos de facilidade em baixa T: "experimental
+    ignition delay times are several times smaller than predictions" —
+    §8 p. 38). Proveniência em
+    `pipeline/dados_publicados/slack1977_bhaskaran_figA17.yaml`;
+    comparação é verificação do CÓDIGO (tolerância fator ~2), nunca
+    validação do mecanismo.
+  - **R2b (0-D vs CFD, 1ª execução)**: τ_CFD = 100,6 µs (dT̄/dt máx) e
+    100,0 µs (pico de ∫Q̇dV) vs τ_0D = 101,5 µs (dT/dt máx; 101,0 µs
+    por d[OH]/dt) em T₀=1050 K, p₀=202,65 kPa, φ=1 — coerência de ~1 %.
+    Confirmado na reexecução com o FO Qdot corrigido (impedimento 9).
+  Reforços da fase de verificação (mesma data):
+  - paredes **adiabáticas obrigatórias** no modo reativo
+    (`cfd.walls.model=adiabatic` bloqueante em config.validate) — o
+    portão R2c só fecha sem troca de calor com as paredes;
+  - `specieMass` agora rastreia **todas as espécies do mecanismo** (o
+    ΔU precisa da composição completa; intermediários têm massa no pico
+    de ignição);
+  - scripts de verificação em
+    `examples/cfd/mechanisms/burke2012/pipeline/`:
+    `verificar_0d_ignicao.py` (portão R2a — reator 0-D Cantera, volume
+    constante, lê a conversão ck2yaml `Burke2012.yaml` dos MESMOS arquivos
+    Chemkin do suplemento; os pontos experimentais entram SOMENTE de
+    `dados_publicados/*.yaml` citados — nenhum dado é inventado) e
+    `verificar_cfd_r2.py` (portões R2b/R2c/R2d — lê as séries de
+    postProcessing do caso, ΔU via entalpias Cantera e massa medida
+    `gasIntegral`, `U = Σᵢ mᵢhᵢ(T̄) − p̄V`).
+- **Gate antes de subir para R3** (CONFRONTADOS 2026-09-24 —
+  `docs/cfd/verification.md` §3g):
+  - ~~atraso de ignição (0-D, integrador homogêneo) reproduz dados~~
+    **CUMPRIDO**: 9 pontos da Fig. A-17 (Slack 1977 2 atm +
+    Bhaskaran 1973 2,5 atm, banho N₂, φ=1) digitalizados com
+    incertezas declaradas; razões τ_0D/τ_medido 0,38–5,98, com os
+    desvios coincidindo com os documentados no próprio artigo Burke
+    (impurezas ~1 ppb; baixa T: dados de facilidade MENORES que a
+    predição — 5,98× @990 K). Verificação do CÓDIGO (fator ~2), não
+    validação do mecanismo;
+  - ~~o mesmo atraso no CFD (malha fixa, homogênea) é consistente com o
+    0-D~~ **CUMPRIDO**: τ_CFD = 100,6 µs (dT̄/dt máx) / 103,1 µs (pico
+    ∫Q̇dV) vs τ_0D = 101,5 µs — razão 0,991 (tolerância declarada 20 %);
+  - ~~fechamento de energia: energia liberada pela química = ΔU~~
+    **CUMPRIDO (reformulado honestamente)**: com câmara adiabática
+    fechada e rígida, ΔE_tot = 0 por construção física — o confronto
+    correto é ∫∫Q̇dVdt vs −ΔH_química (entalpia de formação consumida,
+    das massas medidas de TODAS as 13 espécies): **1,0017 vs 1,000
+    (tolerância ±2 %)**; ΔE_tot = +0,15 J em base 8,59 J (diagnóstico
+    adiabático);
+  - ~~passo de integração química estabilizado (sem oscilação não
+    física em p̄(t))~~ **CUMPRIDO**: reversos máximos de p̄ = 3,12 Pa =
+    1,0e-5 da variação total; homogeneidade final T 0,46 % / p 0,41 %.
 - **Fora de escopo**: malha móvel, geometria de motor, CH₄/etanol/
   diesel, emissões.
 
@@ -232,11 +287,15 @@ instalado (`/opt/openfoam13/`, Ubuntu-22.04 WSL2) e dos tutoriais:
   `noCombustion` (transporte de espécies SEM reação — caminho do R1),
   `infinitelyFastChemistry`, `singleStepCombustion`, entre outros.
 - **(c) Química — CONFIRMADO**: `src/thermophysicalModels/chemistryModel/`
-  com `odeChemistryModel`, solvers `ode` (Rosenbrock43 etc.),
-  `EulerImplicit` e `noChemistrySolver`, tabulação ISAT e redução
-  (DRGEP/DRG); functionObject `adjustTimeStepToChemistry` para passo
-  controlado pela química (seção 4c antiga — controles existem; custo
-  continua a medir, seção 6).
+  com `odeChemistryModel`, solvers `ode`, `EulerImplicit` e
+  `noChemistrySolver`, tabulação ISAT e redução (DRGEP/DRG); métodos do
+  `odeSolver` do OF13: Euler, EulerSI, RKCK45, RKDP45, RKF45,
+  Rosenbrock12/23/34, SIBS, Trapezoid, rodas23, rodas34, seulex
+  (`ODESolverNew.C`) — o padrão do wiebepy é `seulex` (o OF13 NÃO tem
+  Rosenbrock43; correção registrada ao executar o caso R2);
+  functionObject `adjustTimeStepToChemistry` para passo controlado pela
+  química (seção 4c antiga — controles existem; custo continua a medir,
+  seção 6).
 - **(d) Formato de mecanismo — CONFIRMADO, com ressalva**: o leitor do
   OF13 NÃO lê CHEMKIN; os mecanismos entram em dicionário OpenFOAM
   (reactions `reversibleArrhenius`/`irreversibleArrhenius` + thermo por
@@ -345,10 +404,10 @@ depende dele:
    `chemkinToFoam`. A verificação numérica (fechamento com NASA vs Cp
    constante) permanece gate do R1.
 3. **~~Integração química e passo~~ — CONTROLES CONFIRMADOS
-   (seção 4c)**: solvers `ode` (Rosenbrock43 etc.), `EulerImplicit`,
-   `initialChemicalTimeStep` e functionObject
-   `adjustTimeStepToChemistry` existem no OF13; o CUSTO multiplicado
-   continua a medir (item 7).
+   (seção 4c)**: solvers `ode` (métodos do `ODESolverNew.C` — padrão
+   do wiebepy: `seulex`), `EulerImplicit`, `initialChemicalTimeStep` e
+   functionObject `adjustTimeStepToChemistry` existem no OF13; o CUSTO
+   multiplicado continua a medir (item 7).
 4. **Mecanismo de etanol a escolher** (R5): Marinov 1999 vs AramcoMech
    — critério de escolha documentado (faixa de validade vs condições
    do motor, disponibilidade do arquivo, licença) é prerequisito;
@@ -363,3 +422,21 @@ depende dele:
 7. **Custo computacional não medido**: todos os números de custo do
    modo reativo estão "a medir" até o protocolo da seção 6 ser
    executado.
+8. **~~functionObjects gravam campo TODO passo~~ — RESOLVIDO
+   (2026-09-24)**: no OF13 os FOs `multiply` (ρ·Yᵢ, R1/R2) e
+   `wallHeatFlux` usam `writeControl timeStep` por padrão e gravam o
+   campo resultante a CADA passo (um diretório de tempo por passo —
+   milhares de diretórios até o fim da janela; registrado no primeiro
+   caso de verificação R2). Correção: `writeControl writeTime;`
+   explícito nesses FOs no case_builder (testes de regressão em
+   tests/test_cfd.py).
+9. **~~FO `Qdot` com `executeControl writeTime` congela o campo~~ —
+   RESOLVIDO (2026-09-24)**: no OF13 o FO do tipo `Qdot` é quem
+   RECALCULA o campo `Qdot` — com `executeControl writeTime` o campo só
+   era atualizado nos writeTimes e o `QdotIntegral` integrava valor
+   parado entre eles (segundo caso R2: 256 J "liberados" com 42 J de
+   combustível — série bit-a-bit constante, 2,65274987e+06 W, ao longo
+   de ~2000 passos). Correção: `executeControl timeStep;` (campo vivo)
+   + `writeControl writeTime;` (sem dump do campo a cada passo) no
+   case_builder. Verificação numérica do fechamento reexecutada no caso
+   regenerado.

@@ -97,8 +97,15 @@ def test_config_reactive_validacao():
                     / "examples" / "cfd" / "mechanisms" / "burke2012")
     ok = CfdConfig.from_dict({"mode": "reactive",
                               "geometry": {"moving_piston": False},
+                              "walls": {"model": "adiabatic"},
                               "reaction": {"mechanism": mecanismo}})
     assert ok.validate() == []
+    # parede a T fixa no modo reativo é bloqueante (portão R2c: ∫Q̇dVdt = ΔU
+    # só fecha sem troca de calor com as paredes)
+    ruim = CfdConfig.from_dict({"mode": "reactive",
+                                "geometry": {"moving_piston": False},
+                                "reaction": {"mechanism": mecanismo}})
+    assert cfg_has_error(ruim, "walls.model=adiabatic")
     # pistão móvel com reação é bloqueante (R3 — verificação pendente)
     ruim = CfdConfig.from_dict({"mode": "reactive",
                                 "geometry": {"moving_piston": True},
@@ -625,6 +632,7 @@ def test_case_builder_reactive_r2(tmp_path):
         "initial": {"P_kPa": 250, "T_K": 800},
         "interval": {"start": 0.0, "end": 2.0e-3},
         "numerics": {"write_interval_deg": 1.0e-4},
+        "walls": {"model": "adiabatic"},
         "turbulence": {"model": "laminar"},
         "reaction": {"mechanism": str(mecanismo),
                      "equivalence_ratio": 1.0},
@@ -678,6 +686,8 @@ def test_case_builder_reactive_r2(tmp_path):
     assert "maxDeltaT       0.001;" in cd
     assert "#includeFunc adjustTimeStepToChemistry" in cd
     assert "QdotIntegral" in cd and "volIntegrate" in cd
+    # campos auxiliares multiply NÃO gravam por passo (writeTime)
+    assert cd.count("writeControl    writeTime;") >= 13
     # documentação do caso
     info = yaml.safe_load((caso / "case_config.yaml").read_text("utf-8"))
     assert info["mode"] == "reactive"
@@ -705,6 +715,7 @@ def test_case_builder_reactive_composicao_explicita(tmp_path):
         / "mechanisms" / "burke2012"
     cfg = CfdConfig.from_dict({
         "mode": "reactive", "geometry": {"moving_piston": False},
+        "walls": {"model": "adiabatic"},
         "reaction": {"mechanism": str(mecanismo),
                      "composition": {"H2": 0.0285, "O2": 0.2262,
                                      "N2": 0.7453}}})
@@ -951,8 +962,12 @@ def test_case_builder_multicomponente_solver_e_campos(tmp_path):
     d = b.build(tmp_path / "r1")
     cd = (d / "system/controlDict").read_text(encoding="utf-8")
     assert "solver          multicomponentFluid;" in cd
-    # conservação de massa por espécie: multiply (rho·Yi) + volIntegrate
+    # conservação de massa por espécie: multiply (rho·Yi) + volIntegrate;
+    # campos auxiliares multiply com writeControl writeTime — sem isso o
+    # OF13 grava ρ·Yi TODO passo (um diretório de tempo por passo, bug
+    # registrado no caso R2 de verificação)
     assert "massN2" in cd and "massO2" in cd and "specieMass" in cd
+    assert cd.count("writeControl    writeTime;") >= 2
     # frações mássicas: N2 = 3,76·M_N2/(3,76·M_N2 + M_O2) = 0,76695…
     # (campos ficam no diretório do tempo inicial, ex. -120/)
     t0 = d / "-120"
