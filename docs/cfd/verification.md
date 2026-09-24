@@ -332,6 +332,20 @@ temporal nesta faixa, e a queda de max_Co de 0,5 para 0,25 não altera
 as conclusões. (Os casos 001–006 rodaram a 0,5; 007/008/011/012 a 0,25;
 o padrão do construtor passou a ser 0,25.)
 
+**Restauração do case_006 (2026-09-23).** O diretório arquivado
+`results/cfd/case_006/` foi acidentalmente regenerado durante um teste
+E2E da GUI (clique em Preparar caso com o padrão do formulário). O caso
+foi re-executado de ponta a ponta pela receita documentada
+(`config_cfd_equivalencia.yaml`), com max_Co 0,25 (o padrão atual do
+construtor — ver item 9): p_max 5487,6 kPa @ 12,08°, T̄ máx 1305,2 K,
+trabalho indicado 193,6 J, ∫Q prescrito 369,4 J (erro 1,0e-4),
+perda às paredes 34,8 J. Os
+números coincidem com o case_011 (rms documentado 3,6 kPa entre as
+duas soluções; 0,04 % no p_max vs o 006 original a 0,5). O report.html
+foi regenerado. As MÉTRICAS citadas nos itens anteriores permanecem as
+da corrida original; a corrida restaurada confirma-as dentro da banda
+de insensibilidade numérica documentada.
+
 ## 3d. Rastreabilidade do case_012 (caso diagnóstico)
 
 **O que mudou do case_006 para o case_012** (única origem:
