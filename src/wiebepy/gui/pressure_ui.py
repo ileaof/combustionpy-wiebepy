@@ -178,12 +178,14 @@ def dados() -> None:
     elif d.P[0] > 20000.0:
         st.warning(f"P no IVC = {d.P[0]:.3g} kPa — muito alta. Confira a "
                    "**Unidade da pressão**.")
-    df = pd.DataFrame({"θ [rad]": d.theta, "P [kPa]": d.P})
+    # campos SEM colchete: o parser de campos do Vega trata "[...]" como
+    # acesso aninhado e o gráfico sai em branco (NaN); unidades vão no title
+    df = pd.DataFrame({"θ": d.theta, "P": d.P})
     st.altair_chart(alt.Chart(df).mark_line(
         point=alt.OverlayMarkDef(size=12)).encode(
-        x=alt.X("θ [rad]:Q"), y=alt.Y("P [kPa]:Q"),
-        tooltip=[alt.Tooltip("θ [rad]:Q", format=".4f"),
-                 alt.Tooltip("P [kPa]:Q", format=".1f")]
+        x=alt.X("θ:Q", title="θ [rad]"), y=alt.Y("P:Q", title="P [kPa]"),
+        tooltip=[alt.Tooltip("θ:Q", format=".4f", title="θ [rad]"),
+                 alt.Tooltip("P:Q", format=".1f", title="P [kPa]")]
     ).properties(title="Prévia: pressão × ângulo (após conversão e filtro)",
                  height=360).interactive())
     if res.get("preview") is not None:

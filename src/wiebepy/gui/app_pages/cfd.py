@@ -601,11 +601,13 @@ if res_prontos or state in (CaseState.CANCELED, CaseState.FAILED):
                    f"(erro {hs.get('rel_error', float('nan')):.1e}). "
                    "Média de volume do solver (não confundir com sonda "
                    "nem com pressão medida).")
-        df = pd.DataFrame({"θ [°CA]": r["ca_deg"],
+        # campo SEM colchete: "[...]" no nome do campo é interpretado pelo
+        # Vega como acesso aninhado (gráfico em branco); unidades no title
+        df = pd.DataFrame({"θ": r["ca_deg"],
                            "p̄ [MPa]": r["p_mean"] / 1e6,
                            "T̄ [K]": r["T_mean"]})
-        st.altair_chart(alt.Chart(df.melt("θ [°CA]")).mark_line().encode(
-            x=alt.X("θ [°CA]:Q"), y=alt.Y("value:Q", title=None),
+        st.altair_chart(alt.Chart(df.melt("θ")).mark_line().encode(
+            x=alt.X("θ:Q", title="θ [°CA]"), y=alt.Y("value:Q", title=None),
             color="variable:N").properties(height=300), use_container_width=True)
         st.markdown("Relatório completo (proveniência, balanços, limites): "
                     f"`{case_dir / 'report.html'}` — gere/atualize com o "
