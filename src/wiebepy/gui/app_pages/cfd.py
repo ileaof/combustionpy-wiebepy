@@ -87,6 +87,15 @@ def _form() -> dict:
             "exp_angle_unit": "rad", "exp_pressure_unit": "bar",
             "exp_offset_deg": 0.0,
         }
+        # conexão gravada pelo doctor (GUI "Conectar OpenFOAM ao código"
+        # ou CLI "wiebepy cfd doctor --connect") define a distro padrão
+        try:
+            from wiebepy.cfd.capabilities import load_connection
+            _conn = load_connection()
+            if _conn and _conn.get("distro"):
+                st.session_state.cfd_form["wsl_distro"] = _conn["distro"]
+        except Exception:                            # noqa: BLE001
+            pass  # sem conexão: mantém o padrão literal
     return st.session_state.cfd_form
 
 
@@ -577,9 +586,45 @@ _painel_job()
 
 # ============================================ diagnóstico e resultados
 with st.expander("Diagnóstico do ambiente (doctor)"):
-    if st.button("Executar diagnóstico", icon=":material/stethoscope:"):
-        from wiebepy.cfd.capabilities import doctor
-        st.code(doctor().format(), language=None)
+    from wiebepy.cfd.capabilities import (connect_openfoam, doctor,
+                                          load_connection)
+
+    conn = load_connection()
+    if conn:
+        st.success(f"Conectado: OpenFOAM {conn.get('version') or '?'} na "
+                   f"distro '{conn.get('distro')}' ({conn.get('root')})")
+    else:
+        st.info("Nenhuma conexão gravada — detectar e conectar preenche a "
+                "distro usada pelos casos.")
+
+    b1, b2 = st.columns(2)
+    if b1.button("Executar diagnóstico", icon=":material/stethoscope:",
+                 use_container_width=True):
+        st.session_state["cfd_doctor"] = doctor().format()
+    if b2.button("Conectar OpenFOAM ao código", icon=":material/cable:",
+                 use_container_width=True,
+                 help="Detecta a instalação, VERIFICA que o foamRun "
+                      "executa (probe -help), grava a conexão e ajusta a "
+                      "distro do formulário. Procura primeiro na distro "
+                      "configurada; sem instalação lá, usa a melhor de "
+                      "qualquer distro."):
+        f_doc = _form()
+        conn_nova, msgs = connect_openfoam(
+            distro=f_doc["wsl_distro"] or None)
+        if conn_nova is None:
+            st.error("Não foi possível conectar:\n\n"
+                     + "\n".join(f"• {m}" for m in msgs)
+                     + "\n\nInstale o OpenFOAM no WSL2 seguindo "
+                       "docs/cfd/install.md e conecte novamente.")
+            st.session_state["cfd_doctor"] = doctor().format()
+        else:
+            # conectado: a sessão passa a usar a distro conectada
+            if conn_nova.get("distro"):
+                f_doc["wsl_distro"] = conn_nova["distro"]
+            st.session_state["cfd_doctor"] = (
+                "\n".join(msgs) + "\n\n" + doctor().format())
+    if st.session_state.get("cfd_doctor"):
+        st.code(st.session_state["cfd_doctor"], language=None)
 
 res_prontos = state == CaseState.COMPLETED
 if res_prontos or state in (CaseState.CANCELLED, CaseState.FAILED):

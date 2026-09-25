@@ -1004,3 +1004,129 @@ def test_cfd_config_gas_model_validacao():
     d["gas"] = {"model": "nao_existe"}
     c = CfdConfig.from_dict(d)
     assert any("gas.model" in e for e in c.validate())
+
+
+# ============================================================================
+# Doctor — diagnóstico E CONEXÃO do ambiente (GUI "Conectar OpenFOAM ao
+# código" / CLI "wiebepy cfd doctor --connect")
+# ============================================================================
+
+def _inst(distro="Ubuntu-22.04", root="/opt/openfoam13"):
+    return {"distro": distro, "root": root, "version": "13",
+            "foamRun": f"{root}/platforms/linux64GccDPInt32Opt/bin/foamRun",
+            "gcc": "/usr/bin/gcc", "mpirun": "/usr/bin/mpirun"}
+
+
+@pytest.fixture
+def ambiente_fake(monkeypatch):
+    """Ambiente WSL2 falso: 2 distros, OpenFOAM só na segunda."""
+    import wiebepy.cfd.capabilities as cap
+
+    def fake_doctor():
+        r = cap.EnvironmentReport(platform="fake", windows=True, wsl_ok=True)
+        r.distros = [{"name": "sem-of", "openfoam": []},
+                     {"name": "com-of", "openfoam": [_inst("com-of")]}]
+        return r
+
+    monkeypatch.setattr(cap, "doctor", fake_doctor)
+    probes = []
+    monkeypatch.setattr(cap, "verify_install",
+                        lambda inst, distro=None:
+                        probes.append(inst) or (True, "Usage: foamRun"))
+    return cap, probes
+
+
+def test_connect_localiza_e_grava_conexao(ambiente_fake, tmp_path):
+    cap, probes = ambiente_fake
+    arq = tmp_path / "cfd_env.json"
+    conn, msgs = cap.connect_openfoam(state_file=str(arq))
+    assert conn is not None
+    assert conn["distro"] == "com-of"
+    assert conn["root"] == "/opt/openfoam13"
+    assert "connected_at" in conn
+    assert probes and probes[0]["distro"] == "com-of"  # foamRun verificado
+    assert any("gravada" in m for m in msgs)
+    # a conexão persistida é relida (survive reinício de sessão da GUI)
+    de_novo = cap.load_connection(state_file=str(arq))
+    assert de_novo == conn
+
+
+def test_connect_sem_instalacao_nao_grava_nem_levanta(tmp_path, monkeypatch):
+    import wiebepy.cfd.capabilities as cap
+
+    def sem_nada():
+        r = cap.EnvironmentReport(platform="x", windows=True, wsl_ok=True)
+        r.distros = [{"name": "d", "openfoam": []}]
+        return r
+
+    monkeypatch.setattr(cap, "doctor", sem_nada)
+    arq = tmp_path / "cfd_env.json"
+    conn, msgs = cap.connect_openfoam(state_file=str(arq))
+    assert conn is None
+    assert any("nenhuma instalação" in m for m in msgs)
+    assert not arq.exists()          # nada gravado
+    assert cap.load_connection(state_file=str(arq)) is None
+
+
+def test_connect_foamrun_que_nao_executa_recusa(ambiente_fake, tmp_path,
+                                                monkeypatch):
+    import wiebepy.cfd.capabilities as cap
+    monkeypatch.setattr(cap, "verify_install",
+                        lambda inst, distro=None: (False, "rc=127"))
+    arq = tmp_path / "cfd_env.json"
+    conn, msgs = cap.connect_openfoam(state_file=str(arq))
+    assert conn is None
+    assert any("não executa" in m for m in msgs)
+    assert not arq.exists()
+
+
+def test_connect_prefere_a_distro_pedida(ambiente_fake, tmp_path,
+                                         monkeypatch):
+    import wiebepy.cfd.capabilities as cap
+    _, probes = ambiente_fake
+
+    def fake_doctor():
+        r = cap.EnvironmentReport(platform="x", windows=True, wsl_ok=True)
+        r.distros = [
+            {"name": "com-of", "openfoam": [_inst("com-of")]},
+            {"name": "outra", "openfoam": [_inst("outra", "/opt/of-outro")]},
+        ]
+        return r
+
+    monkeypatch.setattr(cap, "doctor", fake_doctor)
+    conn, _ = cap.connect_openfoam(distro="outra", state_file=str(tmp_path / "a.json"))
+    assert conn["distro"] == "outra"
+    assert conn["root"] == "/opt/of-outro"
+    assert probes[-1]["distro"] == "outra"   # verificação na distro certa
+
+
+def test_connect_distro_sem_of_cai_na_melhor_e_avisa(ambiente_fake, tmp_path):
+    import wiebepy.cfd.capabilities as cap
+    cap, _ = ambiente_fake
+    arq = tmp_path / "a.json"
+    conn, msgs = cap.connect_openfoam(distro="sem-of", state_file=str(arq))
+    assert conn is not None and conn["distro"] == "com-of"
+    assert any("melhor encontrada" in m for m in msgs)
+
+
+def test_load_connection_ignora_arquivo_corrompido(tmp_path):
+    import wiebepy.cfd.capabilities as cap
+    arq = tmp_path / "quebrado.json"
+    arq.write_text("{ nao sou json", encoding="utf-8")
+    assert cap.load_connection(state_file=str(arq)) is None
+    assert cap.load_connection(state_file=str(tmp_path)) is None  # dir sem arquivo
+
+
+def test_estado_path_env_override(monkeypatch, tmp_path):
+    import wiebepy.cfd.capabilities as cap
+    monkeypatch.setenv("WIEBEPY_CFD_ENV", str(tmp_path / "x.json"))
+    assert cap.estado_path() == tmp_path / "x.json"
+
+
+def test_verify_install_falha_sem_wsl(monkeypatch):
+    import wiebepy.cfd.capabilities as cap
+    from wiebepy.cfd.wsl import WslError
+    monkeypatch.setattr(cap, "run_wsl",
+                        lambda *a, **k: (_ for _ in ()).throw(WslError("sem wsl")))
+    ok, msg = cap.verify_install(_inst())
+    assert not ok and "sem wsl" in msg

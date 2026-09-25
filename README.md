@@ -407,7 +407,13 @@ botões na ordem:
 
 1. **Verificar o ambiente** (uma vez): no expander *Diagnóstico do
    ambiente (doctor)*, botão **Executar diagnóstico** — equivale ao
-   `wiebepy cfd doctor` (confere WSL2, OpenFOAM, foamRun, mpirun).
+   `wiebepy cfd doctor` (confere WSL2, OpenFOAM, foamRun, mpirun). Se
+   a linha *Conexão* mostrar *nenhuma*, clique **Conectar OpenFOAM ao
+   código**: verifica que o foamRun executa (probe `-help`), grava a
+   conexão em `~/.wiebepy/cfd_env.json` e ajusta a *Distribuição
+   WSL2* do formulário (primeiro na distro configurada; sem
+   instalação lá, a melhor de qualquer distro). Equivalente na CLI:
+   `wiebepy cfd doctor --connect`.
 2. **Escolher o diretório do caso** — o primeiro ajuste de todo caso
    novo: em *Configuração do caso*, troque **"Diretório do caso"** para
    um diretório NOVO (ex.: `results/cfd/caso_gui_001`). ⚠️ O padrão

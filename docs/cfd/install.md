@@ -35,12 +35,20 @@ Documentação oficial da versão: <https://openfoam.org/version/13/>
        sudo add-apt-repository http://dl.openfoam.org/ubuntu
        sudo apt update && sudo apt install openfoam13
 
-3. Verificação (de fora do WSL):
+3. Verificação e CONEXÃO (de fora do WSL):
 
-       wiebepy cfd doctor
+       wiebepy cfd doctor --connect
 
    O diagnóstico lista as distribuições WSL2 e, para cada uma, se o
-   OpenFOAM foi encontrado e a versão.
+   OpenFOAM foi encontrado e a versão. Com `--connect` ele além disso
+   **conecta** o solver ao código: verifica que o foamRun detectado
+   executa (probe `-help` — detecção por diretório pode achar uma
+   instalação quebrada) e grava a conexão (distro, root, foamRun) em
+   `~/.wiebepy/cfd_env.json`, que passa a definir a distribuição
+   padrão da GUI e da CLI. Na GUI o equivalente é o botão **Conectar
+   OpenFOAM ao código** no expander *Diagnóstico do ambiente
+   (doctor)*. Sem `--connect`, o `wiebepy cfd doctor` apenas localiza
+   (e mostra a linha *Conexão*).
 
 Notas:
 

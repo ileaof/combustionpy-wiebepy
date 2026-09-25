@@ -56,6 +56,10 @@ def build_cfd_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("doctor", help="diagnóstico do ambiente (WSL2, "
                                       "OpenFOAM)")
     s.add_argument("--distro", help="distribuição WSL2 específica")
+    s.add_argument("--connect", action="store_true",
+                   help="além de diagnosticar, conecta: verifica o "
+                        "foamRun e grava a conexão (distro/root) usada "
+                        "como padrão pela GUI e pela CLI")
 
     s = sub.add_parser("prepare", help="gera o caso para inspeção (sem "
                                        "executar)")
@@ -130,11 +134,20 @@ def _solver_install(distro: Optional[str]):
 
 # ----------------------------------------------------------------- comandos
 def _cmd_doctor(a) -> int:
-    from .capabilities import doctor
+    from .capabilities import connect_openfoam, doctor
     rep = doctor()
     print(rep.format())
     if a.distro and not any(d["name"] == a.distro for d in rep.distros):
         print(f"AVISO: distribuição '{a.distro}' não listada.")
+    if getattr(a, "connect", False):
+        conn, msgs = connect_openfoam(distro=a.distro)
+        for m in msgs:
+            print(f"• {m}")
+        if conn is None:
+            print("CONEXÃO NÃO ESTABELECIDA.")
+            return EXIT_USO
+        print(f"Conectado: OpenFOAM {conn.get('version') or '?'} na distro "
+              f"'{conn.get('distro')}' ({conn.get('root')}).")
     return EXIT_OK
 
 
