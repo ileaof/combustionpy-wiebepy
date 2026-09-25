@@ -97,7 +97,8 @@ formato nativo OpenFOAM (p, T, U, ρ por tempo gravado):
 | N2 | conservação de massa em cavidade fechada (ṁ=0) | sintético automatizado + caso real |
 | N3 | equilíbrio sem fluxo | coberto por N2 (p interna = BC) |
 | N5 | enchimento/ventagem com inversão (sinais separados) | sintético automatizado + caso real |
-| N6 | balanço de energia com troca de calor | **caso real**: massa 0,019 %, energia 0,61 % (mini-janela 2e-5 s) |
+| N6 | balanço de energia com troca de calor | **caso real**: massa 0,019 %, energia 0,61 % (mini-janela 2e-5 s); **janela completa (caso fino, §7b)**: massa 0,0007 % (ok), energia 2,42 % (residual = aproximação declarada h_out = T_camara) |
+| N7 | sensibilidade de amostragem do fluxo | **evidência real (§7b)**: resíduo de massa 2,13e-9 kg a 1° vs 1,0e-13 kg a 2e-6 s na mesma janela — aliasing do transiente acústico; FOs fixados em 20 passos no gerador |
 | N7 | sensibilidade de malha/Δt | procedimento documentado (§5); não reivindicado |
 | N8 | serial vs MPI | `--workers N` disponível; comparação a registrar |
 | N9 | não-interferência no wiebepy | 382 testes existentes + teste de identidade automatizado |
@@ -105,6 +106,43 @@ formato nativo OpenFOAM (p, T, U, ρ por tempo gravado):
 Mocks não substituem o caso real: o caso demo
 `examples/crevice/crevice_exemplo.yaml` é **executado no OpenFOAM 13
 real** (foamRun, solver `fluid`, laminar, heRhoThermo/perfectGas).
+
+## 7b. Janela completa (caso real de 360°, 2026-09-25)
+
+Dois casos reais executados até o fim (foamRun rc=0, 'End' no log,
+janela 0→0,04 s = 360° a 1500 rpm, serial, /mnt/c):
+
+| Caso | Amostragem dos FOs | Balanço de massa | Balanço de energia |
+|---|---|---|---|
+| `results/crevice_exemplo` (demo, 1°) | a 1° (writeTime) | resíduo 3,04e-9 kg = **0,88 %** da massa trocada (3,44e-7 kg) — FALHA (tol 0,5 %) | **4,01 %** dos termos brutos (0,264 J) — FALHA (tol 2 %) |
+| `results/crevice_exemplo_fino` (final) | a 20 passos (~2e-6 s) | 2,5e-12 kg = **0,0007 %** — OK | **2,42 %** — FALHA marginal (tol 2 %) |
+
+**Diagnóstico do resíduo de massa (probe `results/_crevice_probe_ams`)**
+— mesma janela [0, 0,002 s], mesma malha/solver, só a amostragem muda:
+resíduo **2,13e-9 kg a 1°** vs **1,0e-13 kg a 2e-6 s** (≈ exato). O ṁ
+real oscila até |ṁ| = 2,1e-5 kg/s DENTRO de um único intervalo de 1°
+(ringing acústico da folga, Δt ≈ 1e-7 s); a amostra de 1° cai perto do
+cruzamento por zero (−3,4e-8 no 1º intervalo). O gerador passou a
+gravar os FOs a cada 20 passos (`writeControl timeStep`); campos 3D
+continuam a 1°. Correção de escala em `balanco_massa`/`balanco_energia`:
+a referência agora é a massa/termos trocados, não m₀ nem o resíduo
+líquido (troca de 46× m₀ fazia o resíduo parecer 82 %).
+
+**Residual de energia (2,42 %, acima da tol)**: causa declarada, não
+numérica — `h_out = cp·T_camara` usa a temperatura PRESCRITA da câmara
+enquanto o gás que sai carrega a temperatura da fresta (junto às
+paredes), e `h_in` usa o `inflow_T_K` fixo da BC `inletOutlet`. Com a
+troca de massa gigante (1,7e-7 kg, 46× m₀), o erro dessa aproximação
+supera a tolerância. Caminho declarado para fechar: FO adicional
+`volAverage(T)` na célula-zone da fresta e `h_out` medido (fica para o
+nível 2). Relatórios de ambos os casos: `report.html` em cada diretório
+(o do demo mostra as FALHAS com a nova escala — nunca silencioso).
+
+**Bug corrigido durante a fase**: `check_completion` usava
+`glob("*.dat")` e não via as subpastas por startTime que o RESTART do
+OF13 cria (`postProcessing/<startTime>/*.dat`) — marcava caso completo
+como FAILED ("Sem série temporal"); corrigido para `glob("*/*.dat")`
+com teste de regressão.
 
 ## 8. Como reproduzir o caso demo
 
@@ -141,6 +179,15 @@ Paralelo: `--workers N` (decomposePar + mpirun + reconstructPar).
 5. Setor wedge válido somente para fresta anelar uniforme.
 6. Turbulência: `laminar` justificado localmente pelo Re da folga
    (estimativa impressa no relatório); nunca auto-selecionado.
+7. Entalpia das fronteiras aproximada por `h ≈ cp·T`: `h_out` usa a
+   T_camara prescrita (não a T da fresta) e `h_in` o `inflow_T_K` fixo
+   da BC — na janela completa com troca de massa 46× m₀, o residual do
+   balanço de energia fica em ~2,4 % dos termos brutos (§7b).
+8. Amostragem dos functionObjects: a 1° o balanço de massa não fecha
+   (aliasing do ringing acústico, resíduo 0,88 % da massa trocada); o
+   gerador agora grava a cada 20 passos (~2e-6 s) e fecha a 0,0007 %
+   (§7b). Casos antigos com FOs a 1° devem ser reavaliados com essa
+   limitação em mente.
 
 ## 10. Dados necessários para um caso REAL (não demo)
 

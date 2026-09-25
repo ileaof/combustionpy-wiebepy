@@ -326,7 +326,8 @@ functions
         operation       sum;
         writeFields     no;
         fields          (phi);
-        writeControl    writeTime;
+        writeControl    timeStep;
+        writeInterval   20;   // ~2e-6 s: resolve o transiente acustico (aliasing a 1 grau: residuo de massa 2.1e-9 kg na demo; fino: 1e-13)
     }}
     pT_camara
     {{
@@ -337,7 +338,8 @@ functions
         operation       areaAverage;
         writeFields     no;
         fields          (p T);
-        writeControl    writeTime;
+        writeControl    timeStep;
+        writeInterval   20;   // ~2e-6 s: resolve o transiente acustico (aliasing a 1 grau: residuo de massa 2.1e-9 kg na demo; fino: 1e-13)
     }}
     massaTotal
     {{
@@ -348,7 +350,8 @@ functions
         operation       volIntegrate;
         writeFields     no;
         fields          (rho);
-        writeControl    writeTime;
+        writeControl    timeStep;
+        writeInterval   20;   // ~2e-6 s: resolve o transiente acustico (aliasing a 1 grau: residuo de massa 2.1e-9 kg na demo; fino: 1e-13)
     }}
     massaFresta
     {{
@@ -359,7 +362,8 @@ functions
         operation       volIntegrate;
         writeFields     no;
         fields          (rho);
-        writeControl    writeTime;
+        writeControl    timeStep;
+        writeInterval   20;   // ~2e-6 s: resolve o transiente acustico (aliasing a 1 grau: residuo de massa 2.1e-9 kg na demo; fino: 1e-13)
     }}
     massaBuffer
     {{
@@ -370,7 +374,8 @@ functions
         operation       volIntegrate;
         writeFields     no;
         fields          (rho);
-        writeControl    writeTime;
+        writeControl    timeStep;
+        writeInterval   20;   // ~2e-6 s: resolve o transiente acustico (aliasing a 1 grau: residuo de massa 2.1e-9 kg na demo; fino: 1e-13)
     }}
     // energia interna por zona: para gás perfeito U = ∫p dV/(γ−1) —
     // o volIntegrate de p dá o balanço de energia sem aproximar T̄
@@ -383,7 +388,8 @@ functions
         operation       volIntegrate;
         writeFields     no;
         fields          (p);
-        writeControl    writeTime;
+        writeControl    timeStep;
+        writeInterval   20;   // ~2e-6 s: resolve o transiente acustico (aliasing a 1 grau: residuo de massa 2.1e-9 kg na demo; fino: 1e-13)
     }}
     energiaBuffer
     {{
@@ -394,14 +400,16 @@ functions
         operation       volIntegrate;
         writeFields     no;
         fields          (p);
-        writeControl    writeTime;
+        writeControl    timeStep;
+        writeInterval   20;   // ~2e-6 s: resolve o transiente acustico (aliasing a 1 grau: residuo de massa 2.1e-9 kg na demo; fino: 1e-13)
     }}
     fluxoCalorParedes
     {{
         type            wallHeatFlux;
         libs            ("libfieldFunctionObjects.so");
         patches         (liner piston);
-        writeControl    writeTime;
+        writeControl    timeStep;
+        writeInterval   20;   // ~2e-6 s: resolve o transiente acustico (aliasing a 1 grau: residuo de massa 2.1e-9 kg na demo; fino: 1e-13)
     }}
     calorLiner
     {{
@@ -412,7 +420,8 @@ functions
         operation       areaIntegrate;
         writeFields     no;
         fields          (wallHeatFlux);
-        writeControl    writeTime;
+        writeControl    timeStep;
+        writeInterval   20;   // ~2e-6 s: resolve o transiente acustico (aliasing a 1 grau: residuo de massa 2.1e-9 kg na demo; fino: 1e-13)
     }}
     calorPistao
     {{
@@ -423,7 +432,8 @@ functions
         operation       areaIntegrate;
         writeFields     no;
         fields          (wallHeatFlux);
-        writeControl    writeTime;
+        writeControl    timeStep;
+        writeInterval   20;   // ~2e-6 s: resolve o transiente acustico (aliasing a 1 grau: residuo de massa 2.1e-9 kg na demo; fino: 1e-13)
     }}
 }}"""), encoding="utf-8")
 

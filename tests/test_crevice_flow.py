@@ -281,3 +281,31 @@ def test_n9_cli_delega_mesmo_sem_config(tmp_path):
     with pytest.raises(SystemExit) as e:
         main_cfd(["crevice"])
     assert e.value.code == 2
+
+# ============================================== N2b: restart (subpastas)
+def test_n2_check_completion_com_restart_subpastas(tmp_path):
+    """Restart do OF13 cria postProcessing/<startTime>/*.dat: o
+    check_completion precisa ler a ÚLTIMA subpasta (bug real do caso
+    demo: _last_time com glob('*.dat') retornava None e marcava o caso
+    como FAILED mesmo com janela coberta)."""
+    from wiebepy.crevice_flow.runner import check_completion
+    d = tmp_path / "case"
+    d.mkdir()
+    log = d / "logs/foamRun.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("Time = 0.04s\nEnd\n", encoding="utf-8")
+    t0 = np.array([0.0, 0.000556])
+    t1 = np.array([0.013889, 0.04])
+    _escreve_dat(d / "postProcessing/fluxoMassaCamara/0/"
+                 "surfaceFieldValue.dat", ["Time \tsum(phi)"],
+                 np.column_stack([t0, np.zeros_like(t0)]))
+    _escreve_dat(d / "postProcessing/fluxoMassaCamara/0.01388889/"
+                 "surfaceFieldValue.dat", ["Time \tsum(phi)"],
+                 np.column_stack([t1, np.zeros_like(t1)]))
+    ok, msg = check_completion(d, 0.04)
+    assert ok, msg
+    # sem a subpasta do restart: janela não coberta → falho, explícito
+    import shutil
+    shutil.rmtree(d / "postProcessing/fluxoMassaCamara/0.01388889")
+    ok2, msg2 = check_completion(d, 0.04)
+    assert not ok2 and "0.000556" in msg2

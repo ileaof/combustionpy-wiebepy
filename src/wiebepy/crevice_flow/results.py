@@ -122,11 +122,15 @@ class CreviceResults:
         prev = self.m_total[0] + self.m_in_cum() - self.m_out_cum()
         res = self.m_total - prev
         m0 = float(self.m_total[0])
-        denom = max(abs(m0), 1e-15)
+        trocado = float(self.m_in_cum()[-1] + self.m_out_cum()[-1])
+        # referência = massa trocada pela abertura (quando >> m0, m0
+        # deixa de ser a escala física do erro de integração)
+        denom = max(abs(m0), trocado, 1e-15)
         rel = float(np.max(np.abs(res)) / denom * 100.0)
         return Balanco("massa", float(np.max(np.abs(res))), rel,
                        tolerancia_pct, rel <= tolerancia_pct,
-                       {"m0_kg": m0, "m_in_final_kg":
+                       {"m0_kg": m0, "massa_trocada_kg": trocado,
+                        "m_in_final_kg":
                         float(self.m_in_cum()[-1]),
                         "m_out_final_kg": float(self.m_out_cum()[-1]),
                         "m_final_kg": float(self.m_total[-1])})
@@ -148,7 +152,11 @@ class CreviceResults:
         du = float(self.u_total[-1] - self.u_total[0])
         esperado = float((e_in - e_out - q)[-1])
         res = du - esperado
-        denom = max(abs(esperado), abs(du), 1e-15)
+        # referência = termos brutos trocados (entalpia + calor), não o
+        # resíduo: quando in/out se cancelam, o resíduo líquido ~ 0 não
+        # é a escala do erro de integração
+        bruto = float(abs(e_in[-1]) + abs(e_out[-1]) + abs(q[-1]))
+        denom = max(bruto, abs(esperado), abs(du), 1e-15)
         rel = abs(res) / denom * 100.0
         return Balanco("energia", res, rel, tolerancia_pct,
                        rel <= tolerancia_pct,
@@ -156,8 +164,10 @@ class CreviceResults:
                         "Q_paredes_J": float(q[-1]),
                         "E_in_J": float(e_in[-1]),
                         "E_out_J": float(e_out[-1]),
+                        "termo_bruto_J": bruto,
                         "aproximacao": "h ~= cp·T; h_in = cp·T_inflow "
-                                       "(BC inletOutlet)"})
+                                       "(BC inletOutlet); h_out usa "
+                                       "T_camara prescrita"})
 
     # ------------------------------------------------------------- exportar
     def export_serie(self, case_dir) -> Path:

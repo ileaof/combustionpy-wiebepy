@@ -57,7 +57,9 @@ def _last_time(case_dir: Path) -> Optional[float]:
     if not pp.is_dir():
         return None
     ultimo = None
-    for dat in sorted(pp.glob("*.dat")):
+    # subpastas por startTime (restart gera 0/, 0.013889/, ...);
+    # concatena igual a results.py (_dat).
+    for dat in sorted(pp.glob("*/*.dat")) or sorted(pp.glob("*.dat")):
         for linha in dat.read_text(encoding="utf-8",
                                    errors="replace").splitlines():
             linha = linha.strip()

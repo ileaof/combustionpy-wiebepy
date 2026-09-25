@@ -901,14 +901,32 @@ suíte completa: 400 passed após as mudanças, 2026-09-25).
   ṁ < 0 na subida de pressão (enchendo), física coerente.
 - blockMesh/checkMesh limpos (não-ortogonalidade 0; aspecto 5,3).
 
+### Janela completa 360° (2026-09-25, §7b de crevice.md)
+
+Dois casos REAIS completos (0→0,04 s, 360° @ 1500 rpm, serial):
+`results/crevice_exemplo` (FOs a 1°: massa **0,88 %** da massa trocada
+3,44e-7 kg — FALHA; energia 4,01 % — FALHA) e
+`results/crevice_exemplo_fino` (FOs a 20 passos ≈ 2e-6 s: massa
+**0,0007 %** — OK, 2,5e-12 kg; energia **2,42 %** — FALHA marginal
+pela aproximação declarada h_out = T_camara prescrita). O probe
+`results/_crevice_probe_ams` (janela 0,002 s) provou a causa:
+resíduo 2,13e-9 kg a 1° vs 1,0e-13 kg a 2e-6 s — aliasing do ringing
+acústico na folga (|ṁ| até 2,1e-5 kg/s dentro de um intervalo de 1°).
+Escalas dos balanços corrigidas: referência = massa/termos trocados.
+Bug corrigido: `check_completion` não via subpastas de restart do
+OF13 (glob `*.dat` → `*/*.dat`, com teste de regressão). Suíte:
+401 passed (15 de crevice_flow) após as mudanças.
+
 ### Escada de verificação (N1–N9)
 
 N1/N1b automatizados (`tests/test_crevice_flow.py`: conversões
 dθ/dt = 6·rpm, convenção de vértices do blockMesh — bug "inside-out"
 fixado —, regras de geometria, erro duro de blowby/extrapolação/
-proveniência). N2/N5/N6 sintéticos automatizados + caso real acima.
-N7 (sensibilidade malha/Δt): procedimento documentado, não
-reivindicado — uma execução nunca estabelece independência.
+proveniência). N2/N5/N6 sintéticos automatizados + caso real acima (janela completa
+na seção anterior). N7 (sensibilidade): amostragem do fluxo MEDIDA
+(1° vs 2e-6 s: 0,88 % → 0,0007 % do fluxo trocado); malha/Δt com
+procedimento documentado, não reivindicado — uma execução nunca
+estabelece independência.
 N8 (serial vs MPI): `--workers N` disponível (decomposePar + mpirun +
 reconstructPar no adapter reutilizado). N9: 400 testes do wiebepy
 passam com o módulo presente; CLI/GUI degradam graciosamente sem ele.
