@@ -156,6 +156,8 @@ def test_cli_modo_pressao(tmp_path):
     cab = next(csv.reader(open(tmp_path / "results.csv", encoding="utf-8")))
     for col in ("dQ_dtheta_kJ_per_rad", "Q_released_kJ", "Q_wall_J", "Tg_K"):
         assert col in cab
+    assert not any(c.startswith("P_sim_wiebe") for c in cab)   # N = 1: sem
+    # comparação truncada
     assert _main(["--input", str(ENSAIO), "--input-type", "pressure",
                   "--quiet", "--output", str(tmp_path / "x")]) == 2
 
@@ -173,7 +175,7 @@ def test_relatorio_html_completo(ensaio):
     for constante in ("diâmetro", "curso", "biela", "Vd", "Rc", "rotação",
                       "PCI", "Q_total", "κ", "T1", "Tw", "Hohenberg"):
         assert constante in h, constante
-    assert h.count("data:image/png;base64,") == 10
+    assert h.count("data:image/png;base64,") == 12
     for coef in ("constante de Hohenberg", "expoente do volume",
                  "expoente da pressão", "expoente da temperatura",
                  "acréscimo à velocidade do pistão", "rtol / atol",
@@ -185,3 +187,28 @@ def test_relatorio_html_completo(ensaio):
     assert 1000 < ind["T_max [K]"] < 3000
     assert ind["CA10 [°]"] < ind["CA50 [°]"] < ind["CA90 [°]"]
     assert ind["x_b em θ_final [-]"] == pytest.approx(1.0, abs=1e-6)
+
+
+def test_resultados_comparam_estagos_truncados(ensaio, tmp_path):
+    """N = 2 → results.csv traz P_sim_wiebe1_kPa (1º estágio, β
+    renormalizado) e os dois gráficos de comparação entre estágios."""
+    from wiebepy.pressure.report import write_outputs
+    r = fit_pressure(ensaio, PressureSettings(n_stages=2, runs=1,
+                                              particles=30, iterations=80,
+                                              seed=2))
+    write_outputs(tmp_path, r, ensaio, plots=True)
+    import csv
+    cab = next(csv.reader(open(tmp_path / "results.csv", encoding="utf-8")))
+    for col in ("P_sim_wiebe1_kPa", "residual_wiebe1_kPa"):
+        assert col in cab, col
+    linhas = list(csv.DictReader(open(tmp_path / "results.csv",
+                                      encoding="utf-8")))
+    p1 = np.array([float(l["P_sim_wiebe1_kPa"]) for l in linhas])
+    ps = np.array([float(l["P_sim_kPa"]) for l in linhas])
+    assert np.all(np.isfinite(p1)) and np.all(np.isfinite(ps))
+    assert np.max(np.abs(p1 - ps)) > 1.0                # truncado ≠ ajuste
+    for f in ("plots/pressure_stages_comparison.png",
+              "plots/pv_diagram_stages_comparison.png"):
+        assert (tmp_path / f).exists(), f
+    h = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert "comparação entre estágios" in h

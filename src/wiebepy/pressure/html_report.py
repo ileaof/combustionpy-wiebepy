@@ -27,7 +27,11 @@ from .engine import volume
 
 FIGURAS = [
     ("pressure.png", "Pressão medida × simulada"),
+    ("pressure_stages_comparison.png",
+     "Pressão × ângulo — comparação entre estágios (modelos truncados)"),
     ("pv_diagram.png", "Diagrama P–V (modelo × experimental)"),
+    ("pv_diagram_stages_comparison.png",
+     "Diagrama P–V — comparação entre estágios (modelos truncados)"),
     ("pv_diagram_loglog.png", "Diagrama P–V em escala log-log"),
     ("residual.png", "Resíduo de pressão"),
     ("heat_release.png", "Taxa de liberação de calor por estágio e total"),
@@ -113,12 +117,13 @@ def indicators(r, d) -> Dict[str, float]:
 
 def _figuras(pasta: Optional[Path], r, d) -> List[tuple]:
     """(título, PNG em base64) das figuras; gera-as se ``pasta`` não as tiver."""
-    from .report import _graus, _plots
+    from .report import _graus, _plots, _stage_comparisons
     tmp = None
     if pasta is None or not (pasta / "pressure.png").exists():
         tmp = tempfile.TemporaryDirectory()
         pasta = Path(tmp.name)
-        _plots(pasta, r, d, _graus(r.stages))
+        comp_est = (_stage_comparisons(r, d) if len(r.stages) > 1 else {})
+        _plots(pasta, r, d, _graus(r.stages), comp_est)
     out = []
     for nome, titulo in FIGURAS:
         p = pasta / nome

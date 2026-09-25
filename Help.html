@@ -251,6 +251,15 @@ wiebepy --gui               <em># abre no navegador</em></code></pre>
     <tr><td><code>plots\</code></td><td>7 figuras: x<sub>b</sub>, contribuições, taxa de queima, ajuste, resíduos, convergência</td></tr>
     <tr><td><code>comparison.csv</code>, <code>N1\…N5\</code></td><td>modo de comparação</td></tr>
   </table>
+  <p>No <b>modo pressão</b> o <code>results.csv</code> traz ainda as colunas
+  <code>P_sim_wiebe{k}_kPa</code> e <code>residual_wiebe{k}_kPa</code>
+  (k = N−1 … 1): modelos truncados com os k primeiros estágios do ajuste e
+  β renormalizado — diagnóstico do que cada estágio adicional acrescenta à
+  pressão (não é um novo ajuste; para ajustes de verdade use
+  <code>--compare-stages</code>). Os gráficos
+  <code>plots\pressure_stages_comparison.png</code> (pressão × ângulo) e
+  <code>plots\pv_diagram_stages_comparison.png</code> (P–V) sobrepõem o
+  ajuste N, os modelos truncados e o ensaio.</p>
 </section>
 
 <section id="api">

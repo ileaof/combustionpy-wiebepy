@@ -279,6 +279,17 @@ configuração (`engine:` aceita as chaves do YAML do Double Wiebe;
 `pressure: {angle_unit, pressure_unit, theta_min_rad, theta_max_rad}`).
 Na GUI: página Dados → Tipo de dado = **Pressão do cilindro**.
 
+**Comparação entre estágios no resultado**: com o ajuste de N estágios, o
+`results.csv` do modo pressão traz também `P_sim_wiebe{k}_kPa` e
+`residual_wiebe{k}_kPa` para k = N−1 … 1 — modelos truncados com os k
+primeiros estágios do ajuste e β renormalizado (Σβ = 1; mesma convenção do
+candidato aninhado de `--compare-stages`). É diagnóstico do que cada
+estágio adicional acrescenta à pressão — não é um novo ajuste (para isso
+existe `--compare-stages` / `comparison.csv`). Os gráficos
+`plots/pressure_stages_comparison.png` (pressão × ângulo) e
+`plots/pv_diagram_stages_comparison.png` (P–V) sobrepõem o ajuste N, os
+modelos truncados e o ensaio. Com N = 1 nada é acrescentado.
+
 Ensaio real `P_exp-Carga-3_45%` (459 pontos, −2 a 2 rad), 4 runs:
 
 | Modelo | RMSE [kPa] | R² | Rc |
@@ -301,10 +312,11 @@ todas as constantes, os coeficientes do modelo (Hohenberg, balanço de
 energia, integradores, coeficientes Wiebe de cada estágio e o vetor de
 parâmetros ajustados com limites), a configuração do ajuste, as métricas,
 indicadores termodinâmicos (P e T máximas, CA10/50/90, calores, trabalho
-indicado e IMEP na janela), runs, avisos, a comparação (se houver) e os 10
-gráficos (pressão, P–V linear e log-log, resíduo, taxa de liberação de calor
-por estágio, fração queimada, taxa normalizada, temperatura, calor perdido e
-volume).
+indicado e IMEP na janela), runs, avisos, a comparação (se houver) e os 12
+gráficos (pressão, comparação entre estágios na pressão × ângulo e no P–V,
+P–V linear e log-log, resíduo, taxa de liberação de calor
+por estágio, fração queimada, taxa normalizada, temperatura, calor perdido
+e volume).
 
 ### CFD (opcional — escoamento 3D com OpenFOAM)
 
