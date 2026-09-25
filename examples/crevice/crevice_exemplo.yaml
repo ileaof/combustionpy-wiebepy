@@ -1,0 +1,65 @@
+# =====================================================================
+# crevice_exemplo.yaml — EXEMPLO DEMO do crevice_flow (valores
+# DEMONSTRATIVOS/SINTÉTICOS: NÃO representam o ensaio nem um motor real).
+#
+# Submodelo de fresta top-land: domínio anelar localizado (fresta +
+# buffer de câmara), fundo fechado — NÃO é simulação de blow-by.
+# A pressão da câmara é PRESCRITA (BC): o escoamento calculado não a
+# modifica (não é acoplamento bidirecional).
+# =====================================================================
+crevice:
+  theta_unit: deg
+  window: [-180.0, 180.0]
+
+  geometry:                       # unidades explícitas (mm)
+    bore_diameter_mm: 86.0        # diâmetro do cilindro
+    radial_gap_mm: 0.5            # folga radial pistão–cilindro (top land)
+    top_land_height_mm: 6.0       # altura do top land
+    buffer_height_mm: 2.0         # coluna de gás da câmara acima da boca
+    sector_angle_deg: 2.0         # setor wedge (geometria uniforme na
+                                  # circunferência — justificado)
+
+  chamber:
+    source: experiment            # experiment | zero_d | cfd
+    file: pressao_sintetica.csv   # DEMO SINTÉTICO (gera_pressao_sintetica.py)
+    theta_unit: deg
+    p_unit: bar
+    columns: {theta: theta_deg, p: P_bar}
+    bc_type: totalPressure        # uniformTotalPressure (p0 = tabela de t)
+    inflow_T_K: 700.0             # estado do gás que ENTRA — exigido:
+                                  # pressão sozinha não determina o estado
+    extrapolate: false            # sem extrapolar fora da janela do arquivo
+    # blowby: — fase 1 NÃO tem caminho de vazamento (fundo fechado)
+
+  motion:
+    rpm: 1500.0
+    frame: piston                 # geometria constante, malha estática
+    liner_wall_velocity: true     # parede do liner desliza (Couette)
+    stroke_mm: 70.0
+    rod_length_mm: 130.0
+
+  thermal:
+    piston_wall: 400.0            # K, ou "adiabatic"
+    liner_wall: 440.0             # K, ou "adiabatic"
+
+  mesh:
+    n_gap: 6                      # células transversais à folga (≥ 3)
+    n_crevice_axial: 10
+    n_buffer_axial: 8
+    gap_grading: 1.0
+
+  numerics:
+    max_Co: 0.5
+    max_delta_t_s: 1.0e-7
+    write_every_deg: 5.0
+
+  gas:                            # propriedades declaradas e rastreáveis
+    R_specific_J_kgK: 287.07
+    gamma: 1.370
+    dynamic_viscosity_Pa_s: 5.5e-5
+    Pr: 0.7
+  gas_provenance: "valores demo coerentes com o gás simplificado dos casos
+    de câmara do wiebepy (R=287,07; γ=1,370; Cp=γR/(γ−1)=1063) —
+    SINTÉTICO para o exemplo"
+
+  case_directory: results/crevice_exemplo

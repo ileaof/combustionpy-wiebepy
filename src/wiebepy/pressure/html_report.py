@@ -28,10 +28,10 @@ from .engine import volume
 FIGURAS = [
     ("pressure.png", "Pressão medida × simulada"),
     ("pressure_stages_comparison.png",
-     "Pressão × ângulo — comparação entre estágios (modelos truncados)"),
+     "Pressão × ângulo — comparação entre estágios (k-Wiebe refinados)"),
     ("pv_diagram.png", "Diagrama P–V (modelo × experimental)"),
     ("pv_diagram_stages_comparison.png",
-     "Diagrama P–V — comparação entre estágios (modelos truncados)"),
+     "Diagrama P–V — comparação entre estágios (k-Wiebe refinados)"),
     ("pv_diagram_loglog.png", "Diagrama P–V em escala log-log"),
     ("residual.png", "Resíduo de pressão"),
     ("heat_release.png", "Taxa de liberação de calor por estágio e total"),

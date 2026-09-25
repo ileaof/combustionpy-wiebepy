@@ -552,6 +552,115 @@ if relatorio:
         return str(write_report(case_dir, res, exp_data=exp))
     _iniciar_cfd_job("geração do relatório", _rep)
 
+# ================================================ crevice_flow (opcional)
+# O módulo é opcional: sem config de fresta, esta seção não afeta nenhum
+# outro modo do wiebepy (modelos Wiebe intocados).
+try:
+    from wiebepy.crevice_flow.config import read_crevice_config  # noqa: E402
+    _CREVICE_OK = True
+except ImportError:                                     # noqa: BLE001
+    _CREVICE_OK = False
+
+with st.expander("Fresta top-land (crevice_flow — opcional)",
+                 expanded=False):
+    if not _CREVICE_OK:
+        st.info("Módulo crevice_flow não instalado — os demais modos "
+                "funcionam normalmente.")
+    else:
+        st.markdown(
+            "Submodelo: pressão da câmara **prescrita** (o escoamento não "
+            "a modifica) e fresta comunicando **apenas** com a câmara — "
+            "**não é blow-by**. Sem anéis móveis, óleo, combustão ou "
+            "emissões.")
+        cfg_path = st.text_input(
+            "Config do caso de fresta (seção crevice:)",
+            "examples/crevice/crevice_exemplo.yaml", key="crevice_cfg")
+        cr_case = st.text_input(
+            "Diretório do caso:", "results/crevice_exemplo",
+            key="crevice_case")
+        cr_dir = Path(cr_case)
+        cr_state = read_state(cr_dir)
+        c1, c2, c3, c4, c5 = st.columns(5)
+        cr_prep = c1.button("Preparar", key="cr_prep",
+                            icon=":material/build:", disabled=ocupado)
+        cr_val = c2.button("Validar", key="cr_val",
+                           icon=":material/fact_check:",
+                           disabled=ocupado or not cr_dir.exists())
+        cr_run = c3.button("Executar", key="cr_run", type="primary",
+                           icon=":material/play_arrow:", disabled=ocupado)
+        cr_can = c4.button("Cancelar", key="cr_can",
+                           icon=":material/cancel:", disabled=not ocupado)
+        cr_rep = c5.button("Relatório HTML", key="cr_rep",
+                           icon=":material/description:",
+                           disabled=ocupado)
+        st.metric("Estado do caso de fresta", cr_state.label, border=True)
+        with st.expander("Logs e resultados do caso de fresta"):
+            log_dir = cr_dir / "logs"
+            if log_dir.is_dir():
+                for lg in sorted(log_dir.glob("*.log")):
+                    st.caption(lg.name)
+                    st.code(lg.read_text(encoding="utf-8",
+                                         errors="replace")[-3000:],
+                            language=None)
+            if (cr_dir / "report.html").exists():
+                rep_html = (cr_dir / "report.html").read_text(
+                    encoding="utf-8", errors="replace")
+                st.download_button("Baixar relatório HTML do caso",
+                                   rep_html, "report.html", "text/html",
+                                   key="cr_dl_rep")
+
+        if cr_prep:
+            cfg_snap = str(cfg_path)
+            def _cr_prep(job):
+                from wiebepy.crevice_flow.runner import (CreviceRunner,
+                                                         load_config)
+                cfg = load_config(cfg_snap)
+                cfg.case_directory = cr_case
+                from wiebepy.cfd.capabilities import doctor
+                best = doctor().best() or {}
+                return str(CreviceRunner(cfg, solver_info=best)
+                           .prepare(cr_case))
+            _iniciar_cfd_job("preparação do caso de fresta", _cr_prep)
+            st.rerun()
+
+        if cr_val:
+            case_snap = str(cr_dir)
+            def _cr_val(job):
+                from wiebepy.crevice_flow.validation import validate_case
+                ok, erros, avisos = validate_case(case_snap)
+                return {"ok": ok, "erros": erros, "avisos": avisos}
+            _iniciar_cfd_job("validação do caso de fresta", _cr_val)
+
+        if cr_run:
+            case_snap, cfg_snap = str(cr_dir), str(cfg_path)
+            def _cr_run(job):
+                from wiebepy.crevice_flow.runner import (CreviceRunner,
+                                                         load_config)
+                cfg = load_config(cfg_snap)
+                cfg.case_directory = case_snap
+                from wiebepy.cfd.capabilities import doctor
+                best = doctor().best() or {}
+                runner = CreviceRunner(cfg, solver_info=best)
+                return runner.run(case_snap, workers=1,
+                                  on_output=(lambda l:
+                                             job["log"].append(l)))
+            _iniciar_cfd_job("execução do caso de fresta", _cr_run)
+
+        if cr_can:
+            from wiebepy.crevice_flow.runner import CreviceRunner
+            if CreviceRunner.cancel(str(cr_dir)):
+                st.toast("Cancelamento solicitado — o executor vai "
+                         "interromper o solver.", icon=":material/cancel:")
+            else:
+                st.warning("Nenhuma execução ativa no caso de fresta.")
+
+        if cr_rep:
+            case_snap = str(cr_dir)
+            def _cr_rep(job):
+                from wiebepy.crevice_flow.report import write_report
+                return str(write_report(case_snap))
+            _iniciar_cfd_job("relatório da fresta", _cr_rep)
+
 # ------------------------------------------------------- progresso do job
 @st.fragment(run_every=1.0)
 def _painel_job():

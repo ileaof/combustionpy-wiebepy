@@ -99,6 +99,11 @@ def build_cfd_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("report", help="gera o relatório HTML do caso")
     s.add_argument("--case", required=True, metavar="DIR")
+
+    s = sub.add_parser("crevice", help="submódulo OPCIONAL crevice_flow "
+                                       "(fresta top-land; não é blow-by)")
+    s.add_argument("args", nargs=argparse.REMAINDER,
+                   help="ver: wiebepy cfd crevice --help")
     return p
 
 
@@ -274,10 +279,21 @@ def _cmd_report(a) -> int:
     return EXIT_OK
 
 
+def _cmd_crevice(a) -> int:
+    """Delega para o submódulo OPCIONAL crevice_flow — sua ausência ou
+    falha de import não afeta os demais comandos."""
+    try:
+        from ..crevice_flow.cli import main_crevice
+    except ImportError as e:
+        log.error("Módulo crevice_flow indisponível: %s", e)
+        return EXIT_USO
+    return main_crevice(a.args)
+
+
 _COMANDOS = {"doctor": _cmd_doctor, "prepare": _cmd_prepare,
              "validate": _cmd_validate, "run": _cmd_run,
              "status": _cmd_status, "cancel": _cmd_cancel,
-             "report": _cmd_report}
+             "report": _cmd_report, "crevice": _cmd_crevice}
 
 
 def main_cfd(argv: Optional[List[str]] = None) -> int:

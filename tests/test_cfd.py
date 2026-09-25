@@ -1130,3 +1130,69 @@ def test_verify_install_falha_sem_wsl(monkeypatch):
                         lambda *a, **k: (_ for _ in ()).throw(WslError("sem wsl")))
     ok, msg = cap.verify_install(_inst())
     assert not ok and "sem wsl" in msg
+
+
+# ----------------------------------------- faixas angulares (§6) e n_eff
+def test_band_metrics_por_faixa_valores():
+    from wiebepy.cfd.reporting import band_metrics
+    res = _res_sintetico()
+    exp = _exp_sintetico(res["ca_deg"][::2])
+    bm = band_metrics(res["ca_deg"], res["p_mean_kPa"],
+                      exp["ca_deg"], exp["p_kPa"])
+    assert len(bm) == 8
+    por_f = {b["banda_deg"]: b for b in bm}
+    # banda -5…0 e 0…5 têm pontos; total de pontos = banda exp toda
+    total = sum(b["n"] for b in bm)
+    assert total == len(exp["ca_deg"])
+    # banda sem pontos experimentais (20…120 tem, -120…-80 tem) — confere
+    # que a banda -5…0 interpola sem NaN
+    b50 = por_f[(-5.0, 0.0)]
+    assert b50["n"] > 0 and np.isfinite(b50["rmse_kPa"])
+    # CFD idêntico à exp → RMSE ~ 0
+    bm0 = band_metrics(res["ca_deg"], res["p_mean_kPa"],
+                       res["ca_deg"], res["p_mean_kPa"])
+    assert max(b["rmse_kPa"] for b in bm0) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_band_metrics_sem_sobreposicao_n_zero():
+    from wiebepy.cfd.reporting import band_metrics
+    res = _res_sintetico()
+    exp = _exp_sintetico(np.linspace(500.0, 700.0, 50))
+    bm = band_metrics(res["ca_deg"], res["p_mean_kPa"],
+                      exp["ca_deg"], exp["p_kPa"])
+    assert all(b["n"] == 0 and not np.isfinite(b["rmse_kPa"]) for b in bm)
+
+
+def test_polytropic_bands_recupera_n_conhecido():
+    """ln p = c − n·ln V com n=1.35 constante → n_eff = 1,35 em toda
+    banda com pontos; e dip de n_eff é detectável (assinatura crevice)."""
+    from wiebepy.cfd.reporting import polytropic_bands
+    ca = np.linspace(-120.0, 0.0, 121)
+    V = 5e-5 + 3e-4 * 0.5 * (1.0 + np.cos(np.radians(ca)))
+    p = 1e5 * (V / V.max()) ** (-1.35) / 1e3          # kPa
+    nb = polytropic_bands(ca, p, V)
+    com_n = [b for b in nb if np.isfinite(b["n_eff"])]
+    assert com_n and all(abs(b["n_eff"] - 1.35) < 0.01 for b in com_n)
+    # dip: n(ca) menor no meio da compressão (gás armazenado na crevice)
+    # → p por integração d ln p = −n(ca)·d ln V
+    n_ca = np.where((ca > -70) & (ca < -50), 1.20, 1.35)
+    dlnV = np.diff(np.log(V))
+    ln_p = -np.concatenate(([0.0], np.cumsum(0.5 * (n_ca[1:] + n_ca[:-1])
+                                             * dlnV)))
+    p_dip = np.exp(ln_p)
+    p_dip = p_dip / p_dip[0] * p[0]
+    nb2 = polytropic_bands(ca, p_dip, V)
+    por_f = {b["banda_deg"]: b["n_eff"] for b in nb2}
+    dip = por_f[(-80.0, -40.0)]
+    fora = por_f[(-120.0, -80.0)]
+    assert dip < fora                                  # dip capturado
+    assert dip < 1.32                                  # ~1,25 (n=1,20 local)
+
+
+def test_polytropic_bands_n_insuficiente_nan():
+    from wiebepy.cfd.reporting import polytropic_bands
+    ca = np.array([-100.0, -99.0])
+    p = np.array([100.0, 101.0])
+    V = np.array([5e-4, 4.9e-4])
+    nb = polytropic_bands(ca, p, V)
+    assert all(not np.isfinite(b["n_eff"]) for b in nb)

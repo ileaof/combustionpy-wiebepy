@@ -171,6 +171,83 @@ def _metricas_experimental(res: Dict, exp: Dict) -> List[List]:
     ] + extra
 
 
+# ------------------------------------------------------------- faixas (§6)
+BANDAS_PADRAO = ((-120.0, -80.0), (-80.0, -40.0), (-40.0, -20.0),
+                 (-20.0, -5.0), (-5.0, 0.0), (0.0, 5.0), (5.0, 20.0),
+                 (20.0, 120.0))
+
+
+def band_metrics(ca_cfd, p_cfd, ca_exp, p_exp,
+                 bandas=BANDAS_PADRAO) -> List[Dict]:
+    """RMSE/viés de p̄ CFD × p medida POR FAIXA ANGULAR (método do §6 —
+    a análise antes existia só como narrativa no verification.md).
+
+    Cada banda usa os pontos EXPERIMENTAIS dentro de [a, b] com p̄ do
+    CFD interpolado nesses CA; CFD sem sobreposição numa banda aparece
+    com n = 0 (nunca silencioso). Diagnóstico — não validação."""
+    ca = np.asarray(ca_cfd, float)
+    p = np.asarray(p_cfd, float)
+    cae = np.asarray(ca_exp, float)
+    pe = np.asarray(p_exp, float)
+    ok = len(ca) and len(cae)
+    saida = []
+    # faixas meio-abertas [a, b), última inclusiva — cada ponto conta em
+    # exatamente UMA banda (a soma dos n é a sobreposição total)
+    for i, (a, b) in enumerate(bandas):
+        linha = {"banda_deg": (a, b), "n": 0, "rmse_kPa": float("nan"),
+                 "bias_kPa": float("nan"), "mae_kPa": float("nan")}
+        if ok:
+            m = (cae >= min(a, b)) & \
+                ((cae < max(a, b)) if i < len(bandas) - 1
+                 else (cae <= max(a, b)))
+            linha["n"] = int(m.sum())
+            if linha["n"]:
+                pcf = np.interp(cae[m], ca, p)
+                dif = pcf - pe[m]
+                linha["rmse_kPa"] = float(np.sqrt(np.mean(dif ** 2)))
+                linha["bias_kPa"] = float(np.mean(dif))
+                linha["mae_kPa"] = float(np.mean(np.abs(dif)))
+        saida.append(linha)
+    return saida
+
+
+def polytropic_bands(ca, p, V, bandas=BANDAS_PADRAO) -> List[Dict]:
+    """n_eff por faixa: ajuste ln p = c − n·ln V (mínimos quadrados) nos
+    pontos dentro de cada banda. Um DIP de n_eff no meio da compressão é
+    a assinatura de crevice/blow-by (verification.md §3c item 7) — o
+    ensaio mostra 1,324 → 1,284 → 1,366; o CFD com Rc geométrico
+    constante não reproduz o dip."""
+    ca = np.asarray(ca, float)
+    p = np.asarray(p, float)
+    V = np.asarray(V, float)
+    ok = len(ca) == len(p) == len(V) and len(ca) > 2
+    saida = []
+    for a, b in bandas:
+        linha = {"banda_deg": (a, b), "n_eff": float("nan"), "n_pts": 0}
+        if ok:
+            m = (ca >= min(a, b)) & (ca <= max(a, b)) & (p > 0) & (V > 0)
+            linha["n_pts"] = int(m.sum())
+            if linha["n_pts"] >= 3:
+                x = np.log(V[m])
+                y = np.log(p[m])
+                if x.std() > 0:
+                    linha["n_eff"] = float(-np.polyfit(x, y, 1)[0])
+        saida.append(linha)
+    return saida
+
+
+def _tabela_bandas(bandas_res: List[Dict], col_metricas: bool) -> List[List]:
+    linhas = []
+    for b in bandas_res:
+        a, bb = b["banda_deg"]
+        if col_metricas:
+            linhas.append([f"{a:g}…{bb:g}", b["n"], b["rmse_kPa"],
+                           b["bias_kPa"], b["mae_kPa"]])
+        else:
+            linhas.append([f"{a:g}…{bb:g}", b["n_pts"], b["n_eff"]])
+    return linhas
+
+
 def _e(v) -> str:
     return html.escape(str(v))
 
@@ -528,6 +605,43 @@ def report_html(case_dir, res: Dict, cfg: Optional[CfdConfig] = None,
                   "somente dentro da janela simulada. Pressão média "
                   "volumétrica ≠ pressão medida no sensor (posicionamento "
                   "do sensor, cavitação, defasagem de aquisição).</p>")
+            # faixas angulares (§6): RMSE por banda + n_eff politrópico
+            def _serie(k):
+                v = res.get(k)
+                return v if v is not None and len(v) else []
+
+            def _serie_exp(k):
+                v = exp_data.get(k)
+                return v if v is not None and len(v) else []
+            bm_ = band_metrics(_serie("ca_deg"), _serie("p_mean_kPa"),
+                               _serie_exp("ca_deg"), _serie_exp("p_kPa"))
+            a("<h3>RMSE por faixa angular</h3>")
+            a(_tabela(["Faixa [° CA]", "n (exp)", "RMSE [kPa]",
+                       "viés [kPa]", "MAE [kPa]"],
+                      _tabela_bandas(bm_, col_metricas=True)))
+            a("<p class='nota'>Comparação DIAGNÓSTICA por faixa — nenhuma "
+              "calibração silenciosa; banda sem pontos experimentais "
+              "aparece com n = 0.</p>")
+            if exp_data.get("V_m3") is not None \
+                    and res.get("V_m3") is not None:
+                n_exp = polytropic_bands(exp_data["ca_deg"],
+                                         exp_data["p_kPa"],
+                                         exp_data["V_m3"])
+                n_cfd = polytropic_bands(res["ca_deg"], res["p_mean_kPa"],
+                                         res["V_m3"])
+                a("<h3>n_eff politrópico por faixa (ensaio × CFD)</h3>")
+                lin_n = []
+                for be, bc in zip(n_exp, n_cfd):
+                    lin_n.append([f"{be['banda_deg'][0]:g}…"
+                                  f"{be['banda_deg'][1]:g}",
+                                  be["n_eff"], bc["n_eff"]])
+                a(_tabela(["Faixa [° CA]", "n_eff ensaio", "n_eff CFD"],
+                          lin_n))
+                a("<p class='nota'>Dip de n_eff no meio da compressão é "
+                  "assinatura de crevice/blow-by (gás armazenado na "
+                  "folga da segmentação). O CFD com Rc geométrico "
+                  "constante tende a NÃO reproduzir o dip — comparação "
+                  "diagnóstica, nunca validação.</p>")
             else:
                 a("<p class='nota'>Sem métricas: as séries não se "
                   "sobrepõem em ângulo de manivela.</p>")
