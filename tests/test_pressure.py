@@ -190,14 +190,15 @@ def test_relatorio_html_completo(ensaio):
 
 
 def test_resultados_comparam_estagos_truncados(ensaio, tmp_path):
-    """N = 2 → results.csv traz P_sim_wiebe1_kPa (1º estágio, β
-    renormalizado) e os dois gráficos de comparação entre estágios."""
+    """N = 2 → results.csv traz P_sim_wiebe1_kPa (1-Wiebe refinado a partir
+    do truncamento) e os dois gráficos de comparação entre estágios."""
     from wiebepy.pressure.report import write_outputs
     r = fit_pressure(ensaio, PressureSettings(n_stages=2, runs=1,
                                               particles=30, iterations=80,
                                               seed=2))
     write_outputs(tmp_path, r, ensaio, plots=True)
     import csv
+    import json
     cab = next(csv.reader(open(tmp_path / "results.csv", encoding="utf-8")))
     for col in ("P_sim_wiebe1_kPa", "residual_wiebe1_kPa"):
         assert col in cab, col
@@ -206,7 +207,11 @@ def test_resultados_comparam_estagos_truncados(ensaio, tmp_path):
     p1 = np.array([float(l["P_sim_wiebe1_kPa"]) for l in linhas])
     ps = np.array([float(l["P_sim_kPa"]) for l in linhas])
     assert np.all(np.isfinite(p1)) and np.all(np.isfinite(ps))
-    assert np.max(np.abs(p1 - ps)) > 1.0                # truncado ≠ ajuste
+    assert np.max(np.abs(p1 - ps)) > 1.0                # 1-Wiebe ≠ ajuste
+    comp = json.loads((tmp_path / "results.json").read_text(
+        encoding="utf-8"))["comparacao_truncada"]["1"]
+    assert comp["refinado"] is True                     # curva É ajustada
+    assert comp["rmse_kPa"] > r.metrics["rmse"]         # e pior que o N=2
     for f in ("plots/pressure_stages_comparison.png",
               "plots/pv_diagram_stages_comparison.png"):
         assert (tmp_path / f).exists(), f

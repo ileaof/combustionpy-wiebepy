@@ -281,14 +281,21 @@ Na GUI: página Dados → Tipo de dado = **Pressão do cilindro**.
 
 **Comparação entre estágios no resultado**: com o ajuste de N estágios, o
 `results.csv` do modo pressão traz também `P_sim_wiebe{k}_kPa` e
-`residual_wiebe{k}_kPa` para k = N−1 … 1 — modelos truncados com os k
-primeiros estágios do ajuste e β renormalizado (Σβ = 1; mesma convenção do
-candidato aninhado de `--compare-stages`). É diagnóstico do que cada
-estágio adicional acrescenta à pressão — não é um novo ajuste (para isso
-existe `--compare-stages` / `comparison.csv`). Os gráficos
+`residual_wiebe{k}_kPa` para k = N−1 … 1 — modelos reduzidos que partem
+dos k primeiros estágios do ajuste com β renormalizado (Σβ = 1) e são
+**refinados por mínimos quadrados (TRF)** a partir desse ponto (mesma
+mecânica do candidato aninhado de `--compare-stages`); cada curva é
+portanto um k-Wiebe de fato ajustado ao ensaio, não um truncamento
+arbitrário (que pode ficar acima do ajuste N, com todo o calor queimando
+na janela do 1º estágio). Se a referência solve_ivp falhar na fronteira
+de falha do passo adaptativo, o modelo refinado é avaliado com RK4 f64
+(rótulo no gráfico e aviso em `warnings.txt`). É diagnóstico do que cada
+estágio adicional acrescenta à pressão — não substitui a comparação
+completa com PSO (`--compare-stages` / `comparison.csv`). Os gráficos
 `plots/pressure_stages_comparison.png` (pressão × ângulo) e
 `plots/pv_diagram_stages_comparison.png` (P–V) sobrepõem o ajuste N, os
-modelos truncados e o ensaio. Com N = 1 nada é acrescentado.
+modelos reduzidos e o ensaio; os parâmetros de cada modelo reduzido ficam
+em `results.json` (`comparacao_truncada`). Com N = 1 nada é acrescentado.
 
 Ensaio real `P_exp-Carga-3_45%` (459 pontos, −2 a 2 rad), 4 runs:
 
