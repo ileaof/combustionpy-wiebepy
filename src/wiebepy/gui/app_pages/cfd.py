@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 import altair as alt
+import numpy as np
 import pandas as pd
 import streamlit as st
 import yaml
@@ -438,6 +439,115 @@ with st.expander("Configuração do caso", expanded=True):
             "Deslocamento [°CA]", f["exp_offset_deg"],
             help="Offset angular aplicado ao ensaio (sincronismo do "
                  "encoder).")
+
+# ============================================ geometria do cilindro (Fase C)
+with st.expander("Geometria do cilindro (esquema)", expanded=False):
+    st.caption("Corte lateral com DIÂMETRO e ALTURA da câmara rotulados — "
+               "valores direto do formulário. Altura instantânea h(θ) = "
+               "folga + deslocamento do pistão (PMS no topo).")
+    f["theta_viz_deg"] = st.slider("Posição do pistão θ [°CA]",
+                                   -180.0, 180.0,
+                                   f.get("theta_viz_deg", -45.0), 1.0,
+                                   key="theta_viz")
+    _bore = float(f["bore_mm"]) * 1e-3
+    _stroke = float(f["stroke_mm"]) * 1e-3
+    _rod = float(f["rod_length_mm"]) * 1e-3
+    _rc = float(f["Rc"])
+    _folga = _stroke / max(_rc - 1.0, 1e-9)
+    _r, _l = _stroke / 2.0, _rod
+    _th = math.radians(float(f["theta_viz_deg"]))
+    _y = (_l + _r - _r * math.cos(_th)
+          - math.sqrt(_l * _l - _r * _r * math.sin(_th) ** 2))
+    _h = _folga + _y                  # altura da câmara em θ
+    _hp = 0.22 * _stroke              # altura visual do pistão
+
+    import pandas as _pd
+    _df_geo = _pd.DataFrame({
+        "x": [-_bore / 2, -_bore / 2, _bore / 2, _bore / 2],
+        "z": [0.0, _folga + _stroke, 0.0, _folga + _stroke],
+        "parede": ["cabeçote", "liner E", "cabeçote", "liner D"]})
+    _chart = alt.layer(
+        alt.Chart(_pd.DataFrame({"x": [-_bore / 2, _bore / 2],
+                                 "z": [0.0, 0.0]})).mark_rule(
+            size=4, color="#264653").encode(x="x:Q", y="z:Q"),
+        alt.Chart(_df_geo.iloc[[1, 3]]).mark_line(
+            size=4, color="#264653").encode(x="x:Q", y="z:Q",
+                                            detail="parede:N"),
+        alt.Chart(_pd.DataFrame({
+            "x": [-_bore / 2 + 0.01 * _stroke, _bore / 2 - 0.01 * _stroke],
+            "z1": [_folga + _y, _folga + _y],
+            "z2": [_folga + _y + _hp, _folga + _y + _hp]}))
+        .mark_rect(color="#8d6e63", opacity=0.85).encode(
+            x="x:Q", y="z1:Q", y2="z2:Q"),
+        alt.Chart(_pd.DataFrame({
+            "x": [0.0], "z": [_h / 2],
+            "rot": [f"altura h(θ) = {_h*1e3:.1f} mm"]})).mark_text(
+            color="#b3402a", fontSize=12, dy=-6).encode(
+            x="x:Q", y="z:Q", text="rot:N"),
+        alt.Chart(_pd.DataFrame({
+            "x": [0.0], "z": [_folga + _stroke + 0.06 * _stroke],
+            "rot": [f"diâmetro = {float(f['bore_mm']):.1f} mm"
+                    f"  |  curso = {float(f['stroke_mm']):.1f} mm"
+                    f"  |  Rc = {_rc:.2f}"]})).mark_text(
+            color="#264653", fontSize=12).encode(
+            x="x:Q", y="z:Q", text="rot:N"),
+    ).encode(
+        x=alt.X("x:Q", scale=alt.Scale(domain=[-_bore * 0.6,
+                                               _bore * 0.6]),
+                axis=None),
+        y=alt.Y("z:Q", scale=alt.Scale(domain=[_folga + _stroke * 1.15,
+                                               -0.08 * _stroke]),
+                title="z abaixo do cabeçote [m]"))
+    st.altair_chart(_chart, use_container_width=True)
+    st.caption(f"h(θ = {f['theta_viz_deg']:.0f}°) = {_h*1e3:.2f} mm · "
+               f"V(θ) = π·(D/2)²·h = {math.pi*(_bore/2)**2*_h*1e6:.2f} cm³")
+
+    _g1, _g2 = st.columns(2)
+    if _g1.button("Exportar CSV de geometria", key="geo_csv"):
+        ths = np.arange(-180.0, 180.5, 1.0)
+        ys = np.array([_l + _r - _r * math.cos(math.radians(t))
+                       - math.sqrt(_l * _l - _r * _r
+                                   * math.sin(math.radians(t)) ** 2)
+                       for t in ths])
+        hs = _folga + ys
+        vs = math.pi * (_bore / 2) ** 2 * hs
+        csv_geo = "theta_deg,y_pistao_m,h_camara_m,V_m3\n" + "\n".join(
+            f"{t:.1f},{y:.8g},{h:.8g},{v:.8g}"
+            for t, y, h, v in zip(ths, ys, hs, vs))
+        st.download_button("Baixar geometria.csv", csv_geo,
+                           "geometria_cilindro.csv", "text/csv",
+                           key="geo_csv_dl")
+    if _g2.button("Exportar PNG do esquema", key="geo_png"):
+        import io as _io
+        import matplotlib as _mpl
+        _mpl.use("Agg")
+        import matplotlib.pyplot as _plt
+        fig, ax = _plt.subplots(figsize=(5, 5.5), dpi=130)
+        ax.plot([-_bore/2, _bore/2], [0, 0], lw=4, color="#264653")
+        for xe in (-_bore/2, _bore/2):
+            ax.plot([xe, xe], [0, _folga + _stroke], lw=4, color="#264653")
+        ax.add_patch(_plt.Rectangle((-_bore/2, _folga + _y), _bore, _hp,
+                                    color="#8d6e63", alpha=0.85))
+        ax.annotate("", xy=(-_bore*0.55, 0), xytext=(-_bore*0.55, _h),
+                    arrowprops=dict(arrowstyle="<->", color="#b3402a"))
+        ax.text(-_bore*0.53, _h/2, f"h = {_h*1e3:.1f} mm",
+                color="#b3402a", fontsize=9)
+        ax.annotate("", xy=(-_bore/2, _folga + _stroke*1.08),
+                    xytext=(_bore/2, _folga + _stroke*1.08),
+                    arrowprops=dict(arrowstyle="<->", color="#264653"))
+        ax.text(0, _folga + _stroke*1.12,
+                f"diâmetro = {float(f['bore_mm']):.1f} mm",
+                ha="center", color="#264653", fontsize=9)
+        ax.set_xlim(-_bore*0.75, _bore*0.75)
+        ax.set_ylim(_folga + _stroke*1.2, -0.05*_stroke)
+        ax.set_aspect("equal")
+        ax.axis("off")
+        buf = _io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        _plt.close(fig)
+        st.download_button("Baixar esquema.png", buf.getvalue(),
+                           "esquema_cilindro.png", "image/png",
+                           key="geo_png_dl")
 
 # ========================================================== estado e ações
 case_dir = Path(_form()["case_directory"])

@@ -325,6 +325,20 @@ case_011 (passo temporal, 3,6 kPa rms), a independência numérica está
 fechada e o resíduo de ~91 kPa do case_006 é físico (Rc efetivo —
 item 6), não numérico.
 
+**11b. Confirmação de malha no par (case_017_malha_fina, 36×54 vs 012,
+24×36).** Fecha a limitação registrada em §3d/§7: o case_012 (par
+calibrado, Rc 15,635 + fonte duo) foi reexecutado na malha 36×54
+(69.984 células, 2,25× do 24×36, mesma config `examples/
+config_cfd_rc_efetivo_malha_fina.yaml`, serial, 493 s). A diferença
+entre as duas malhas no par é rms 4,25 kPa e a estrutura por faixa
+confirma que ela se concentra onde os gradientes são maiores:
+−5…0° rms 7,6 kPa (viés −7,5), 0…5° rms 11,1 kPa (viés −11,0),
+5…20° rms 8,1 kPa; fora do entorno do PMS as faixas ficam ≤ 3 kPa
+(−120…−80°: 0,18 kPa). Mesma magnitude da confirmação no caso base
+(4,4 kPa, item 11) — a independência de malha vale também para o par
+calibrado, e a Rc 15,635 configurada permanece **diagnóstica** (§3d:
+adotá-la como geometria do projeto é proibido).
+
 **9. Sensibilidade ao passo temporal / Courant (case_011 vs 006).**
 case_011 repete o case_006 com `max_Co 0,25` (em vez de 0,5):
 p_max 5487,6 @ 12,08° (006: 5489,6 @ 12,02°), RMSE vs ensaio 92,5
@@ -855,7 +869,9 @@ fonte na preparação (§3c item 10).
   do p_max); refinamentos adicionais têm ganho desprezível. O resíduo
   remanescente é físico (Rc efetivo, §3c item 6), não numérico —
   independência de passo temporal confirmada em separado (case_011,
-  3,6 kPa rms).
+  3,6 kPa rms). **Confirmação no par calibrado** (case_017_malha_fina,
+  36×54 vs case_012 24×36): 4,25 kPa rms, mesma estrutura por faixa —
+  item 11b; a limitação "não repetida no par" está fechada.
 - kOmegaSST executado e documentado (33,7 J — abaixo do kEpsilon
   neste caso); sem varredura exaustiva de constantes dos modelos.
 - A comparação experimental é **diagnóstica**: a p̄ volumétrica de um
@@ -863,3 +879,45 @@ fonte na preparação (§3c item 10).
   já usa estes dados na calibração — não é validação (ver seção 3a e
   architecture.md §9).
 - A pressão volumétrica média não identifica os campos 3D.
+## 3h. Módulo opcional crevice_flow (submodelo de fresta, 2026-09-25)
+
+Escopo e arquitetura: `docs/cfd/crevice.md`. Nível submodelo: câmara
+prescrita (o escoamento não modifica p(θ)), domínio anelar wedge
+(fresta top-land + buffer), fundo fechado — NÃO é blow-by. Modelos
+Wiebe 0-D e casos de câmara intocados (teste de identidade +
+suíte completa: 400 passed após as mudanças, 2026-09-25).
+
+### Sondas e prova real (OpenFOAM Foundation 13, WSL Ubuntu-22.04)
+
+- `uniformTotalPressure` (p0 Function1 tabela de tempo, ψ/γ), 
+  `uniformFixedValue` (estático), `pressureInletOutletVelocity`
+  (reversão), `inletOutlet` (T com inversão), patches `wedge`,
+  `wallHeatFlux` + `areaIntegrate`/`volIntegrate` com cellZone —
+  todos aceitos pelo solver `fluid` em execução real.
+- Formatos de postProcessing capturados de caso real (headers acima).
+- Mini-caso real (2e-5 s, 108 células, Δt ≤ 1e-7, laminar):
+  **balanço de massa 0,019 %** (tol 0,5 %) e **balanço de energia
+  0,61 %** (tol 2 %) — U = ∫p dV/(γ−1), h ≈ cp·T declarado.
+  ṁ < 0 na subida de pressão (enchendo), física coerente.
+- blockMesh/checkMesh limpos (não-ortogonalidade 0; aspecto 5,3).
+
+### Escada de verificação (N1–N9)
+
+N1/N1b automatizados (`tests/test_crevice_flow.py`: conversões
+dθ/dt = 6·rpm, convenção de vértices do blockMesh — bug "inside-out"
+fixado —, regras de geometria, erro duro de blowby/extrapolação/
+proveniência). N2/N5/N6 sintéticos automatizados + caso real acima.
+N7 (sensibilidade malha/Δt): procedimento documentado, não
+reivindicado — uma execução nunca estabelece independência.
+N8 (serial vs MPI): `--workers N` disponível (decomposePar + mpirun +
+reconstructPar no adapter reutilizado). N9: 400 testes do wiebepy
+passam com o módulo presente; CLI/GUI degradam graciosamente sem ele.
+
+### Custo medido
+
+Δt limitado pelo CFL acústico na folga (a·Δt/Δr ≈ 1 → Δt ~1e-7 s);
+janela de 360° a 1500 rpm ≈ 4e5 passos; /mnt/c (WSL) faz wall-clock
+~5–7× o CPU — considerar filesystem nativo do WSL para casos de
+fresta. GPU: interface preparada (workers do SOLVER separados dos
+backends do wiebepy), sem conversão OpenFOAM→CUDA e sem promessa de
+aceleração.

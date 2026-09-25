@@ -374,6 +374,26 @@ wiebepy cfd report   --case results/cfd/meu_caso   <em># 4. relatório HTML com 
   indisponível até a implementação própria e nunca é substituído
   silenciosamente pela fonte Wiebe. Proposta incremental:
   <code>docs/cfd/reactive_roadmap.md</code>.</p>
+  <h3>Fresta top-land (crevice_flow — submódulo opcional do CFD)</h3>
+  <p>Módulo separado (<code>wiebepy cfd crevice …</code>, GUI na página CFD)
+  que simula o gás entrando/saindo da folga entre o topo do pistão, a
+  segmentação e o liner — <strong>não é simulação de blow-by</strong>: o
+  fundo é fechado acima do 1º anel e a pressão da câmara é
+  <strong>prescrita</strong> (tabela experimental ou sintética). O
+  escoamento calculado <strong>não modifica</strong> essa pressão; não há
+  fonte de calor nem química. Detalhes: <code>docs/cfd/crevice.md</code>.</p>
+  <pre><code>wiebepy cfd crevice doctor   <em># confere OpenFOAM 13 (mesma checagem do cfd)</em>
+wiebepy cfd crevice prepare  --config examples/crevice/crevice_exemplo.yaml
+wiebepy cfd crevice validate --case results/crevice_exemplo
+wiebepy cfd crevice run      --case results/crevice_exemplo
+wiebepy cfd crevice report   --case results/crevice_exemplo</code></pre>
+  <p>Exporta séries p/T×θ, massa armazenada, fluxos assinados (entrada e
+  saída acumulados separadamente), calor por parede e balanços de massa e
+  energia com convenção de sinais declarada. O exemplo em
+  <code>examples/crevice/</code> usa dados <strong>sintéticos
+  demonstrativos</strong> — não representam o ensaio. Sem a pasta
+  <code>crevice_flow</code>, os modos 0-D, CFD e GUI continuam
+  funcionando normalmente.</p>
 </section>
 
 <section id="problemas">

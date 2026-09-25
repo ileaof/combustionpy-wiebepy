@@ -351,6 +351,28 @@ wiebepy cfd status   --case results/cfd/case_001   # cancel/status/report idem
 wiebepy cfd report   --case results/cfd/case_001   # relatório HTML autônomo
 ```
 
+#### Fresta top-land (crevice_flow — submódulo opcional do CFD)
+
+Submodelo de escoamento na fresta entre pistão, 1º anel e cilindro:
+câmara **prescrita** (o escoamento não modifica p(θ)) e domínio
+comunicando **apenas** com a câmara — **não é simulação de blow-by**.
+Sem anéis móveis, óleo, combustão ou emissões; laminar justificado
+localmente (Re da folga impresso no relatório). Balanços de massa e
+energia quantificados com convenção de sinais declarada. Detalhes e
+limitações: `docs/cfd/crevice.md`.
+
+```bash
+wiebepy cfd crevice prepare  --config examples/crevice/crevice_exemplo.yaml
+wiebepy cfd crevice validate --case results/crevice_exemplo
+wiebepy cfd crevice run      --case results/crevice_exemplo [--workers N]
+wiebepy cfd crevice report   --case results/crevice_exemplo
+```
+
+O exemplo usa pressão **sintética** (demo; gerada por
+`examples/crevice/gera_pressao_sintetica.py`) — para um caso real, forneça
+p(θ) do ensaio/0-D e o estado do gás que entra (`inflow_T_K`: a pressão
+sozinha não determina o estado).
+
 #### Rodando um exemplo — caso de referência (case_006)
 
 Para rodar um exemplo você só **edita um arquivo**; os outros dois são
