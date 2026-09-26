@@ -403,6 +403,18 @@ functions
         writeControl    timeStep;
         writeInterval   20;   // ~2e-6 s: resolve o transiente acustico (aliasing a 1 grau: residuo de massa 2.1e-9 kg na demo; fino: 1e-13)
     }}
+    T_fresta
+    {{
+        type            volFieldValue;
+        libs            ("libfieldFunctionObjects.so");
+        select          cellZone;
+        cellZone        crevice;
+        operation       volAverage;
+        writeFields     no;
+        fields          (T);
+        writeControl    timeStep;
+        writeInterval   20;   // T MEDIDA da fresta: h_out = cp*T_fresta no balanco de energia (h_out = T_camara prescrita era a limitacao 7 de crevice.md)
+    }}
     fluxoCalorParedes
     {{
         type            wallHeatFlux;

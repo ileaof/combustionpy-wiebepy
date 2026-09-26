@@ -132,10 +132,13 @@ def _escreve_dat(p: Path, cab, linhas):
             fh.write("\t".join(f"{x:.8e}" for x in l) + "\n")
 
 
-def _caso_sintetico(tmp_path, mdot, t=None, m0=1e-9, t_in=600.0):
+def _caso_sintetico(tmp_path, mdot, t=None, m0=1e-9, t_in=600.0,
+                    T_fresta=None):
     """Caso com séries sintéticas no formato real do OF13: ṁ constante
     (negativo = enchendo) → balanço de massa deve fechar; calor nulo."""
     d = tmp_path / "case"
+    if T_fresta is None:
+        T_fresta = t_in
     if t is None:
         t = np.linspace(0.0, 1e-4, len(mdot))
     # massa coerente com o sinal: ṁ<0 = entrada → m(t) = m0 − ∫ṁ dt
@@ -162,6 +165,9 @@ def _caso_sintetico(tmp_path, mdot, t=None, m0=1e-9, t_in=600.0):
     _escreve_dat(d / "postProcessing/energiaBuffer/0/volFieldValue.dat",
                  ["Time \tvolIntegrate(p)"],
                  np.column_stack([t, np.full_like(t, 2e-4)]))
+    _escreve_dat(d / "postProcessing/T_fresta/0/volFieldValue.dat",
+                 ["Time \tvolAverage(T)"],
+                 np.column_stack([t, np.full_like(t, T_fresta)]))
     _escreve_dat(d / "postProcessing/calorLiner/0/surfaceFieldValue.dat",
                  ["Time \tareaIntegrate(wallHeatFlux)"],
                  np.column_stack([t, np.zeros_like(t)]))
@@ -309,3 +315,41 @@ def test_n2_check_completion_com_restart_subpastas(tmp_path):
     shutil.rmtree(d / "postProcessing/fluxoMassaCamara/0.01388889")
     ok2, msg2 = check_completion(d, 0.04)
     assert not ok2 and "0.000556" in msg2
+
+
+def test_n6b_h_out_usa_T_fresta_medida(tmp_path):
+    """h_out = cp·T_fresta MEDIDA (não T_camara prescrita): o balanço só
+    fecha com a T da fresta; sem o FO, o fallback é declarado e o
+    balanço falha honestamente."""
+    t = np.linspace(0.0, 1e-4, 11)
+    mdot = np.full_like(t, 1e-6)                # SÓ saída (ventagem)
+    T_cam = 800.0                               # prescrita (pT_camara)
+    T_fre = 600.0                               # medida (zona crevice)
+    d = _caso_sintetico(tmp_path / "vent", mdot, T_fresta=T_fre)
+    # reescreve pT_camara com T_camara != T_fresta
+    _escreve_dat(d / "postProcessing/pT_camara/0/surfaceFieldValue.dat",
+                 ["Time \tareaAverage(p)\tareaAverage(T)"],
+                 np.column_stack([t, np.full_like(t, 1e5),
+                                  np.full_like(t, T_cam)]))
+    # U coerente com h_out MEDIDO: U(t) = U0 − ∫ṁ_out·cp·T_fresta dt
+    gam, rs = 1.370, 287.07
+    cp = gam * rs / (gam - 1.0)
+    e_out = np.concatenate(([0], np.cumsum(
+        0.5 * (1e-6 * cp * T_fre + 1e-6 * cp * T_fre) * np.diff(t))))
+    u = (2e-4 / (gam - 1.0)) - e_out
+    _escreve_dat(d / "postProcessing/energiaFresta/0/volFieldValue.dat",
+                 ["Time \tvolIntegrate(p)"],
+                 np.column_stack([t, u * (gam - 1.0) * 0.7]))
+    _escreve_dat(d / "postProcessing/energiaBuffer/0/volFieldValue.dat",
+                 ["Time \tvolIntegrate(p)"],
+                 np.column_stack([t, u * (gam - 1.0) * 0.3]))
+    r = CreviceResults.load(d)
+    be = r.balanco_energia()
+    assert be.ok, be.detalhe
+    assert "T_fresta MEDIDA" in be.detalhe["aproximacao"]
+    # fallback (sem FO T_fresta): usa T_camara prescrita e FALHA
+    import shutil
+    shutil.rmtree(d / "postProcessing/T_fresta")
+    be2 = CreviceResults.load(d).balanco_energia()
+    assert not be2.ok
+    assert "T_camara prescrita" in be2.detalhe["aproximacao"]

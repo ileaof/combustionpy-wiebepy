@@ -79,6 +79,8 @@ class CreviceResults:
     mdot: np.ndarray                    # [kg/s] + = SAINDO (fresta→câmara)
     q_liner: np.ndarray                 # [W]  + = gás perde para a parede
     q_pistao: np.ndarray                # [W]  idem
+    T_fresta: np.ndarray                # [K]  (volAverage MEDIDA, zona
+                                        #  crevice; vazia se FO ausente)
     meta: Dict = field(default_factory=dict)
 
     # ----------------------------------------------------------- derivadas
@@ -147,7 +149,13 @@ class CreviceResults:
         t_in = float(self.meta.get("condicao_camara", {}).get(
             "inflow_T_K", self.T_camara[0]))
         e_in = self._cum(self.mdot_in * cp * t_in)
-        e_out = self._cum(self.mdot_out * cp * self.T_camara)
+        # h_out: o gás que SAI carrega a temperatura MEDIDA da fresta
+        # (FO T_fresta, volAverage da zona); se o FO não existe no caso
+        # (casos antigos), cai para T_camara prescrita — declarado.
+        t_out_medida = self.T_fresta.size == len(self.mdot) and \
+            np.any(self.T_fresta > 0)
+        t_out = self.T_fresta if t_out_medida else self.T_camara
+        e_out = self._cum(self.mdot_out * cp * t_out)
         q = self.q_cum()["total"]
         du = float(self.u_total[-1] - self.u_total[0])
         esperado = float((e_in - e_out - q)[-1])
@@ -166,8 +174,11 @@ class CreviceResults:
                         "E_out_J": float(e_out[-1]),
                         "termo_bruto_J": bruto,
                         "aproximacao": "h ~= cp·T; h_in = cp·T_inflow "
-                                       "(BC inletOutlet); h_out usa "
-                                       "T_camara prescrita"})
+                                       "(BC inletOutlet); h_out = "
+                                       + ("cp·T_fresta MEDIDA"
+                                          if t_out_medida else
+                                          "cp·T_camara prescrita "
+                                          "(FO T_fresta ausente)")})
 
     # ------------------------------------------------------------- exportar
     def export_serie(self, case_dir) -> Path:
@@ -176,13 +187,15 @@ class CreviceResults:
         case_dir = Path(case_dir)
         q = self.q_cum()
         cols = ["theta_deg", "t_s", "p_camara_Pa", "T_camara_K",
-                "m_total_kg", "m_fresta_kg", "m_buffer_kg", "U_J",
+                "T_fresta_K", "m_total_kg", "m_fresta_kg", "m_buffer_kg",
+                "U_J",
                 "mdot_kg_s_positivo_saindo", "mdot_in_kg_s",
                 "mdot_out_kg_s", "m_in_cum_kg", "m_out_cum_kg",
                 "q_liner_W", "q_pistao_W", "Q_liner_cum_J",
                 "Q_pistao_cum_J", "Q_paredes_cum_J"]
         data = [self.theta_deg, self.t, self.p_camara, self.T_camara,
-                self.m_total, self.m_fresta, self.m_buffer, self.u_total,
+                self.T_fresta, self.m_total, self.m_fresta, self.m_buffer,
+                self.u_total,
                 self.mdot, self.mdot_in, self.mdot_out, self.m_in_cum(),
                 self.m_out_cum(), self.q_liner, self.q_pistao,
                 q["liner"], q["piston"], q["total"]]
@@ -229,6 +242,7 @@ class CreviceResults:
         m_buf = _dat(case_dir, "massaBuffer", "volFieldValue")
         e_fre = _dat(case_dir, "energiaFresta", "volFieldValue")
         e_buf = _dat(case_dir, "energiaBuffer", "volFieldValue")
+        t_fre = _dat(case_dir, "T_fresta", "volFieldValue")
         q_lin = _dat(case_dir, "calorLiner", "surfaceFieldValue")
         q_pis = _dat(case_dir, "calorPistao", "surfaceFieldValue")
 
@@ -255,6 +269,7 @@ class CreviceResults:
             # q>0 = gás PERDE (convenção declarada no docstring)
             q_liner=-_zone_at(q_lin, t) if q_lin.size else np.zeros_like(t),
             q_pistao=-_zone_at(q_pis, t) if q_pis.size else np.zeros_like(t),
+            T_fresta=_zone_at(t_fre, t) if t_fre.size else np.zeros_like(t),
             meta=meta)
 
 
