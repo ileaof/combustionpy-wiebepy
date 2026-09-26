@@ -99,7 +99,7 @@ formato nativo OpenFOAM (p, T, U, ρ por tempo gravado):
 | N5 | enchimento/ventagem com inversão (sinais separados) | sintético automatizado + caso real |
 | N6 | balanço de energia com troca de calor | **caso real**: massa 0,019 %, energia 0,61 % (mini-janela 2e-5 s); **janela completa (caso hmed, §7b)**: massa 0,0007 % (OK), energia 1,54 % (OK, `h_out = cp·T_fresta` medida; sem o FO: 2,42 %, FALHA declarada) |
 | N7 | sensibilidade de amostragem do fluxo | **evidência real (§7b)**: resíduo de massa 2,13e-9 kg a 1° vs 1,0e-13 kg a 2e-6 s na mesma janela — aliasing do transiente acústico; FOs fixados em 20 passos no gerador |
-| N7 | sensibilidade de malha/Δt | procedimento documentado (§5); não reivindicado |
+| N7 | sensibilidade de Δt | **par medido em janela curta (§7c)**: massa total e p concordam a <0,1 % entre Δt = 1e-7 e 5e-8 s; ṁ instantâneo muda de fase (erro oscilatório, cancela na integral). Malha: procedimento documentado, não reivindicado |
 | N8 | serial vs MPI | `--workers N` disponível; comparação a registrar |
 | N9 | não-interferência no wiebepy | 382 testes existentes + teste de identidade automatizado |
 
@@ -150,6 +150,30 @@ nunca silencioso).
 OF13 cria (`postProcessing/<startTime>/*.dat`) — marcava caso completo
 como FAILED ("Sem série temporal"); corrigido para `glob("*/*.dat")`
 com teste de regressão.
+
+## 7c. Sensibilidade a Δt (par medido em janela curta, 2026-09-25)
+
+Um único par na janela do probe [0, 0,002 s] (~500° antes do regime do
+caso completo; **não é reivindicação de independência**): mesma malha,
+mesmos BCs, só Δt muda (1e-7 vs 5e-8 s; amostragem dos FOs em ambos os
+casos no regime resolvido, 2e-6 e 1e-6 s):
+
+| Grandeza | max \|Δ\| | escala do sinal | dif. rel. máx |
+|---|---|---|---|
+| massa total armazenada | 3,8e-12 kg | 6,2e-9 kg | **0,06 %** |
+| p na câmara (imposta) | 20,7 Pa | 1,28e5 Pa | **0,016 %** |
+| ṁ instantâneo (ringing) | 4,5e-7 kg/s | 2,2e-5 kg/s | 2,1 % (até ~27 % nos instantes em que \|ṁ\| é pequeno) |
+
+Interpretação: as grandezas **integradas** — as que alimentam os
+balanços — concordam a <0,1 %; o ṁ **instantâneo** do ringing acústico
+muda de fase com Δt (esperado para um transiente com período ~Δt·2π),
+mas o erro é oscilatório e se cancela na integral — consistente com os
+resíduos de massa de ambos os probes (1e-13 kg). Confirma que a escolha
+de Δt ~ CFL acústico na folga (§5) é adequada para os balanços; para
+análise do ṁ instantâneo em si, a resolução deve ser reportada junto.
+
+Sensibilidade de **malha** para o módulo: procedimento documentado (§5),
+não reivindicado.
 
 ## 8. Como reproduzir o caso demo
 

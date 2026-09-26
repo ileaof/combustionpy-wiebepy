@@ -914,7 +914,11 @@ energia **2,42 %** — FALHA marginal) e `results/crevice_exemplo_hmed`
 declarado e testado). O probe `results/_crevice_probe_ams` (janela
 0,002 s) provou a causa do resíduo de massa: 2,13e-9 kg a 1° vs
 1,0e-13 kg a 2e-6 s — aliasing do ringing acústico na folga (|ṁ| até
-2,1e-5 kg/s dentro de um intervalo de 1°). Escalas dos balanços
+2,1e-5 kg/s dentro de um intervalo de 1°). Segundo probe
+(`results/_crevice_probe_dt`): sensibilidade a Δt (1e-7 vs 5e-8 s,
+mesma janela de 0,002 s) — massa total 3,8e-12 kg (0,06 %) e p 0,016 %
+de diferença; ṁ instantâneo difere até 2,1 % do pico (muda de fase com
+Δt; cancela na integral). Escalas dos balanços
 corrigidas: referência = massa/termos trocados. Bug corrigido:
 `check_completion` não via subpastas de restart do OF13 (glob
 `*.dat` → `*/*.dat`, com teste de regressão). Suíte: 402 passed
@@ -928,8 +932,11 @@ fixado —, regras de geometria, erro duro de blowby/extrapolação/
 proveniência). N2/N5/N6 sintéticos automatizados + caso real acima (janela completa
 na seção anterior: massa 0,0007 % OK, energia 1,54 % OK com h_out
 medido). N7 (sensibilidade): amostragem do fluxo MEDIDA
-(1° vs 2e-6 s: 0,88 % → 0,0007 % do fluxo trocado); malha/Δt com
-procedimento documentado, não reivindicado — uma execução nunca
+(1° vs 2e-6 s: 0,88 % → 0,0007 % do fluxo trocado); Δt MEDIDO em
+janela curta (probe `_crevice_probe_dt`, Δt = 1e-7 vs 5e-8 s, §7c de
+crevice.md: massa total e p concordam a <0,1 %; ṁ instantâneo muda de
+fase, erro oscilatório que se cancela na integral); malha com
+procedimento documentado, não reivindicada — uma execução nunca
 estabelece independência.
 N8 (serial vs MPI): `--workers N` disponível (decomposePar + mpirun +
 reconstructPar no adapter reutilizado). N9: 400 testes do wiebepy
