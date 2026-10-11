@@ -43,6 +43,17 @@ _LIM = [
 ]
 
 
+def write_exp_csv(path, theta_rad, p_kPa, origem: str = "") -> Path:
+    """Grava um ensaio θ [rad], P [kPa] no formato que ``load_exp_data``
+    lê: SEM cabeçalho (o leitor descarta colunas de nome desconhecido,
+    como "P"), só linhas ``#`` com a origem."""
+    linhas = [f"# ensaio: {origem}", "# theta [rad], P [kPa]"]
+    linhas += [f"{t:.10g},{p:.10g}" for t, p in zip(theta_rad, p_kPa)]
+    path = Path(path)
+    path.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    return path
+
+
 def load_exp_data(case_dir, cfg=None, engine=None) -> Optional[Dict]:
     """Dados experimentais para a comparação do relatório.
 
@@ -397,13 +408,13 @@ def report_html(case_dir, res: Dict, cfg: Optional[CfdConfig] = None,
     a = partes.append
     a("<h1>wiebepy CFD — Relatório do caso "
       f"({_e(case_dir.name)})</h1>")
-    a("<p class='sub'>Simulação 3D do escoamento e da energia em um "
-      "cilindro simplificado com liberação de calor global prescrita pela "
-      "função Wiebe calibrada (modo "
-      f"{_e(info.get('mode', 'prescribed_wiebe'))}). <b>Este relatório "
-      "NÃO apresenta previsões independentes de combustão</b>: a liberação "
-      "de calor foi imposta; o solver responde ao escoamento, à pressão e "
-      "às temperaturas.</p>")
+    a("<p class='sub'>Simulação 3D da combustão em um cilindro "
+      "simplificado: a liberação de calor da combustão segue a função "
+      "Wiebe calibrada no ensaio (modo "
+      f"{_e(info.get('mode', 'prescribed_wiebe'))}), e o solver calcula o "
+      "escoamento, a pressão, as temperaturas e a troca de calor nas "
+      "paredes. A taxa de queima é a da Wiebe; cinética química e frente "
+      "de chama não são resolvidas (ver <i>Modo físico e escopo</i>).</p>")
 
     a("<h2>Identificação e proveniência</h2>")
     a(_tabela(["Item", "Valor"], [

@@ -52,6 +52,7 @@ def init_state() -> None:
     from ..pressure.engine import EngineConfig
     st.session_state.setdefault("mode", "pressure")      # pressure | xb
     st.session_state.setdefault("pdata", None)           # PressureData
+    st.session_state.setdefault("pdata_full", None)      # idem, sem corte θ
     st.session_state.setdefault("engine", EngineConfig())
     st.session_state.setdefault("pmodel", None)          # {"Rc", "stages"}
     st.session_state.setdefault("pfit_result", None)

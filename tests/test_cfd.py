@@ -1196,3 +1196,24 @@ def test_polytropic_bands_n_insuficiente_nan():
     V = np.array([5e-4, 4.9e-4])
     nb = polytropic_bands(ca, p, V)
     assert all(not np.isfinite(b["n_eff"]) for b in nb)
+
+
+def test_copia_do_ensaio_no_caso_e_lida_pelo_relatorio(tmp_path):
+    """O ensaio gravado no caso (Preparar caso, GUI) volta inteiro na
+    comparação do relatório — um cabeçalho "theta,P" fazia o leitor
+    descartar a coluna P e o relatório saía com 0 pontos."""
+    from wiebepy.cfd.reporting import load_exp_data, write_exp_csv
+    from wiebepy.pressure.fit import read_pressure
+    src = Path(__file__).resolve().parents[1] / "examples" / "data" / \
+        "ensaio_P_exp_carga3_45.txt"
+    d = read_pressure(src, "rad", "bar", None, None)
+    write_exp_csv(tmp_path / "ensaio_x.csv", d.theta, d.P, "carga3_45")
+    (tmp_path / "case_config.yaml").write_text(yaml.safe_dump(
+        {"configuration": {"comparison": {
+            "experimental": "ensaio_x.csv", "experimental_angle_unit": "rad",
+            "experimental_pressure_unit": "kPa"}}}), encoding="utf-8")
+    exp = load_exp_data(tmp_path, engine=EngineConfig())
+    assert "erro" not in exp, exp.get("erro")
+    assert exp["p_kPa"].size == d.n
+    assert np.allclose(exp["p_kPa"], d.P)
+    assert np.allclose(np.radians(exp["ca_deg"]), d.theta)

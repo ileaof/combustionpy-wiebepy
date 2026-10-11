@@ -253,3 +253,41 @@ def test_cfd_equivalencia_gui_cli():
     assert cfg.max_Co == 0.25
     assert cfg.gas_model == "simple"
     assert cfg.experimental.endswith("ensaio_P_exp_carga3_45.txt")
+
+
+def test_cfd_segue_o_ensaio_carregado():
+    """A carga carregada na aba Dados define o caso CFD: motor, P inicial,
+    comparação e (com o modelo 0-D ajustado) Wiebe + Rc do mesmo ajuste."""
+    from wiebepy.pressure.engine import EngineConfig
+    at = _app()
+    _carrega_ensaio(at)
+    eng = at.session_state["engine"]
+    at.switch_page("app_pages/cfd.py").run()
+    _sem_erros(at)
+    f = at.session_state["cfd_form"]
+    nome = at.session_state["data_name"]
+    assert f["exp_file"].startswith("ensaio_") and f["exp_file"].endswith(".csv")
+    assert f["exp_angle_unit"] == "rad" and f["exp_pressure_unit"] == "kPa"
+    assert f["m_fuel_kg_per_cycle"] == eng.m_fuel and f["rpm"] == eng.rpm
+    assert f["T0_K"] == eng.T1
+    # P em -120° vem da série completa do ensaio (o corte ±2 rad começa em
+    # -114,5°): é o P1 medido e documentado do case_006/012, 127,6 kPa
+    assert abs(f["P0_kPa"] - 127.6) < 0.05, f["P0_kPa"]
+    assert f["_P0_origem"] == "interpolada no ensaio"
+    # motor plano: EngineConfig.from_dict deve receber os valores do form
+    e = EngineConfig.from_dict({k: f[k] for k in (
+        "bore_mm", "stroke_mm", "rod_length_mm", "Rc", "rpm",
+        "m_fuel_kg_per_cycle", "LHV_kJ_per_kg", "T1_K", "Tw_K")})
+    assert e.m_fuel == eng.m_fuel and e.Rc == f["Rc"]
+    # modelo 0-D ajustado -> Wiebe e Rc vêm do mesmo ajuste
+    at.switch_page("app_pages/modelo.py").run()
+    at.segmented_control(key="pmodelo_n").set_value(2).run()
+    _sem_erros(at)
+    pm = at.session_state["pmodel"]
+    at.switch_page("app_pages/cfd.py").run()
+    _sem_erros(at)
+    f = at.session_state["cfd_form"]
+    assert f["wiebe_origem"] == "modelo atual"
+    assert len(f["wiebe_stages"]) == 2
+    assert f["Rc"] == float(pm["Rc"])
+    assert nome

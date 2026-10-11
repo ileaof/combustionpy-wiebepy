@@ -100,6 +100,86 @@ def _form() -> dict:
     return st.session_state.cfd_form
 
 
+def _ensaio_id(d) -> tuple:
+    """Identidade do ensaio carregado na aba Dados (nome + conteúdo)."""
+    return (st.session_state.get("data_name") or d.source or "", int(d.n),
+            round(float(np.sum(d.P)), 6))
+
+
+def _modelo_id(pm) -> tuple | None:
+    if not pm or not pm.get("stages"):
+        return None
+    return (round(float(pm.get("Rc") or 0.0), 8),
+            tuple(tuple(round(float(v), 10) for v in
+                        (s.beta, s.theta0, s.duration, s.m, s.a))
+                  for s in as_stages(pm["stages"])))
+
+
+def _csv_do_ensaio(nome: str) -> str:
+    """Nome do arquivo com o ensaio carregado, gravado DENTRO do caso."""
+    base = "".join(c if c.isalnum() or c in "-_" else "_"
+                   for c in Path(nome or "ensaio").stem)
+    return f"ensaio_{base}.csv"
+
+
+def _p_inicial_do_ensaio(d, theta_deg: float, e) -> tuple:
+    """P [kPa] do ensaio no início da janela CFD. Fora da faixa lida,
+    extrapola por compressão politrópica (κ do motor) a partir do ponto
+    medido mais próximo — declarado na interface."""
+    from wiebepy.pressure.engine import volume
+    th = np.degrees(d.theta)
+    if th[0] <= theta_deg <= th[-1]:
+        return float(np.interp(theta_deg, th, d.P)), "interpolada no ensaio"
+    i = 0 if theta_deg < th[0] else -1
+    V0, _, _ = volume(math.radians(float(th[i])), e.Rc, e)
+    V1, _, _ = volume(math.radians(theta_deg), e.Rc, e)
+    return (float(d.P[i] * (V0 / V1) ** e.kappa),
+            f"extrapolada de {th[i]:.1f}° (politrópica, κ = {e.kappa:g})")
+
+
+def _sincronizar_ensaio(f) -> str | None:
+    """O ensaio carregado (aba Dados) define o caso CFD: motor, P e T
+    iniciais, comparação e — quando o modelo 0-D estiver ajustado — a
+    Wiebe e o Rc do MESMO ajuste. Só sobrescreve o formulário quando o
+    ensaio ou o modelo mudam; edições feitas aqui depois são mantidas."""
+    d = st.session_state.get("pdata")
+    if d is None:
+        return None
+    eid = _ensaio_id(d)
+    if f.get("_ensaio_id") != eid:
+        e = st.session_state.engine
+        f.update({"bore_mm": e.bore * 1e3, "stroke_mm": e.stroke * 1e3,
+                  "rod_length_mm": e.rod_length * 1e3, "rpm": e.rpm,
+                  "Rc": e.Rc, "m_fuel_kg_per_cycle": e.m_fuel,
+                  "LHV_kJ_per_kg": e.LHV, "T1_K": e.T1, "T0_K": e.T1,
+                  "Tw_K": e.Tw,
+                  "exp_file": _csv_do_ensaio(eid[0]),
+                  "exp_angle_unit": "rad", "exp_pressure_unit": "kPa",
+                  "exp_offset_deg": 0.0})
+        P0, como = _p_inicial_do_ensaio(
+            st.session_state.get("pdata_full") or d,
+            float(f["interval_start"]), e)
+        f["P0_kPa"] = round(P0, 3)
+        f["_P0_origem"] = como
+        f["_ensaio_id"] = eid
+        f["_modelo_id"] = None
+    mid = _modelo_id(st.session_state.get("pmodel"))
+    if mid is not None and f.get("_modelo_id") != mid:
+        fonte = _estagios_fonte_deg()
+        if fonte:
+            f["wiebe_origem"] = "modelo atual"
+            f["wiebe_stages"] = fonte
+            st.session_state["_cfd_n_pendente"] = len(fonte)
+            for k in [k for k in st.session_state
+                      if str(k).startswith("cfd_editor_")]:
+                st.session_state.pop(k, None)
+            # Wiebe e Rc saem do mesmo ajuste: usar um sem o outro
+            # desfaz a calibração (verification.md §3d)
+            f["Rc"] = float(st.session_state.pmodel.get("Rc") or f["Rc"])
+        f["_modelo_id"] = mid
+    return eid[0]
+
+
 def _estagios_fonte_deg() -> list | None:
     """Estágios do modelo ATUAL (fonte sugerida da Wiebe prescrita),
     convertidos para DEG. Modo pressão: pmodel (rad interno); modo xb:
@@ -185,8 +265,10 @@ def _cfg_do_form(f=None) -> "CfdConfig":
     return CfdConfig.from_dict(cfg_dict)
 
 
-def _engine_cfg() -> dict:
-    f = _form()
+def _engine_cfg(f=None) -> dict:
+    # chaves PLANAS: EngineConfig.from_dict não desembrulha {"engine": …}
+    if f is None:
+        f = _form()
     return {k: f[k] for k in ("bore_mm", "stroke_mm", "rod_length_mm", "Rc",
                               "rpm", "m_fuel_kg_per_cycle", "LHV_kJ_per_kg",
                               "T1_K", "Tw_K")}
@@ -210,7 +292,7 @@ def _runner(f=None):
         f = _form()
     cfg = _cfg_do_form(f)
     inst, distro = _solver_install(f["wsl_distro"])
-    engine = EngineConfig.from_dict({"engine": _engine_cfg()})
+    engine = EngineConfig.from_dict(_engine_cfg(f))
     return CfdRunner(cfg, engine=engine, distro=distro,
                      solver_info=inst or {"version": None})
 
@@ -239,6 +321,17 @@ def _job() -> dict | None:
 
 # =============================================================== formulário
 with st.expander("Configuração do caso", expanded=True):
+    _ensaio_nome = _sincronizar_ensaio(_form())
+    if _ensaio_nome:
+        _f = _form()
+        st.info(f"Ensaio carregado: **{_ensaio_nome}**. Motor, P inicial "
+                f"({_f['P0_kPa']:.1f} kPa, {_f.get('_P0_origem', '')}), "
+                f"comparação"
+                + (" e Wiebe/Rc do modelo ajustado"
+                   if _f.get("_modelo_id") else
+                   " (ajuste o modelo 0-D para trazer a Wiebe e o Rc)")
+                + " vêm deste ensaio; o caso grava uma cópia dele.",
+                icon=":material/link:")
     c1, c2 = st.columns(2)
     with c1:
         f = _form()
@@ -580,6 +673,8 @@ with st.container(horizontal=True):
 
 if rodar:
     fs = dict(_form())                 # snapshot fora da thread
+    pdata_prep = (st.session_state.get("pdata_full")
+                  or st.session_state.get("pdata"))
     cfg = _cfg_do_form(fs)
     erros = cfg.validate()
     if erros:
@@ -588,7 +683,15 @@ if rodar:
     else:
         def _prep(job):
             runner = _runner(fs)
-            return str(runner.prepare(heat_enabled=True))
+            d = runner.prepare(heat_enabled=True)
+            # cópia do ensaio carregado dentro do caso: o relatório
+            # compara sempre com a carga que gerou o caso
+            if (pdata_prep is not None and fs.get("_ensaio_id")
+                    and fs["exp_file"] == _csv_do_ensaio(fs["_ensaio_id"][0])):
+                from wiebepy.cfd.reporting import write_exp_csv
+                write_exp_csv(Path(d) / fs["exp_file"], pdata_prep.theta,
+                              pdata_prep.P, fs["_ensaio_id"][0])
+            return str(d)
         _iniciar_cfd_job("preparação do caso", _prep)
         st.rerun()
 
@@ -624,41 +727,44 @@ if cancelar:
         st.warning("Nenhuma execução ativa neste caso.")
 
 if relatorio:
-    fs = dict(_form())
-    pdata_snap = st.session_state.get("pdata")   # fora da thread
+    # O relatório usa SÓ o que o caso gravou (motor e ensaio do
+    # case_config.yaml): trocar a carga na aba Dados depois de rodar não
+    # pode mudar a comparação de um caso já calculado.
+    _info_caso = yaml.safe_load((case_dir / "case_config.yaml").read_text(
+        encoding="utf-8")) or {}
+    _pd = st.session_state.get("pdata")
+    if _pd is not None:
+        from wiebepy.cfd.reporting import load_exp_data
+        from wiebepy.pressure.engine import EngineConfig
+        _exp_caso = load_exp_data(
+            case_dir, engine=EngineConfig.from_dict(
+                _info_caso.get("engine") or {}))
+        _mesmo = False
+        if _exp_caso and "p_kPa" in _exp_caso:
+            _ca = np.degrees(_pd.theta)
+            _m = ((_ca >= _exp_caso["ca_deg"][0])
+                  & (_ca <= _exp_caso["ca_deg"][-1]))
+            _mesmo = bool(_m.sum() >= 20 and np.max(np.abs(
+                np.interp(_ca[_m], _exp_caso["ca_deg"], _exp_caso["p_kPa"])
+                / _pd.P[_m] - 1.0)) < 0.01)
+        if not _mesmo:
+            st.warning(
+                f"O ensaio carregado ({st.session_state.get('data_name')}) "
+                f"não é o deste caso; o relatório usa o ensaio gravado no "
+                f"caso ({(_exp_caso or {}).get('source', 'nenhum')}).",
+                icon=":material/warning:")
     def _rep(job):
         from wiebepy.core.parameters import as_stages
-        from wiebepy.cfd.reporting import write_report
+        from wiebepy.cfd.reporting import load_exp_data, write_report
         from wiebepy.cfd.results import read_results
         from wiebepy.pressure.engine import EngineConfig
-        engine = EngineConfig.from_dict(
-            {"engine": {k: fs[k] for k in ("bore_mm", "stroke_mm",
-                                           "rod_length_mm", "Rc", "rpm",
-                                           "m_fuel_kg_per_cycle",
-                                           "LHV_kJ_per_kg", "T1_K",
-                                           "Tw_K")}})
-        info = yaml.safe_load((case_dir / "case_config.yaml").read_text(
-            encoding="utf-8")) or {}
+        engine = EngineConfig.from_dict(_info_caso.get("engine") or {})
         try:
-            stages = as_stages(info.get("wiebe_stages") or [])
+            stages = as_stages(_info_caso.get("wiebe_stages") or [])
         except Exception:                               # noqa: BLE001
             stages = None
         res = read_results(case_dir, engine=engine, stages=stages)
-        # dados experimentais: prioridade ao ensaio carregado (aba Dados)
-        exp = None
-        pd_ = pdata_snap
-        if pd_ is not None:
-            import numpy as _np
-            from wiebepy.pressure.engine import volume
-            ca = _np.degrees(_np.asarray(pd_.theta, float))
-            V, _, _ = volume(_np.radians(ca), engine.Rc, engine)
-            exp = {"source": pd_.source or "ensaio carregado (aba Dados)",
-                   "ca_deg": ca, "p_kPa": _np.asarray(pd_.P, float),
-                   "offset_deg": 0.0, "V_m3": _np.asarray(V, float),
-                   "warnings": list(getattr(pd_, "warnings", []) or [])}
-        else:
-            from wiebepy.cfd.reporting import load_exp_data
-            exp = load_exp_data(case_dir, engine=engine)
+        exp = load_exp_data(case_dir, engine=engine)
         return str(write_report(case_dir, res, exp_data=exp))
     _iniciar_cfd_job("geração do relatório", _rep)
 
@@ -857,9 +963,10 @@ if res_prontos or state in (CaseState.CANCELLED, CaseState.FAILED):
             from wiebepy.core.parameters import as_stages
             from wiebepy.cfd.results import read_results
             from wiebepy.pressure.engine import EngineConfig
-            engine = EngineConfig.from_dict({"engine": _engine_cfg()})
             info = yaml.safe_load((case_dir / "case_config.yaml")
                                   .read_text(encoding="utf-8")) or {}
+            # motor gravado no caso, não o do formulário atual
+            engine = EngineConfig.from_dict(info.get("engine") or {})
             stages = None
             try:
                 stages = as_stages(info.get("wiebe_stages") or [])

@@ -484,15 +484,33 @@ botões na ordem:
      *Modelo do gás* = `multicomponent_inert` (degrau R1) Cp/μ/Pr ficam
      desabilitados: N₂+O₂ com NASA janaf da mistura. Para descartar a
      comparação, esvazie o campo do arquivo.
+   - **Com um ensaio carregado na aba Dados, a carga do CFD é a MESMA
+     do ensaio.** Ao carregar (ou trocar) o ensaio, a página CFD copia
+     os dados do motor da sessão (geometria, rpm, m_f, PCI, T1, Tw),
+     tira o **P inicial** da curva medida no início da janela (série
+     completa do arquivo, sem o corte θ mín/máx; fora dela, extrapola
+     por politrópica com κ e avisa) e aponta a comparação para uma
+     cópia do ensaio. Quando o modelo 0-D é ajustado, a origem passa a
+     *modelo atual* com os estágios **e o Rc do mesmo ajuste** (usar um
+     sem o outro desfaz a calibração — §3d do `verification.md`). Um
+     aviso azul no topo do formulário mostra de qual ensaio o caso
+     vem; edições feitas depois na página são mantidas até o ensaio ou
+     o modelo mudarem.
 4. **Preparar caso** → gera o caso OpenFOAM para inspeção (estado
-   *Preparado*). A configuração é validada antes: erros aparecem como
+   *Preparado*). Com ensaio carregado, grava junto
+   `ensaio_<nome>.csv` (θ [rad], P [kPa]) no diretório do caso: é com
+   ele que o relatório compara. A configuração é validada antes: erros aparecem como
    mensagem vermelha e o caso não é gerado.
 5. **Validar** → estado *Validado* — o **Executar** exige isso (gate).
 6. **Executar** → painel com o **log do solver ao vivo**; ~2–3 min na
    malha 24×36. **Cancelar execução** interrompe inclusive os processos
    MPI, preservando logs e resultados parciais.
 7. **Relatório HTML** → gera/atualiza o `report.html` no diretório do
-   caso (habilitado só no estado *Concluído*).
+   caso (habilitado só no estado *Concluído*). Usa **só o que o caso
+   gravou** (`engine` e `comparison` do `case_config.yaml`): trocar a
+   carga na aba Dados depois de rodar não muda a comparação de um caso
+   já calculado — a página avisa quando o ensaio carregado não é o do
+   caso.
 8. **Ver os resultados**: o expander *Resultados (0-D extraído do caso
    3D)* mostra p̄ máx, T̄ máx, trabalho indicado, perda nas paredes, a
    energia prescrita pela Wiebe com o erro da tabela, e o gráfico

@@ -139,6 +139,11 @@ def dados() -> None:
             nova = (anterior is None or nome != st.session_state.data_name
                     or d.n != anterior.n or not np.allclose(d.P, anterior.P))
             st.session_state.pdata = d
+            # série SEM o corte θ mín/máx: o CFD tira dela o P inicial
+            # (ex. -120°, fora de ±2 rad) e grava a cópia do ensaio no caso
+            st.session_state.pdata_full = pressure_from_arrays(
+                th, P, "rad" if u_ang == "radianos" else "deg", u_p,
+                None, None, nome)
             st.session_state.mode = "pressure"
             st.session_state.data_name = nome
             st.session_state.p_resumo = {
