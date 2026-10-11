@@ -123,7 +123,8 @@ def _yaml_load(p: Path) -> Dict:
     return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
 
 
-def _metricas_experimental(res: Dict, exp: Dict) -> List[List]:
+def _metricas_experimental(res: Dict, exp: Dict,
+                           rpm: Optional[float] = None) -> List[List]:
     """Métricas p̄ CFD × p medida no ponto experimental (seleção
     documentada; sem calibração silenciosa)."""
     ca = np.asarray(res.get("ca_deg") if res.get("ca_deg") is not None
@@ -154,20 +155,34 @@ def _metricas_experimental(res: Dict, exp: Dict) -> List[List]:
             and "wall_loss_J" in res:
         # perda às paredes acumulada ATÉ O PICO: calor perdido depois do
         # pico não corrige a pressão máxima anterior (escada de V&V).
+        # wall_loss_W é potência [W] e wl_ca é ângulo [°CA]: a integral sai
+        # em W·°CA e só vira joule dividindo pela velocidade angular
+        # ω = 6·rpm [°/s] (6 = 360°/60 s).
         wl_ca = np.asarray(wl_ca, float)
         wl_W = np.asarray(wl_W, float)
         m_ate = wl_ca <= ca[imax_c]
         if wl_ca.size > 1 and m_ate.sum() > 1:
-            l_tot = float(np.trapz(wl_W, wl_ca))
+            l_tot = float(np.trapz(wl_W, wl_ca))          # W·°CA
             l_ate = float(np.trapz(wl_W[m_ate], wl_ca[m_ate]))
+            omega = 6.0 * float(rpm) if rpm else 0.0          # °/s
             extra = [
                 ["perda às paredes: total na janela [J]",
                  float(res["wall_loss_J"])],
-                ["perda às paredes acumulada até p_max "
-                 f"({ca[imax_c]:.1f}°) [J]", float(l_ate)],
-                ["fração da perda antes do p_max [%]",
-                 float(100.0 * l_ate / l_tot) if l_tot else float("nan")],
             ]
+            if omega > 0:
+                extra.append(["perda às paredes acumulada até p_max "
+                              f"({ca[imax_c]:.1f}°) [J]", l_ate / omega])
+                # conferência: a integral da potência deve reproduzir o
+                # total do solver (mesma grandeza, caminhos diferentes)
+                extra.append(["conferência: integral da potência na janela "
+                              "[J]", l_tot / omega])
+            else:
+                extra.append(["perda às paredes acumulada até p_max "
+                              f"({ca[imax_c]:.1f}°) [W·°CA] (rpm ausente: "
+                              "sem conversão para J)", l_ate])
+            extra.append(["fração da perda antes do p_max [%]",
+                          float(100.0 * l_ate / l_tot) if l_tot
+                          else float("nan")])
     return [
         ["p_max CFD [kPa]", float(p[imax_c])],
         ["CA de p_max CFD [°]", float(ca[imax_c])],
@@ -607,7 +622,8 @@ def report_html(case_dir, res: Dict, cfg: Optional[CfdConfig] = None,
               "causa do erro acima — nenhuma substituição silenciosa foi "
               "feita.</p>")
         else:
-            met = _metricas_experimental(res, exp_data)
+            met = _metricas_experimental(res, exp_data,
+                                         (motion or {}).get("rpm"))
             if met:
                 a("<h3>Métricas p̄ CFD × p medida</h3>")
                 a(_tabela(["Métrica", "Valor"], met))

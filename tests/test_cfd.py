@@ -1217,3 +1217,30 @@ def test_copia_do_ensaio_no_caso_e_lida_pelo_relatorio(tmp_path):
     assert exp["p_kPa"].size == d.n
     assert np.allclose(exp["p_kPa"], d.P)
     assert np.allclose(np.radians(exp["ca_deg"]), d.theta)
+
+
+def test_perda_as_paredes_em_joules(tmp_path):
+    """A perda acumulada até o pico sai em J (W·°CA ÷ ω) e a integral da
+    potência reproduz o total do solver — regressão: antes o relatório
+    publicava W·°CA rotulado como J (fator 6·rpm ≈ 2e4)."""
+    import numpy as np
+    from wiebepy.cfd.reporting import _metricas_experimental
+    rpm = 3396.2
+    ca = np.linspace(-120.0, 120.0, 481)
+    p = 1000.0 + 4000.0 * np.exp(-((ca - 10.0) / 15.0) ** 2)
+    pot = -300.0 - 900.0 * np.exp(-((ca - 20.0) / 30.0) ** 2)      # W
+    total_J = float(np.trapz(pot, ca) / (6.0 * rpm))
+    res = {"ca_deg": ca, "p_mean_kPa": p, "wall_loss_ca_deg": ca,
+           "wall_loss_W": pot, "wall_loss_J": total_J}
+    exp = {"ca_deg": ca, "p_kPa": p}
+    linhas = dict((l[0], l[1]) for l in _metricas_experimental(res, exp, rpm))
+    conf = [v for k, v in linhas.items() if k.startswith("conferência")][0]
+    assert conf == pytest.approx(total_J, rel=1e-9)
+    ate = [v for k, v in linhas.items() if "acumulada até" in k][0]
+    assert "[J]" in [k for k in linhas if "acumulada até" in k][0]
+    assert abs(ate) < abs(total_J)                     # parte do total
+    frac = linhas["fração da perda antes do p_max [%]"]
+    assert frac == pytest.approx(100.0 * ate / total_J, rel=1e-9)
+    # sem rpm: o rótulo deixa claro que não houve conversão
+    sem = dict((l[0], l[1]) for l in _metricas_experimental(res, exp, None))
+    assert any("W·°CA" in k for k in sem)
