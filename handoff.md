@@ -3,6 +3,28 @@
 Registro das alterações feitas no código, para quem continuar o trabalho.
 A mais recente fica no topo.
 
+## 2026-10-12 — Help.html bilingue (Portugues/Ingles)
+
+`Help.html`. O guia passou a conter as duas versoes no mesmo arquivo, que
+continua autocontido (a exibicao no GUI usa `st.iframe` com srcdoc). O texto em
+portugues ficou dentro de `<div id="doc-pt">`, sem alteracao; a traducao
+completa das 15 secoes e do indice ficou em `<div id="doc-en">`, com ancoras de
+sufixo `-en` para nao duplicar ids. Dois botoes no cabecalho (`.lang`) alternam
+os blocos, o `<title>`, o atributo `lang` e o proprio cabecalho; a escolha vai
+para `localStorage` dentro de try/catch, porque o iframe do Streamlit pode
+bloquear o acesso — nesse caso o guia simplesmente abre em portugues, que e o
+padrao. Quem editar o guia precisa mexer nos dois blocos.
+
+## Planejado — CFD em Apple Silicon (macOS)
+
+Ainda sem código; registro do plano. O CFD do wiebepy chama o OpenFOAM 13 pelo
+`wsl.exe` (adapter `openfoam`, `src/wiebepy/cfd/`), o que só existe no Windows. Em
+Apple Silicon (máquina M5 prevista), o OpenFOAM vai rodar numa VM Linux ARM
+(OrbStack, Lima ou UTM). Será preciso um segundo caminho de execução que chame o
+`foamRun` dentro da VM, escolhido pelo sistema operacional, mantendo o `doctor`,
+a validação e o relatório iguais. As partes 0-D, ajuste e GUI são Python puro e
+devem rodar sem mudança.
+
 ## 2026-10-10 — Relatório CFD: perda às paredes até o p_max estava em W·°CA
 
 `src/wiebepy/cfd/reporting.py`, `_metricas_experimental`. A integral
