@@ -30,6 +30,7 @@ import streamlit as st
 from ..core.core import multistage_wiebe, stage_contributions
 from ..core.derivatives import multistage_wiebe_derivative
 from ..core.parameters import A_DEFAULT, Stage, as_stages, default_stages
+from .i18n import t as _, tf
 
 CORES = ["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e"]
 UNIDADE = {"deg": "°", "rad": "rad"}
@@ -88,8 +89,8 @@ def aplicar_ao_modelo(stages) -> None:
 def tabela_estagios(stages) -> pd.DataFrame:
     u = unidade()
     return pd.DataFrame([{
-        "estágio": j, "β": s.beta, f"θ0 [{u}]": s.theta0,
-        f"Δθ [{u}]": s.duration, "m": s.m, "a": s.a}
+        _("estágio"): j, "β": s.beta, tf("θ0 [{u}]", u=u): s.theta0,
+        tf("Δθ [{u}]", u=u): s.duration, "m": s.m, "a": s.a}
         for j, s in enumerate(as_stages(stages), start=1)])
 
 
@@ -180,13 +181,15 @@ def grafico_curvas(theta, stages, dados=None, serie: str = "xb",
     total = (multistage_wiebe(th, st_) if serie == "xb"
              else multistage_wiebe_derivative(th, st_))
     contrib = cx if serie == "xb" else cd
-    linhas = [pd.DataFrame({"θ": th, "valor": total, "curva": "total"})]
+    nome_total = _("total")
+    nome_est = [tf("estágio {j}", j=j + 1) for j in range(len(st_))]
+    linhas = [pd.DataFrame({"θ": th, "valor": total, "curva": nome_total})]
     if contribuicoes and len(st_) > 1:
         for j in range(len(st_)):
             linhas.append(pd.DataFrame({"θ": th, "valor": contrib[j],
-                                        "curva": f"estágio {j + 1}"}))
+                                        "curva": nome_est[j]}))
     df = pd.concat(linhas)
-    dominio = ["total"] + [f"estágio {j + 1}" for j in range(len(st_))]
+    dominio = [nome_total] + nome_est
     cores = ["#1d2330"] + CORES[:len(st_)]
     eixo_y = "x_b [-]" if serie == "xb" else f"dx_b/dθ [1/{u}]"
     base = alt.Chart(df).mark_line().encode(
@@ -194,10 +197,11 @@ def grafico_curvas(theta, stages, dados=None, serie: str = "xb",
         y=alt.Y("valor:Q", title=eixo_y),
         color=alt.Color("curva:N", scale=alt.Scale(domain=dominio, range=cores),
                         title=None),
-        strokeDash=alt.condition(alt.datum.curva == "total", alt.value([1, 0]),
-                                 alt.value([5, 3])),
-        tooltip=["curva:N", alt.Tooltip("θ:Q", format=".2f"),
-                 alt.Tooltip("valor:Q", format=".4g")])
+        strokeDash=alt.condition(alt.datum.curva == nome_total,
+                                 alt.value([1, 0]), alt.value([5, 3])),
+        tooltip=[alt.Tooltip("curva:N", title=_("curva")),
+                 alt.Tooltip("θ:Q", format=".2f"),
+                 alt.Tooltip("valor:Q", format=".4g", title=_("valor"))])
     camadas = [base]
     exp = None if dados is None else (dados.xb if serie == "xb" else dados.dxb)
     if exp is not None:
@@ -208,8 +212,10 @@ def grafico_curvas(theta, stages, dados=None, serie: str = "xb",
                                                      opacity=0.7).encode(
             x="θ:Q", y="valor:Q",
             tooltip=[alt.Tooltip("θ:Q", format=".2f"),
-                     alt.Tooltip("valor:Q", format=".4g", title="experimental")]))
-    titulo = ("Fração de massa queimada" if serie == "xb" else "Taxa de queima")
+                     alt.Tooltip("valor:Q", format=".4g",
+                                 title=_("experimental"))]))
+    titulo = (_("Fração de massa queimada") if serie == "xb"
+              else _("Taxa de queima"))
     return _tema(alt.layer(*camadas), titulo)
 
 
@@ -221,9 +227,12 @@ def grafico_residuos(dados, stages, serie: str = "xb"):
            else multistage_wiebe_derivative(dados.theta, st_))
     df = pd.DataFrame({"θ": dados.theta, "resíduo": sim - y})
     linha = alt.Chart(df).mark_line(color=CORES[0]).encode(
-        x=alt.X("θ:Q", title=f"θ [{u}]"), y=alt.Y("resíduo:Q"))
+        x=alt.X("θ:Q", title=f"θ [{u}]"),
+        y=alt.Y("resíduo:Q", title=_("resíduo")))
     zero = alt.Chart(pd.DataFrame({"y": [0.0]})).mark_rule(color="#1d2330").encode(y="y:Q")
-    return _tema(linha + zero, f"Resíduos ({'x_b' if serie == 'xb' else 'dx_b/dθ'})")
+    return _tema(linha + zero,
+                 tf("Resíduos ({serie})",
+                    serie="x_b" if serie == "xb" else "dx_b/dθ"))
 
 
 def grafico_convergencia(fit_result):
@@ -233,36 +242,39 @@ def grafico_convergencia(fit_result):
             continue
         h = np.maximum(np.asarray(r.history, dtype=float), 1e-300)
         linhas.append(pd.DataFrame({"iteração": np.arange(h.size),
-                                    "objetivo": h, "run": f"run {r.run + 1}"}))
+                                    "objetivo": h,
+                                    "run": f"run {r.run + 1}"}))
     if not linhas:
         return None
     df = pd.concat(linhas)
     c = alt.Chart(df).mark_line().encode(
-        x="iteração:Q",
+        x=alt.X("iteração:Q", title=_("iteração")),
         y=alt.Y("objetivo:Q", scale=alt.Scale(type="log"),
-                title=f"objetivo ({fit_result.spec.metric})"),
+                title=tf("objetivo ({metrica})",
+                         metrica=fit_result.spec.metric)),
         color=alt.Color("run:N", title=None))
-    return _tema(c, "Convergência do PSO (antes do refinamento local)")
+    return _tema(c, _("Convergência do PSO (antes do refinamento local)"))
 
 
 def grafico_comparacao(tabela: List[Dict]):
     df = pd.DataFrame(tabela)
     longo = pd.concat([
-        pd.DataFrame({"N": df.n_stages, "RMSE": df.rmse, "série": "treino"}),
+        pd.DataFrame({"N": df.n_stages, "RMSE": df.rmse,
+                      "série": _("treino")}),
         pd.DataFrame({"N": df.n_stages, "RMSE": df.cv_rmse,
-                      "série": "validação cruzada"})]).dropna()
+                      "série": _("validação cruzada")})]).dropna()
     erro = alt.Chart(longo).mark_line(point=True).encode(
-        x=alt.X("N:O", title="número de estágios"),
+        x=alt.X("N:O", title=_("número de estágios")),
         y=alt.Y("RMSE:Q", scale=alt.Scale(type="log")),
         color=alt.Color("série:N", title=None))
     ic = pd.concat([
         pd.DataFrame({"N": df.n_stages, "Δ": df.delta_aic, "critério": "ΔAIC"}),
         pd.DataFrame({"N": df.n_stages, "Δ": df.delta_bic, "critério": "ΔBIC"})])
     crit = alt.Chart(ic).mark_line(point=True).encode(
-        x=alt.X("N:O", title="número de estágios"), y=alt.Y("Δ:Q"),
+        x=alt.X("N:O", title=_("número de estágios")), y=alt.Y("Δ:Q"),
         color=alt.Color("critério:N", title=None))
-    return (_tema(erro, "Erro × complexidade"),
-            _tema(crit, "ΔAIC / ΔBIC (indicativos)"))
+    return (_tema(erro, _("Erro × complexidade")),
+            _tema(crit, _("ΔAIC / ΔBIC (indicativos)")))
 
 
 # =============================================================================

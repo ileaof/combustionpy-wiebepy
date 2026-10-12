@@ -34,3 +34,14 @@ def n_stages(request):
 @pytest.fixture
 def stages(n_stages):
     return REF_STAGES[n_stages]
+
+
+@pytest.fixture(autouse=True)
+def _gui_em_portugues(tmp_path_factory, monkeypatch):
+    """A GUI é testada em português: a escolha de idioma do usuário (gravada
+    em ~/.wiebepy/gui.json) não pode mudar o resultado dos testes."""
+    from wiebepy.gui import i18n
+    monkeypatch.setattr(i18n, "ARQUIVO",
+                        tmp_path_factory.mktemp("i18n") / "gui.json")
+    monkeypatch.setattr(i18n, "_atual", "pt")
+    i18n.limpar_faltantes()

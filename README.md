@@ -241,7 +241,15 @@ wiebepy --gui                          # abre no navegador (localhost:8501)
 streamlit run src/wiebepy/gui/app.py   # equivalente
 ```
 
-Páginas (menu no topo) e botão **Ajuda** (abre este guia, `Help.html`):
+No topo ficam o seletor **Português / English** e o botão **Ajuda**
+(abre o guia `Help.html`, que tem o seu próprio seletor de idioma).
+O idioma vale para toda a interface — rótulos, mensagens, títulos de
+gráfico e nomes de coluna — é lembrado entre sessões (gravado em
+`~/.wiebepy/gui.json`) e também pode vir da URL (`?lang=en`). As
+mensagens do núcleo (leitura de dados, identificabilidade, CFD) ainda
+saem em português.
+
+Páginas (menu no topo):
 
 | Página | O que faz |
 |---|---|
@@ -867,7 +875,8 @@ wiebepy/
 │   │                            # hardware, procs (pools sem sobreinscrição)
 │   ├── io/                      # readers, writers, config
 │   ├── plotting/plots.py
-│   ├── gui/                     # Streamlit: app.py, state.py, app_pages/
+│   ├── gui/                     # Streamlit: app.py, state.py, app_pages/,
+│   │                            # i18n + lang_en (português/inglês)
 │   ├── pressure/                # modelo 0-D: engine, model (Hohenberg, EDOs), fit
 │   ├── cfd/                     # OPCIONAL: config, case_builder, sources,
 │   │                            # adapters (OpenFOAM 13/WSL2), runner,

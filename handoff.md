@@ -3,6 +3,53 @@
 Registro das alterações feitas no código, para quem continuar o trabalho.
 A mais recente fica no topo.
 
+## 2026-10-12 — GUI bilingue (portugues/ingles)
+
+`src/wiebepy/gui/i18n.py` (novo), `src/wiebepy/gui/lang_en.py` (novo) e todos
+os arquivos da GUI. A interface inteira passou a ter idioma: seletor
+**Portugues / English** no cabecalho, ao lado do botao Ajuda.
+
+Como funciona: a chave de traducao e o PROPRIO texto em portugues (padrao
+gettext), ou seja o codigo escreve `_("Fracao de massa queimada")` e
+`lang_en.EN` traz a versao inglesa; texto sem entrada cai de volta para o
+portugues e fica registrado em `i18n.faltantes()`. Para rotulos com valores
+existe `tf("Resultado {n}-Wiebe", n=3)`, que traduz o molde antes de formatar
+(a traducao pode reordenar os campos). O idioma vive em
+`st.session_state["gui_lang"]`, e gravado em `~/.wiebepy/gui.json` (mesmo
+padrao do `cfd_env.json`) e tambem pode vir da URL (`?lang=en`); o padrao e
+portugues.
+
+Cobertura: 456 textos distintos (548 ocorrencias, ~15 mil caracteres), em
+app.py, state.py (titulos de grafico, rotulos de eixo, nomes de coluna),
+as oito paginas, pressure_ui.py e cfd.py. Os NOMES DE CAMPO dos DataFrames
+continuam em portugues de proposito: as strings de encode do Altair
+("valor:Q") precisam casar com eles — o que se traduz e o titulo exibido.
+Opcoes cujo valor e usado na logica (ex. "Arquivo"/"Exemplo sintetico",
+separadores, "sim"/"nao") sao traduzidas por `format_func=_`, mantendo o
+valor em portugues.
+
+Tres armadilhas que apareceram e estao resolvidas:
+
+- `_` como variavel descartavel (`for _, r in df.iterrows()`) APAGAVA a funcao
+  de traducao do modulo. Renomeados em modelo.py, cfd.py, pressure_ui.py e
+  desempenho.py; o teste `test_gui_i18n` nao cobre isso, mas um `ast` scan
+  acha em segundos (procure Name id="_" em ctx Store).
+- Fora de uma execucao de script o Streamlit devolve um `session_state`
+  "bare" que persiste no processo; `i18n._sessao()` por isso exige o
+  `ScriptRunContext` — sem isso o idioma de uma sessao vazava para outra (e
+  os testes do AppTest formatavam opcoes no idioma errado).
+- `col_offset` do `ast` conta BYTES utf-8: a ferramenta que embrulhou os 309
+  rotulos automaticamente teve de cortar o arquivo em bytes, nao em
+  caracteres, senao as linhas acentuadas saem deslocadas.
+
+Quem for traduzir mais: `wiebepy/tests/test_gui_i18n.py` falha apontando
+texto sem traducao, chave morta, campo `{...}` perdido na traducao e
+`**`/crase desequilibrados; os dois ultimos testes abrem a GUI em ingles
+(AppTest) e varrem as oito paginas. As mensagens do NUCLEO (134 raises e
+avisos em validation.py, identificabilidade, CFD) e os 46 textos de `--help`
+da CLI continuam em portugues — pendencia registrada, aparecem dentro da GUI
+em ingles.
+
 ## 2026-10-12 — Help.html bilingue (Portugues/Ingles)
 
 `Help.html`. O guia passou a conter as duas versoes no mesmo arquivo, que
