@@ -31,6 +31,7 @@
   th { background:#f1f3f8; }
   .box { border-left:4px solid; padding:8px 12px; border-radius:6px; margin:12px 0; }
   .ok { border-color:var(--ok); background:#eef8f2; }
+  .nota { color:var(--muted); font-size:13px; }
   .warn { border-color:var(--warn); background:#fdf6e7; }
   .formula { font-family:"Cambria Math","STIX Two Math",serif; font-size:17px;
              background:#f7f8fb; padding:10px 14px; border-radius:8px; overflow-x:auto; }
@@ -47,6 +48,7 @@
 <nav>
   <b>Sumário</b>
   <ol>
+    <li><a href="#cfd-sintese">Como funciona a simulação CFD</a></li>
     <li><a href="#instalar">Instalação (.venv)</a></li>
     <li><a href="#primeira">Primeira análise</a></li>
     <li><a href="#gui">Interface gráfica</a></li>
@@ -63,6 +65,55 @@
     <li><a href="#problemas">Solução de problemas</a></li>
   </ol>
 </nav>
+
+<section id="cfd-sintese">
+  <h2>Como funciona a simulação CFD do wiebepy</h2>
+  <p>A simulação CFD do wiebepy resolve o escoamento 3D compressível e
+  transiente dentro do cilindro durante o intervalo de válvulas fechadas,
+  com a combustão representada por uma fonte de calor prescrita pela função
+  Wiebe de 1 a 5 estágios já calibrada no ensaio de pressão.</p>
+
+  <p>O encadeamento é o seguinte. Primeiro, o modo 0-D ajusta a curva de
+  pressão medida e devolve os coeficientes de cada estágio (β, θ0, Δθ, m, a)
+  e a razão de compressão. Esses coeficientes alimentam a fonte térmica, que
+  converte a taxa de queima em potência:</p>
+  <div class="formula">
+    Q̇(t) = m<sub>f</sub> · PCI · (dx<sub>b</sub>/dθ) · (dθ/dt),
+    &nbsp; com dθ/dt = 6 · rpm [°/s]
+  </div>
+  <p>A derivada dx<sub>b</sub>/dθ vem da mesma implementação usada no 0-D,
+  sem duplicação da formulação.</p>
+
+  <p>A fonte é entregue ao solver como <b>densidade volumétrica</b>
+  q''' = Q̇/V₀(θ), e não como potência total, porque assim ela permanece
+  conservativa com malha móvel e em execução paralela: o solver aplica a
+  densidade sobre os volumes atuais das células. O fechamento é verificado
+  em cada caso pela identidade ∫Q̇dt = m<sub>f</sub>·PCI·Δx<sub>b</sub>; no
+  caso de exemplo o erro relativo é de 2×10⁻⁴.</p>
+
+  <p>A solução das equações de conservação é feita pelo <b>OpenFOAM 13</b>
+  (<code>foamRun</code>, solver <code>fluid</code>), executado no WSL2 ou em
+  Linux. A geometria é um cilindro simplificado com pistão plano, cuja
+  cinemática biela-manivela usa exatamente os mesmos parâmetros do modelo
+  0-D. O avanço é controlado em ângulo de manivela, com passo entre 0,01° e
+  0,5° e Courant máximo de 0,25.</p>
+
+  <p>Ao final, o wiebepy extrai as séries 0-D (pressão média volumétrica,
+  temperatura, perda de calor nas paredes, trabalho indicado) e gera um
+  relatório HTML autocontido com proveniência, balanços e comparação com o
+  ensaio por faixa de ângulo.</p>
+
+  <div class="box warn"><b>Escopo</b>, declarado em todas as saídas: a taxa
+  de queima é imposta, portanto a cinética química, a frente de chama, o
+  knock e as emissões <u>não</u> são resolvidos, e a comparação com o ensaio
+  é <b>diagnóstica</b>, não validação independente, já que a Wiebe foi
+  calibrada com os mesmos dados. O que o CFD acrescenta ao 0-D é a
+  distribuição espacial de velocidade, pressão e temperatura e a troca de
+  calor resolvida nas paredes.</div>
+
+  <p class="nota">Instalação do solver, preparação e execução de casos:
+  <a href="#cfd">seção CFD (opcional)</a>.</p>
+</section>
 
 <section id="instalar">
   <h2>1. Instalação</h2>
