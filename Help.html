@@ -35,15 +35,31 @@
   .warn { border-color:var(--warn); background:#fdf6e7; }
   .formula { font-family:"Cambria Math","STIX Two Math",serif; font-size:17px;
              background:#f7f8fb; padding:10px 14px; border-radius:8px; overflow-x:auto; }
+  .lang { margin-top:14px; display:flex; gap:8px; }
+  .lang button { font:inherit; font-size:13px; padding:5px 14px; cursor:pointer;
+                 border-radius:999px; border:1px solid #4a5468; background:#2a3140;
+                 color:#c9cfdb; }
+  .lang button:hover { background:#36405280; }
+  .lang button.on { background:#fff; color:#1d2330; border-color:#fff;
+                    font-weight:600; }
   @media (max-width:640px) { nav ol { columns:1; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>wiebepy — Guia passo a passo</h1>
-  <p>Funções Wiebe de 1 a 5 estágios: avaliação, ajuste, comparação e execução em CPU/GPU</p>
+  <h1><span class="t-pt">wiebepy — Guia passo a passo</span><span
+      class="t-en" hidden>wiebepy — Step-by-step guide</span></h1>
+  <p><span class="t-pt">Funções Wiebe de 1 a 5 estágios: avaliação, ajuste,
+     comparação e execução em CPU/GPU</span><span class="t-en" hidden>Wiebe
+     functions with 1 to 5 stages: evaluation, fitting, model comparison and
+     CPU/GPU execution</span></p>
+  <div class="lang" role="group" aria-label="Idioma / Language">
+    <button type="button" data-lang="pt" class="on">Português</button>
+    <button type="button" data-lang="en">English</button>
+  </div>
 </header>
 <main>
+<div id="doc-pt" lang="pt-BR">
 
 <nav>
   <b>Sumário</b>
@@ -462,6 +478,545 @@ wiebepy cfd crevice report   --case results/crevice_exemplo</code></pre>
   </table>
   <p>Documentação técnica completa: <code>README.md</code>.</p>
 </section>
+
+</div>
+
+<div id="doc-en" lang="en" hidden>
+<nav>
+  <b>Contents</b>
+  <ol>
+    <li><a href="#cfd-sintese-en">How the CFD simulation works</a></li>
+    <li><a href="#instalar-en">Installation (.venv)</a></li>
+    <li><a href="#primeira-en">First analysis</a></li>
+    <li><a href="#gui-en">Graphical interface</a></li>
+    <li><a href="#pressao-en">Fitting the pressure curve</a></li>
+    <li><a href="#modelo-en">The model and its parameters</a></li>
+    <li><a href="#dados-en">Preparing the data</a></li>
+    <li><a href="#ajuste-en">Fitting N stages</a></li>
+    <li><a href="#escolher-en">Choosing the number of stages</a></li>
+    <li><a href="#runs-en">Runs and warnings</a></li>
+    <li><a href="#desempenho-en">Parallel CPU and GPU</a></li>
+    <li><a href="#saidas-en">Output files</a></li>
+    <li><a href="#api-en">Python API</a></li>
+    <li><a href="#cfd-en">CFD (optional)</a></li>
+    <li><a href="#problemas-en">Troubleshooting</a></li>
+  </ol>
+</nav>
+
+<section id="cfd-sintese-en">
+  <h2>How the wiebepy CFD simulation works</h2>
+  <p>The wiebepy CFD simulation solves the 3D compressible, transient flow
+  inside the cylinder over the closed-valve interval, with combustion
+  represented by a heat source prescribed by the 1-to-5-stage Wiebe function
+  already calibrated against the pressure measurement.</p>
+
+  <p>The chain of steps is the following. First, the 0-D mode fits the
+  measured pressure curve and returns the coefficients of each stage
+  (β, θ0, Δθ, m, a) and the compression ratio. Those coefficients feed the
+  heat source, which converts the burn rate into power:</p>
+  <div class="formula">
+    Q̇(t) = m<sub>f</sub> · LHV · (dx<sub>b</sub>/dθ) · (dθ/dt),
+    &nbsp; with dθ/dt = 6 · rpm [°/s]
+  </div>
+  <p>The derivative dx<sub>b</sub>/dθ comes from the same implementation used
+  by the 0-D model, with no duplicated formulation.</p>
+
+  <p>The source is handed to the solver as a <b>volumetric density</b>
+  q''' = Q̇/V₀(θ) rather than as total power, because that keeps it
+  conservative with a moving mesh and in parallel runs: the solver applies the
+  density over the current cell volumes. Closure is verified in every case by
+  the identity ∫Q̇dt = m<sub>f</sub>·LHV·Δx<sub>b</sub>; in the example case
+  the relative error is 2×10⁻⁴.</p>
+
+  <p>The conservation equations are solved by <b>OpenFOAM 13</b>
+  (<code>foamRun</code>, <code>fluid</code> solver), running under WSL2 or on
+  Linux. The geometry is a simplified cylinder with a flat piston, whose
+  slider-crank kinematics uses exactly the same parameters as the 0-D model.
+  Time advance is controlled in crank angle, with steps between 0.01° and
+  0.5° and a maximum Courant number of 0.25.</p>
+
+  <p>At the end, wiebepy extracts the 0-D series (volume-averaged pressure,
+  temperature, wall heat loss, indicated work) and produces a self-contained
+  HTML report with provenance, balances and a comparison against the
+  measurement by crank-angle band.</p>
+
+  <div class="box warn"><b>Scope</b>, stated in every output: the burn rate is
+  imposed, so chemical kinetics, flame front, knock and emissions are
+  <u>not</u> resolved, and the comparison against the measurement is
+  <b>diagnostic</b>, not independent validation, since the Wiebe function was
+  calibrated with the same data. What CFD adds to the 0-D model is the spatial
+  distribution of velocity, pressure and temperature, plus resolved wall heat
+  transfer.</div>
+
+  <p class="nota">Solver installation, case preparation and execution:
+  <a href="#cfd-en">CFD section (optional)</a>.</p>
+</section>
+
+<section id="instalar-en">
+  <h2>1. Installation</h2>
+  <p>Requires Python 3.11 or newer (Windows, Linux or WSL2). Create a virtual
+  environment <b>before</b> installing, inside the project folder:</p>
+<pre><code>cd wiebepy
+python -m venv .venv
+.venv\Scripts\activate            <em># Windows (Linux/WSL2: source .venv/bin/activate)</em>
+python -m pip install --upgrade pip
+pip install -e ".[numba,dev]"     <em># core + Numba (fast on CPU) + pytest</em>
+pip install cupy-cuda12x          <em># optional: only with an NVIDIA card</em></code></pre>
+  <p>Check:</p>
+<pre><code>wiebepy --devices                 <em># hardware and available backends</em>
+python -m pytest -m "not slow"    <em># fast tests (~20 s)</em></code></pre>
+  <div class="box ok"><b>Without installing:</b> inside the project folder,
+  <code>python main.py …</code> does the same as <code>wiebepy …</code>.</div>
+  <div class="box warn"><b>“wiebepy is not recognized”</b>: the package is not
+  installed in the Python the terminal uses. Activate the <code>.venv</code>
+  (the prompt shows <code>(.venv)</code>) and run <code>pip install -e .</code>
+  again, or use <code>python main.py</code>. If PowerShell blocks activation,
+  run once <code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>.</div>
+</section>
+
+<section id="primeira-en">
+  <h2>2. First analysis</h2>
+  <p>Evaluate a model without data, on a grid from −20° to 100°:</p>
+<pre><code>wiebepy --stages 3 --theta-min -20 --theta-max 100 --theta-step 0.1 --plot</code></pre>
+  <p>Fit a model to the synthetic data shipped with the project:</p>
+<pre><code>wiebepy --stages 2 --optimize --input examples\data\synthetic_2stage.csv ^
+        --fit-target xb --save-plots --output results\first</code></pre>
+  <p>The screen shows the parameters of each stage, the objective of each run
+  and the metrics (RMSE, R², AIC, BIC, Durbin-Watson). The true parameters of
+  the synthetic data are in
+  <code>examples\data\true_parameters.json</code> — compare them.</p>
+  <p>Ready-made commands for every case: <code>wiebepy --help-examples</code>.</p>
+</section>
+
+<section id="gui-en">
+  <h2>2b. Graphical interface</h2>
+<pre><code>pip install -e ".[gui]"     <em># once: Streamlit</em>
+wiebepy --gui               <em># opens in the browser</em></code></pre>
+  <ol>
+    <li><b>Data</b>: load your file or a synthetic example.</li>
+    <li><b>Model</b>: choose N and edit the parameters in the table; the charts
+    show x<sub>b</sub>, dx<sub>b</sub>/dθ and each stage over the data.</li>
+    <li><b>Fit</b>: choose N, the series and the number of runs, then click
+    <i>Start fit</i>. Progress is shown live; <i>Cancel</i> interrupts it.
+    Afterwards, <i>Apply to model</i> sends the result to the Model page.</li>
+    <li><b>Comparison</b>: choose the values of N and click <i>Compare</i> to
+    see the table and the recommendation.</li>
+    <li><b>Export</b>: download everything as a .zip.</li>
+  </ol>
+  <p>The <b>Help</b> button at the top of the interface opens this guide.</p>
+</section>
+
+<section id="pressao-en">
+  <h2>2c. Fitting the PRESSURE curve (test data)</h2>
+  <p>If your file holds <b>crank angle × cylinder pressure</b> (like the Double
+  Wiebe test), use pressure mode: wiebepy fits the pressure with the same 0-D
+  model as Double Wiebe, with 1 to 5 heat-release stages.</p>
+  <ol>
+    <li>GUI: <b>Data</b> page → <b>Data type = Cylinder pressure</b>; choose the
+    angle unit (radians in the test file) and the pressure unit (bar); check the
+    engine under “Engine (geometry and fuel)”.</li>
+    <li><b>Fit</b> page: choose N and click <i>Start fit</i>. The RMSE shown is
+    the one from the solve_ivp reference.</li>
+    <li><b>Comparison</b> page: compare 1, 2 and 3 stages.</li>
+  </ol>
+<pre><code>wiebepy --stages 2 --optimize --input test.txt --input-type pressure --pressure-unit bar</code></pre>
+  <div class="box warn">Loading a pressure file as “Burned fraction” raises an
+  error: x<sub>b</sub> must lie between 0 and 1.</div>
+</section>
+
+<section id="modelo-en">
+  <h2>3. The model and its parameters</h2>
+  <div class="formula">
+    z<sub>j</sub> = (θ − θ<sub>0,j</sub>) / Δθ<sub>j</sub><br>
+    x<sub>b</sub>(θ) = Σ<sub>j</sub> β<sub>j</sub> [1 − exp(−a<sub>j</sub> z<sub>j</sub><sup>m<sub>j</sub>+1</sup>)] &nbsp; (term = 0 if θ &lt; θ<sub>0,j</sub>)<br>
+    dx<sub>b</sub>/dθ = Σ<sub>j</sub> β<sub>j</sub> a<sub>j</sub>(m<sub>j</sub>+1)/Δθ<sub>j</sub> · z<sub>j</sub><sup>m<sub>j</sub></sup> · exp(−a<sub>j</sub> z<sub>j</sub><sup>m<sub>j</sub>+1</sup>)
+  </div>
+  <table>
+    <tr><th>Parameter</th><th>Meaning</th><th>Unit</th><th>Constraint</th></tr>
+    <tr><td>β (beta)</td><td>mass fraction burned in the stage</td><td>–</td><td>0 ≤ β ≤ 1, Σβ = 1</td></tr>
+    <tr><td>θ<sub>0</sub> (theta0)</td><td>start of the stage</td><td>° (or rad)</td><td>ordered during the fit</td></tr>
+    <tr><td>Δθ (duration)</td><td>duration of the stage</td><td>° (or rad)</td><td>&gt; 0</td></tr>
+    <tr><td>m</td><td>shape (small = abrupt start)</td><td>–</td><td>&gt; 0</td></tr>
+    <tr><td>a</td><td>efficiency (6.908 ⇒ 99.9 % within Δθ)</td><td>–</td><td>fixed, or fitted with <code>--fit-a</code></td></tr>
+  </table>
+  <p>1 stage = single-Wiebe; 2 = double-Wiebe (premixed + diffusion); 3 to 5
+  stages represent additional phases (e.g. late burning). Full formulation:
+  <code>wiebepy --help-model</code>.</p>
+</section>
+
+<section id="dados-en">
+  <h2>4. Preparing the data</h2>
+  <p>A <code>.csv</code>, <code>.txt</code>, <code>.dat</code> or
+  <code>.json</code> file with the crank angle and the burned fraction and/or
+  the burn rate:</p>
+<pre><code>theta,xb                theta,dxb_dtheta           theta,xb,dxb_dtheta,sigma
+-20,0.000               -20,0.0000                 ...
+-19,0.000               -19,0.0000</code></pre>
+  <ul>
+    <li>Separator detected automatically; lines starting with <code>#</code> are ignored.</li>
+    <li>Without a header: 2 columns = θ, x<sub>b</sub>; 3 columns = θ, x<sub>b</sub>, dx<sub>b</sub>/dθ.</li>
+    <li>Optional <code>weight</code> column (or <code>sigma</code>, with weight = 1/σ²), for <code>--objective wrmse</code>.</li>
+    <li>θ in degrees by default; use <code>--angle-unit rad</code> for radians.</li>
+    <li>x<sub>b</sub> must be normalized between 0 and 1 (the program warns otherwise).</li>
+  </ul>
+</section>
+
+<section id="ajuste-en">
+  <h2>5. Fitting N stages</h2>
+<pre><code>wiebepy --stages 3 --optimize --input data.csv --runs 10 --save-plots --output results\fit3</code></pre>
+  <table>
+    <tr><th>Option</th><th>Purpose</th></tr>
+    <tr><td><code>--fit-target xb | dxb | both</code></td><td>series being fitted; <code>both</code> uses the two, normalized (default: whichever is available)</td></tr>
+    <tr><td><code>--objective rmse | mse | mae | see | wrmse</code></td><td>objective function</td></tr>
+    <tr><td><code>--fit-a</code></td><td>also fits a<sub>j</sub></td></tr>
+    <tr><td><code>--population</code>, <code>--iterations</code></td><td>PSO size (default 100 × 1000)</td></tr>
+    <tr><td><code>--runs</code>, <code>--seed</code></td><td>independent runs and seed (reproducible)</td></tr>
+    <tr><td><code>--config file.yaml</code></td><td>all options in one file (see <code>examples\</code>)</td></tr>
+  </table>
+  <p>Each run performs PSO followed by local refinement starting from the 5 best
+  distinct points of the swarm. The final result is the best run.</p>
+</section>
+
+<section id="escolher-en">
+  <h2>6. Choosing the number of stages</h2>
+<pre><code>wiebepy --compare-stages 1 2 3 4 5 --input data.csv --runs 10 --save-plots --output results\comparison</code></pre>
+  <p>The program fits each N and shows a table with RMSE, MAE, SEE, R², ΔAIC,
+  ΔBIC, Durbin-Watson, the <b>cross-validation error</b> and the number of
+  warnings, followed by a recommendation.</p>
+  <div class="box warn"><b>Do not choose by the lowest RMSE.</b> More stages
+  always reduce the training error. The recommendation uses the <b>smallest N
+  whose cross-validation error stays within 5 % of the best one</b> and that has
+  no negligible or coincident stages. AIC/BIC are indicative: they assume
+  independent residuals, which does not hold for x<sub>b</sub> curves. A
+  Durbin-Watson ≈ 2 indicates the model already captures the structure of the
+  data (residual ≈ noise).</div>
+  <p>Example with data from 3 true stages: RMSE keeps falling up to N = 5, but
+  cross-validation levels off at N = 3, BIC is minimum at 3, and models 4 and 5
+  raise warnings about coincident stages — recommendation: 3-Wiebe.</p>
+</section>
+
+<section id="runs-en">
+  <h2>7. Runs and warnings</h2>
+  <p>Fitting several stages has local optima. That is why each fit performs
+  several runs (default 5; for N ≥ 3 prefer 10 or more). The file
+  <code>run_statistics.csv</code> shows best, mean, std, median and worst of the
+  objective; <code>parameters.csv</code> brings the mean and the standard
+  deviation of each parameter across runs.</p>
+  <p>Identifiability warnings (full list in <code>warnings.txt</code>):</p>
+  <table>
+    <tr><th>Warning</th><th>What it means</th></tr>
+    <tr><td><code>Stage 4 contributes less than 0.5%</code></td><td>spare stage — use fewer stages</td></tr>
+    <tr><td><code>theta0_2 and theta0_3 are nearly identical</code></td><td>two stages start together; if “redundant”, they are practically the same</td></tr>
+    <tr><td><code>parameter m_5 reached upper bound</code></td><td>the optimum may lie outside the bounds — review them (<code>bounds</code> section)</td></tr>
+    <tr><td><code>varies strongly between runs</code></td><td>parameter poorly determined by the data</td></tr>
+    <tr><td><code>strongly correlated (rho = …)</code></td><td>two parameters compensate each other; do not read them in isolation</td></tr>
+  </table>
+</section>
+
+<section id="desempenho-en">
+  <h2>8. Parallel CPU and GPU</h2>
+  <table>
+    <tr><th><code>--backend</code></th><th>Description</th></tr>
+    <tr><td><code>auto</code> (default)</td><td>measures the available ones on your problem and uses the fastest</td></tr>
+    <tr><td><code>numba</code></td><td>compiled, with <code>--workers</code> threads — the fastest on CPU in our measurements</td></tr>
+    <tr><td><code>numpy</code></td><td>vectorized, 1 core; with <code>--runs</code> and <code>--workers</code> the runs go to parallel processes</td></tr>
+    <tr><td><code>multiprocessing</code></td><td>splits the swarm across processes; only pays off on very large problems</td></tr>
+    <tr><td><code>cupy</code> or <code>--gpu</code></td><td>NVIDIA GPU; pays off with large swarm × points</td></tr>
+  </table>
+  <p>Without a GPU (or without CuPy/Numba) the program warns and uses the next
+  available backend — it never stops because of that. Measure on your machine:
+  <code>wiebepy --benchmark --workers 8</code>.</p>
+  <div class="box warn"><code>--precision float32</code> speeds up the GPU but
+  makes the search less precise; use float64 (default) for final results.</div>
+</section>
+
+<section id="saidas-en">
+  <h2>9. Output files</h2>
+  <table>
+    <tr><th>File</th><th>Content</th></tr>
+    <tr><td><code>results.csv</code></td><td>θ, fitted x<sub>b</sub> and dx<sub>b</sub>/dθ, data, residuals and the contribution of each stage</td></tr>
+    <tr><td><code>parameters.csv</code></td><td>parameters (with units) and mean/standard deviation across runs</td></tr>
+    <tr><td><code>metrics.csv</code></td><td>RMSE, MAE, SEE, R², AIC, BIC, Durbin-Watson…</td></tr>
+    <tr><td><code>run_statistics.csv</code></td><td>objective of each run and statistics</td></tr>
+    <tr><td><code>warnings.txt</code></td><td>identifiability warnings</td></tr>
+    <tr><td><code>model.json</code></td><td>model for reuse: <code>wiebepy --model model.json --plot</code></td></tr>
+    <tr><td><code>configuration_used.yaml</code></td><td>the exact configuration used (reproducibility)</td></tr>
+    <tr><td><code>plots\</code></td><td>7 figures: x<sub>b</sub>, contributions, burn rate, fit, residuals, convergence</td></tr>
+    <tr><td><code>comparison.csv</code>, <code>N1\…N5\</code></td><td>comparison mode</td></tr>
+  </table>
+  <p>In <b>pressure mode</b>, <code>results.csv</code> also brings the columns
+  <code>P_sim_wiebe{k}_kPa</code> and <code>residual_wiebe{k}_kPa</code>
+  (k = N−1 … 1): reduced models that start from the first k stages of the fit
+  with renormalized β and are <b>refined by least squares</b> — each curve is a
+  genuine k-Wiebe fitted to the measurement, not an arbitrary truncation (a
+  diagnosis of what each extra stage adds; for a full comparison use
+  <code>--compare-stages</code>). The charts
+  <code>plots\pressure_stages_comparison.png</code> (pressure × angle) and
+  <code>plots\pv_diagram_stages_comparison.png</code> (P–V) overlay the N-stage
+  fit, the reduced models and the measurement; the parameters of each reduced
+  model are in <code>results.json</code>.</p>
+</section>
+
+<section id="api-en">
+  <h2>10. Python API</h2>
+<pre><code>import numpy as np
+from wiebepy import MultiStageWiebe
+
+theta = np.linspace(-20, 100, 1201)
+model = MultiStageWiebe(n_stages=3)
+xb, dxb = model.evaluate(theta), model.derivative(theta)
+
+result = model.fit(theta_exp, xb_exp, backend="auto", runs=10)
+print(result.stages, result.metrics["xb"]["rmse"], result.warnings)
+model.save("model.json")</code></pre>
+</section>
+
+<section id="cfd-en">
+  <h2>10b. CFD (optional) — 3D flow in the cylinder</h2>
+  <p>The <strong>CFD</strong> page (optional) builds and runs
+  <strong>OpenFOAM 13</strong> cases (on Windows, through WSL2) with heat
+  release <strong>prescribed by the calibrated Wiebe function</strong> — 1 to 5
+  stages, fuels H₂, CH₄ (pure), ethanol and diesel. It <strong>does not predict
+  chemical kinetics, flame front or emissions</strong>; the 3D results are
+  conditioned on the Wiebe curve provided. The rest of the program does not
+  depend on CFD, and disabling it does not erase results.</p>
+  <ol>
+    <li><strong>Install the solver</strong> (once): OpenFOAM does <em>not</em>
+      come from pip — <code>pip install -e ".[cfd]"</code> installs only Python
+      dependencies (PyYAML).
+      <ol type="a">
+        <li><strong>WSL2</strong> — PowerShell as administrator (Windows 11):
+          <code>wsl --install -d Ubuntu-22.04</code>, then <code>wsl --version</code>
+          must list a WSL2 kernel (not WSL1). If it complains about
+          virtualization, enable it in the UEFI/BIOS.</li>
+        <li><strong>OpenFOAM 13</strong> inside Ubuntu 22.04 (official guide
+          <a href="https://openfoam.org/download/linux">openfoam.org/download/linux</a>):
+          <code>sudo sh -c "wget -O - https://dl.openfoam.org/gpg.key | apt-key add -"</code>;
+          <code>sudo add-apt-repository http://dl.openfoam.org/ubuntu</code>;
+          <code>sudo apt update &amp;&amp; sudo apt install openfoam13</code>.</li>
+        <li><strong>Verify</strong>: <code>wiebepy cfd doctor</code> lists the
+          WSL2 distributions and, for each one, the detected OpenFOAM
+          (<code>/opt/openfoam*</code>, <code>foamRun</code>, gcc, mpirun) and its
+          version. Execution uses <code>wsl.exe -d &lt;distro&gt;</code> and the case
+          is read/written directly in the project through <code>/mnt/c/...</code> —
+          no copying needed. Without WSL2/solver only the CFD commands become
+          unavailable (a diagnosis, never a silent fallback). Full guide
+          (including native Linux): <code>docs/cfd/install.md</code>.</li>
+      </ol></li>
+    <li><strong>Configure</strong>: engine (the same parameters as the 0-D
+      modes), crank-angle window (closed valves), initial conditions, walls,
+      turbulence, fuel and the origin of the Wiebe stages (current model or
+      <code>model.json</code>).</li>
+    <li><strong>Prepare</strong> → case generated for inspection
+      (<em>Prepared</em> state).</li>
+    <li><strong>Validate</strong> → checks files, geometry and solver
+      (<em>Validated</em> state).</li>
+    <li><strong>Run</strong> → live solver log; <strong>Cancel run</strong> stops
+      the MPI processes as well, preserving logs and partial results.
+      <em>Process finished ≠ converged</em>: check the energy closure in the
+      report.</li>
+    <li><strong>HTML report</strong> → self-contained file with full provenance
+      (versions, parameters, mesh, scientific limits) and the results p̄×θ, T̄×θ,
+      indicated work, wall heat loss and energy balance. Results are never
+      presented as an independent prediction of combustion — the source is the
+      prescribed Wiebe function.</li>
+  </ol>
+  <h3>Running an example — reference case (case_006)</h3>
+  <p>To run an example you only <strong>edit one file</strong>; the other two are
+  referenced by it. The 3 files involved:</p>
+  <table>
+    <tr><th>File</th><th>Role</th><th>Do you edit it?</th></tr>
+    <tr><td><code>examples/config_cfd_equivalencia.yaml</code></td>
+        <td>Case config (engine + CFD) — the only one the CLI receives</td>
+        <td>Only for a new directory — otherwise use <code>--output</code></td></tr>
+    <tr><td><code>examples/model_cfd_calibrated.json</code></td>
+        <td>Wiebe source — already referenced inside the config (<code>wiebe.model</code>)</td>
+        <td>No</td></tr>
+    <tr><td><code>examples/data/ensaio_P_exp_carga3_45.txt</code></td>
+        <td>Experimental test for the diagnosis — already referenced (<code>comparison.experimental</code>)</td>
+        <td>No</td></tr>
+  </table>
+  <p>The sequence (4 commands + 1 check):</p>
+  <pre><code>wiebepy cfd doctor                <em># 0. once: checks WSL2 + OpenFOAM 13</em>
+wiebepy cfd prepare  --config examples/config_cfd_equivalencia.yaml \
+    --output results/cfd/my_case    <em># 1. builds the case (does NOT run it)</em>
+wiebepy cfd validate --case results/cfd/my_case   <em># 2. validates</em>
+wiebepy cfd run      --case results/cfd/my_case   <em># 3. runs (WSL2/OpenFOAM; ~2-3 min on the 24x36 mesh)</em>
+wiebepy cfd report   --case results/cfd/my_case   <em># 4. HTML report with p×θ, p×V and the comparison</em></code></pre>
+  <p><code>--output</code> overrides <code>case_directory</code> from the config —
+  so you touch no file and do not overwrite the archived case_006. What each
+  command produces:</p>
+  <ul>
+    <li><code>prepare</code> → a complete <code>results/cfd/my_case/</code>
+      (<code>system/</code>, <code>constant/</code>, <code>0/</code>,
+      <code>case_config.yaml</code> — the latter records EVERYTHING: source
+      provenance, properties, energy, hypotheses); you can inspect it before
+      running.</li>
+    <li><code>validate</code> → the case state becomes <em>Validated</em> (only a
+      validated case runs — the gate that already prevented path mistakes in
+      case_013).</li>
+    <li><code>run</code> → <code>logs/foamRun.log</code>, series under
+      <code>postProcessing/</code>, state <em>Completed</em>.</li>
+    <li><code>report</code> → <code>report.html</code> inside the case directory —
+      that is the file you open in the browser.</li>
+  </ul>
+  <p>Useful variants without editing files:</p>
+  <ul>
+    <li><strong>Without combustion (motored)</strong>: add <code>--no-heat</code>
+      to <code>prepare</code>.</li>
+    <li><strong>Multicomponent (R1)</strong>: needs its own config — copy
+      <code>examples/config_cfd_multicomponent.yaml</code> (it already has
+      <code>gas.model: multicomponent_inert</code>).</li>
+    <li><strong>GUI</strong>: <code>streamlit run src/wiebepy/gui/app.py</code> →
+      the CFD tab opens already matched to case_006; the buttons are the same
+      four steps.</li>
+  </ul>
+  <p><em>How to read the result</em>: <code>report.html</code> compares against
+  the measurement in a <strong>diagnostic</strong> way (same speed, same
+  energy) — what it tells you is where and why the model departs from the
+  measurement, not “the model was validated”.</p>
+  <h3>Running an example in the graphical interface (GUI)</h3>
+  <p>Opening it (requires <code>pip install -e ".[gui]"</code>):
+  <code>wiebepy --gui</code> — opens in the browser (localhost:8501) — or
+  <code>streamlit run src/wiebepy/gui/app.py</code>. Choose the
+  <strong>CFD</strong> page in the menu. Step by step, with the buttons in
+  order:</p>
+  <ol>
+    <li><strong>Check the environment</strong> (once): in the <em>Environment
+      diagnosis (doctor)</em> expander, button <strong>Run diagnosis</strong> —
+      equivalent to <code>wiebepy cfd doctor</code> (checks WSL2, OpenFOAM,
+      foamRun, mpirun). If OpenFOAM is installed but the code is not connected to
+      it yet (the <em>Connection</em> line shows <em>none</em>), click
+      <strong>Connect OpenFOAM to the code</strong>: the button detects the
+      installation, <strong>verifies that foamRun really executes</strong>
+      (a <code>-help</code> probe — directory detection may find a broken
+      installation), stores the connection in
+      <code>~/.wiebepy/cfd_env.json</code> and adjusts the form's <em>WSL2
+      distribution</em> automatically — looking first in the configured distro
+      and, if nothing is installed there, taking the best one from any distro. On
+      the CLI the equivalent is <code>wiebepy cfd doctor --connect</code>. The
+      connection survives a session restart (the default distro then comes from
+      the stored connection).</li>
+    <li><strong>Choose the case directory</strong> — the first adjustment for
+      every new case: under <em>Case configuration</em>, change <strong>“Case
+      directory”</strong> to a NEW directory (e.g.
+      <code>results/cfd/gui_case_001</code>). ⚠️ The default points to the
+      archived case_006 — clicking <strong>Prepare case</strong> with that
+      directory <strong>overwrites</strong> the archived case.</li>
+    <li><strong>Check the fields</strong> — they already open matched to
+      case_006: Wiebe source with origin <code>model.json</code> =
+      <code>examples/model_cfd_calibrated.json</code> (the calibrated one; the
+      manual one is <code>model_cfd.json</code> — do not use it), Rc 17, window
+      −120…+120°, P 127.6 kPa / T 308.15 K, walls 440 K, kEpsilon, moving piston,
+      24×36 cells, <code>uniform</code> distribution, diesel fuel, LHV 39191.3,
+      3396.2 rpm. Also confirm: <strong>“WSL2 distribution”</strong> =
+      <code>Ubuntu-22.04</code> (the solver's distro); <strong>“Solver MPI
+      processes”</strong> = 1 (solver parallelism, not wiebepy's);
+      <strong>Wiebe stages</strong>: with origin <code>model.json</code> the heat
+      comes from the calibrated file; with origin <em>current model</em> the
+      editable 1–5 stage table appears (editing it does NOT change the 0-D
+      model); <strong>Gas, numerics and comparison</strong> (full equivalence with
+      the CLI — the same <code>cfd.gas</code>/<code>cfd.numerics</code>/<code>cfd.comparison</code>
+      keys): <em>Gas model</em> <code>simple</code> with Cp 1063.0 J/(kg·K) and
+      M 28.96 ⇒ γ=1.370 = κ of the 0-D model (the old default Cp 1005 ⇒ γ=1.400),
+      with editable μ and Pr; <em>max_Co</em> 0.25 (0.5 aborted on this engine,
+      §5b of <code>verification.md</code>), Δt 1e-6 s, writing every 10° CA; and
+      the <em>Comparison against the measurement (diagnostic)</em> expander with
+      the reference test (<code>examples/data/ensaio_P_exp_carga3_45.txt</code>,
+      rad/bar, offset 0) — the overlap goes into <code>report.html</code>. With
+      <em>Gas model</em> = <code>multicomponent_inert</code> (step R1) Cp/μ/Pr are
+      disabled: N₂+O₂ with NASA janaf for the mixture. To drop the comparison,
+      clear the file field.</li>
+    <li><strong>Prepare case</strong> → builds the OpenFOAM case for inspection
+      (<em>Prepared</em> state). The configuration is validated first: errors
+      appear as a red message and the case is not generated.</li>
+    <li><strong>Validate</strong> → <em>Validated</em> state — <strong>Run</strong>
+      requires it (gate).</li>
+    <li><strong>Run</strong> → panel with the <strong>live solver log</strong>;
+      ~2–3 min on the 24×36 mesh. <strong>Cancel run</strong> stops the MPI
+      processes as well, preserving logs and partial results.</li>
+    <li><strong>HTML report</strong> → creates/updates <code>report.html</code> in
+      the case directory (enabled only in the <em>Completed</em> state).</li>
+    <li><strong>See the results</strong>: the <em>Results (0-D extracted from the
+      3D case)</em> expander shows p̄ max, T̄ max, indicated work, wall loss, the
+      energy prescribed by the Wiebe function with the table error, and the
+      p̄×θ/T̄×θ chart. The full report (provenance, energy balance, limits) is in
+      <code>report.html</code>.</li>
+  </ol>
+  <p>Two details the GUI handles by itself: the gas/numerics/comparison fields
+  open with the case_006 recipe defaults (the Cp 1005 ⇒ γ=1.400 mismatch that
+  GUI-prepared cases had before this equivalence is gone); and the <em>Case
+  state</em> stays visible at the top of the page. The same reminder applies: the
+  comparison against the measurement in the report is <strong>diagnostic, never
+  validation</strong>, and <em>process finished ≠ converged</em> — check the
+  energy closure.</p>
+  <p>Reactive mode (combustion with a chemical mechanism) is <strong>postponed to
+  a later stage</strong> — it is not forbidden: it shows up as unavailable until
+  its own implementation and is never silently replaced by the Wiebe source.
+  Incremental proposal: <code>docs/cfd/reactive_roadmap.md</code>.</p>
+  <h3>Top-land crevice (crevice_flow — optional CFD submodule)</h3>
+  <p>A separate module (<code>wiebepy cfd crevice …</code>, GUI on the CFD page)
+  that simulates the gas entering/leaving the gap between the piston top land,
+  the rings and the liner — it is <strong>not a blow-by simulation</strong>: the
+  bottom is closed above the first ring and the chamber pressure is
+  <strong>prescribed</strong> (experimental or synthetic table). The computed
+  flow <strong>does not modify</strong> that pressure; there is no heat source
+  and no chemistry. Details: <code>docs/cfd/crevice.md</code>.</p>
+  <pre><code>wiebepy cfd crevice doctor   <em># checks OpenFOAM 13 (same check as cfd)</em>
+wiebepy cfd crevice prepare  --config examples/crevice/crevice_exemplo.yaml
+wiebepy cfd crevice validate --case results/crevice_exemplo
+wiebepy cfd crevice run      --case results/crevice_exemplo
+wiebepy cfd crevice report   --case results/crevice_exemplo</code></pre>
+  <p>It exports p/T×θ series, stored mass, signed fluxes (inflow and outflow
+  accumulated separately), heat per wall and mass/energy balances with a stated
+  sign convention. The example in <code>examples/crevice/</code> uses
+  <strong>synthetic demonstration data</strong> — it does not represent the
+  measured engine. Without the <code>crevice_flow</code> folder, the 0-D, CFD and
+  GUI modes keep working normally.</p>
+</section>
+
+<section id="problemas-en">
+  <h2>11. Troubleshooting</h2>
+  <table>
+    <tr><th>Symptom</th><th>Solution</th></tr>
+    <tr><td><code>wiebepy</code> is not recognized</td><td>activate the <code>.venv</code> and run <code>pip install -e .</code>, or use <code>python main.py</code></td></tr>
+    <tr><td>“θ must be strictly increasing”</td><td>remove repeated angles from the file</td></tr>
+    <tr><td>“The target requires the dxb_dtheta column”</td><td>the file lacks that column: use <code>--fit-target xb</code></td></tr>
+    <tr><td>Poor fit / very different runs</td><td>increase <code>--runs</code> and <code>--population</code>; check the warnings; N may be too large</td></tr>
+    <tr><td>Coincident stages or β ≈ 0</td><td>the model has too many stages for the data: run <code>--compare-stages</code></td></tr>
+    <tr><td>WARNING: backend unavailable</td><td>normal without GPU/Numba; <code>wiebepy --devices</code> shows what is there</td></tr>
+    <tr><td>Too slow</td><td>install Numba (<code>pip install numba</code>) and use <code>--backend numba --workers 8</code></td></tr>
+    <tr><td>Unexpected error</td><td>repeat with <code>--debug</code> to see the detail</td></tr>
+  </table>
+  <p>Full technical documentation: <code>README.md</code>.</p>
+</section>
+</div>
+
+<script>
+(function () {
+  var textos = {pt: "wiebepy \u2014 Guia passo a passo",
+                en: "wiebepy \u2014 Step-by-step guide"};
+  function aplicar(lang) {
+    var pt = lang !== "en";
+    document.getElementById("doc-pt").hidden = !pt;
+    document.getElementById("doc-en").hidden = pt;
+    document.querySelectorAll(".t-pt").forEach(function (e) { e.hidden = !pt; });
+    document.querySelectorAll(".t-en").forEach(function (e) { e.hidden = pt; });
+    document.querySelectorAll(".lang button").forEach(function (b) {
+      b.classList.toggle("on", b.dataset.lang === (pt ? "pt" : "en"));
+    });
+    document.documentElement.lang = pt ? "pt-BR" : "en";
+    document.title = pt ? textos.pt : textos.en;
+    try { localStorage.setItem("wiebepy_help_lang", pt ? "pt" : "en"); } catch (e) {}
+  }
+  document.querySelectorAll(".lang button").forEach(function (b) {
+    b.addEventListener("click", function () { aplicar(b.dataset.lang); });
+  });
+  var salvo = null;
+  try { salvo = localStorage.getItem("wiebepy_help_lang"); } catch (e) {}
+  aplicar(salvo === "en" ? "en" : "pt");
+})();
+</script>
 
 </main>
 </body>
