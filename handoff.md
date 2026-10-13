@@ -3,6 +3,48 @@
 Registro das alterações feitas no código, para quem continuar o trabalho.
 A mais recente fica no topo.
 
+## 2026-10-13 — A CLI tambem em ingles (`--lang en`)
+
+`cli/parser.py`, `cli/helptext.py`, `cfd/cli.py`, `crevice_flow/cli.py`,
+`parallel/hardware.py`, `optimization/{fit,compare,identifiability}.py`,
+`parallel/backend.py` e `pressure/fit.py`.
+
+`wiebepy --lang en …` traduz `--help` (46 opcoes e os grupos),
+`--help-model`, `--help-examples`, `--devices` e as mensagens de execucao
+(cabecalho, escolha de backend, progresso do PSO, resultado, metricas,
+avisos). A opcao e consumida ANTES do dispatch (`i18n.consumir_lang`), por
+isso vale tambem para `wiebepy cfd …` e `wiebepy cfd crevice …`, e usa
+`gravar=False`: nao mexe na preferencia que a interface grava.
+
+Dois textos longos (`--help-model`, `--help-examples`) e a descricao/epilogo
+do `--help` NAO foram para o dicionario: sao documentos, e ficam em
+constantes paralelas no `cli/helptext.py` (`DESCRIPTION_EN`, `EPILOG_EN`,
+`HELP_MODEL_EN`, `HELP_EXAMPLES_EN`) com os acessores `descricao()`,
+`epilogo()`, `help_model()`, `help_examples()`.
+
+O que mudou de comportamento, e merece atencao:
+
+- a saida da CLI era MISTURADA (cabecalho e progresso em ingles, resto em
+  portugues). Agora a chave e sempre o portugues: em pt a saida saiu toda
+  em portugues pela primeira vez, e os avisos de identificabilidade — que
+  estavam so em ingles — viraram moldes em portugues com traducao. Testes
+  que fixavam o texto ingles foram atualizados (test_optimization,
+  test_io_cli) e passaram a conferir os DOIS idiomas.
+- moldes de alinhamento (`"%3d %4d %11.4e …"`, `"%-16s: %s"`) ficam FORA da
+  traducao de proposito: nao sao texto.
+- `_` como variavel descartavel apagava a funcao de traducao tambem aqui
+  (backend.py, pressure/fit.py, cfd/cli.py, crevice_flow/cli.py,
+  cfd/reporting.py, pressure/report.py) — renomeados.
+
+Cuidado ao testar a GUI FORA do pytest: o seletor grava
+`~/.wiebepy/gui.json`, entao uma varredura manual em ingles deixa a
+preferencia do usuario em ingles (aconteceu duas vezes aqui). No pytest o
+`conftest` ja isola o arquivo.
+
+Pendencia: mensagens de erro de leitura/validacao de dados
+(`core/validation.py`, `io/readers.py`, `pressure/engine.py`,
+`cfd/validation.py`) seguem em portugues.
+
 ## 2026-10-13 — Os tres relatorios HTML tambem em ingles
 
 `src/wiebepy/i18n.py` + `lang_en.py` (saidos de `gui/` para a raiz do

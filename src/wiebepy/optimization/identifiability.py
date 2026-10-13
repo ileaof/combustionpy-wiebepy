@@ -18,6 +18,7 @@ from typing import Dict, List, Sequence
 import numpy as np
 
 from ..core.core import evaluate_batch
+from ..i18n import tf
 from ..core.parameters import Parametrization, Stage
 from .bounds import at_bounds
 
@@ -27,18 +28,27 @@ def stage_warnings(stages: Sequence[Stage], theta_range: float,
     out = []
     for j, s in enumerate(stages, start=1):
         if s.beta < beta_min:
-            out.append(f"WARNING: Stage {j} contributes less than "
-                       f"{beta_min * 100:.1f}% (beta_{j} = {s.beta:.3g}).")
+            out.append(tf("AVISO: o estágio {j} contribui com menos de "
+                          "{pct:.1f}% (beta_{j} = {beta:.3g}).", j=j,
+                          pct=beta_min * 100, beta=s.beta))
     for j in range(len(stages) - 1):
         a, b = stages[j], stages[j + 1]
         if abs(b.theta0 - a.theta0) < rel_close * theta_range:
-            msg = (f"WARNING: theta0_{j + 1} and theta0_{j + 2} are nearly "
-                   f"identical ({a.theta0:.4g} vs {b.theta0:.4g}).")
+            msg = tf("AVISO: theta0_{a} e theta0_{b} são quase iguais "
+                     "({va:.4g} vs {vb:.4g}).", a=j + 1, b=j + 2,
+                     va=a.theta0, vb=b.theta0)
             if (abs(b.duration - a.duration) < 0.1 * max(a.duration, b.duration)
                     and abs(b.m - a.m) < 0.1 * max(a.m, b.m)):
-                msg += f" Stages {j + 1} and {j + 2} are nearly identical (redundant)."
+                msg += tf(" Os estágios {a} e {b} são quase idênticos "
+                          "(redundantes).", a=j + 1, b=j + 2)
             out.append(msg)
     return out
+
+
+def _lado(inferior: bool) -> str:
+    """"inferior"/"superior" traduzidos (entram num molde maior)."""
+    from ..i18n import t as _
+    return _("inferior") if inferior else _("superior")
 
 
 def bound_warnings(x: np.ndarray, param: Parametrization) -> List[str]:
@@ -46,13 +56,13 @@ def bound_warnings(x: np.ndarray, param: Parametrization) -> List[str]:
     mask = at_bounds(x, param.lower, param.upper)
     for i in np.flatnonzero(mask):
         nome = param.names[i]
-        lado = "lower" if abs(x[i] - param.lower[i]) <= abs(
-            param.upper[i] - x[i]) else "upper"
+        inferior = abs(x[i] - param.lower[i]) <= abs(param.upper[i] - x[i])
         # dtheta0 no limite inferior 0 = inícios coincidentes; s_j = 0 ou 1
         # zera estágios — ambos já tratados em stage_warnings, mas o aviso
         # do parâmetro de busca continua útil.
-        out.append(f"WARNING: parameter {nome} reached {lado} bound "
-                   f"({x[i]:.4g}).")
+        out.append(tf("AVISO: o parâmetro {nome} atingiu o limite "
+                      "{lado} ({valor:.4g}).", nome=nome,
+                      lado=_lado(inferior), valor=x[i]))
     return out
 
 
@@ -63,8 +73,9 @@ def dispersion_warnings(xs: np.ndarray, param: Parametrization,
         return []
     span = np.maximum(param.upper - param.lower, 1e-300)
     sd = xs.std(axis=0, ddof=1) / span
-    return [f"WARNING: parameter {param.names[i]} varies strongly between "
-            f"runs (std = {sd[i] * 100:.1f}% of its range)."
+    return [tf("AVISO: o parâmetro {nome} varia muito entre os runs "
+               "(desvio = {pct:.1f}% da faixa).", nome=param.names[i],
+               pct=sd[i] * 100)
             for i in np.flatnonzero(sd > rel)]
 
 
@@ -109,12 +120,14 @@ def correlation_warnings(x, param, data, fit_target,
     avisos = []
     for i in range(len(param.names)):
         if col[i] == 0:
-            avisos.append(f"WARNING: parameter {param.names[i]} has no effect "
-                          "on the fit (zero sensitivity).")
+            avisos.append(tf("AVISO: o parâmetro {nome} não tem efeito no "
+                             "ajuste (sensibilidade nula).",
+                             nome=param.names[i]))
         for k in range(i + 1, len(param.names)):
             if col[i] > 0 and col[k] > 0 and abs(corr[i, k]) > limit:
-                avisos.append(
-                    f"WARNING: {param.names[i]} and {param.names[k]} are "
-                    f"strongly correlated (rho = {corr[i, k]:+.3f}).")
+                avisos.append(tf(
+                    "AVISO: {a} e {b} são fortemente correlacionados "
+                    "(rho = {rho:+.3f}).", a=param.names[i],
+                    b=param.names[k], rho=corr[i, k]))
     return {"warnings": avisos, "condition_number": cond,
             "correlation": corr.tolist(), "names": list(param.names)}

@@ -114,7 +114,8 @@ def load_exp_data(case_dir, cfg=None, engine=None) -> Optional[Dict]:
            "warnings": extra}
     if engine is not None and len(ca_deg):
         from ..pressure.engine import volume
-        V, _, _ = volume(np.radians(ca_deg - offset), engine.Rc, engine)
+        V, _dV, _dA = volume(np.radians(ca_deg - offset), engine.Rc,
+                             engine)
         out["V_m3"] = np.asarray(V, float)
     return out
 

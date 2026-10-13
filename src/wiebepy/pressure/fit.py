@@ -34,6 +34,7 @@ from ..core.parameters import (A_DEFAULT, PENALTY, Parametrization, Stage,
 from ..optimization.identifiability import (bound_warnings,
                                             dispersion_warnings,
                                             stage_warnings)
+from ..i18n import t as _, tf
 from ..optimization.pso import PSOConfig, pso
 from .engine import EngineConfig
 from .model import ODEFailure, batch_rk4, simulate
@@ -216,10 +217,10 @@ def _resolver_backend(nome: str) -> str:
         return "numba" if numba_available() else ("cupy" if cupy_available()
                                                   else "numpy")
     if nome == "numba" and not numba_available():
-        log.warning("WARNING: numba indisponível; usando numpy.")
+        log.warning(_("WARNING: numba indisponível; usando numpy."))
         return "numpy"
     if nome == "cupy" and not cupy_available():
-        log.warning("WARNING: CuPy/GPU indisponível; usando %s.",
+        log.warning(_("WARNING: CuPy/GPU indisponível; usando %s."),
                     "numba" if numba_available() else "numpy")
         return "numba" if numba_available() else "numpy"
     return nome
@@ -259,7 +260,7 @@ def reference_rmse(data: PressureData, param: PressureParam, x,
     """RMSE com a referência solve_ivp (PENALTY se a integração falhar)."""
     Rc, stages = param.to_model(x)
     try:
-        P, _, _ = simulate(data.theta, float(data.P[0]), stages,
+        P, _Tg, _Qw = simulate(data.theta, float(data.P[0]), stages,
                            engine, Rc)
     except ODEFailure:
         return float(PENALTY)
@@ -343,7 +344,7 @@ def single_run(obj: PressureObjective, param: PressureParam,
             try:
                 candidatos.append(_refinar(obj, xi, param))
             except Exception as e:                    # noqa: BLE001
-                log.debug("refinamento falhou: %s", e)
+                log.debug(_("refinamento falhou: %s"), e)
     rk4 = obj(np.array(candidatos))
     ordem = np.argsort(rk4)
     nota = ""
@@ -414,7 +415,7 @@ def fit_pressure(data: PressureData, s: PressureSettings,
     t0 = time.perf_counter()
     param = PressureParam(s)
     obj = PressureObjective(data, param, s)
-    log.info("Execution backend : %s (%s)", obj.backend, obj.precision)
+    log.info(_("Backend de execução: %s (%s)"), obj.backend, obj.precision)
     runs: List[PressureRun] = []
     for i in range(s.runs):
         seed = None if s.seed is None else s.seed + i
@@ -423,7 +424,7 @@ def fit_pressure(data: PressureData, s: PressureSettings,
             def cb(it, fb, xb, _i=i):
                 return progress(_i, it, fb, xb)
         runs.append(single_run(obj, param, s, i, seed, cb))
-        log.info("Run %02d/%02d  RMSE = %.4f kPa (RK4 %.4f)  %.1f s%s", i + 1,
+        log.info(_("Run %02d/%02d  RMSE = %.4f kPa (RK4 %.4f)  %.1f s%s"), i + 1,
                  s.runs, runs[-1].rmse, runs[-1].rmse_rk4, runs[-1].elapsed_s,
                  f"  [{runs[-1].note}]" if runs[-1].note else "")
     return summarize_pressure(data, s, param, runs, obj.backend,
@@ -473,7 +474,7 @@ def compare_pressure(data: PressureData, ns: Sequence[int],
     res: Dict[int, PressureFitResult] = {}
     tempos = {}
     for N in ns:
-        log.info("=== Modelo %d-Wiebe (pressão) ===", N)
+        log.info(_("=== Modelo %d-Wiebe (pressão) ==="), N)
         t0 = time.perf_counter()
         cb = None
         if progress is not None:
@@ -503,7 +504,7 @@ def compare_pressure(data: PressureData, ns: Sequence[int],
                 continue
             ref = reference_rmse(data, param, x, None, s.engine)
             if ref < res[N].best.rmse * (1 - 1e-9):
-                log.info("N=%d: candidato aninhado (de N=%d) %.4f -> %.4f kPa",
+                log.info(_("N=%d: candidato aninhado (de N=%d) %.4f -> %.4f kPa"),
                          N, N + 1, res[N].best.rmse, ref)
                 extra = PressureRun(run=len(res[N].runs), seed=None, x=x,
                                     rmse=ref, rmse_rk4=float(obj(x[None])[0]),

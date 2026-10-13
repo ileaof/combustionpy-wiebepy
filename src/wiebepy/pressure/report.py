@@ -59,7 +59,7 @@ def _pressao_com_avaliador(theta, P1, stages, engine, Rc):
     Levanta ODEFailure se nenhum dos dois integrar."""
     from .model import ODEFailure, batch_rk4, simulate
     try:
-        P, _, _ = simulate(theta, P1, stages, engine, Rc)
+        P, _Tg, _Qw = simulate(theta, P1, stages, engine, Rc)
         return P, "solve_ivp"
     except ODEFailure:
         p = {k: v[None, :] for k, v in stages_to_arrays(stages).items()}

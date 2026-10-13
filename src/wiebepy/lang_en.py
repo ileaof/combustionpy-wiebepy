@@ -1717,4 +1717,314 @@ EN = {
     "entalpia_liquida_J": "net_enthalpy_J",
     "Q_paredes_J": "Q_walls_J",
     "termo_bruto_J": "gross_term_J",
+
+    # =====================================================================
+    # Linha de comando (cli/parser.py, cfd/cli.py, crevice_flow/cli.py,
+    # parallel/hardware.py). Os textos longos de --help-model e
+    # --help-examples ficam em cli/helptext.py, em constantes paralelas.
+    # =====================================================================
+    # grupos de opções
+    "modelo": "model",
+    "grade angular (modo de avaliação)": "angle grid (evaluation mode)",
+    "dados e saída": "data and output",
+    "otimização": "optimization",
+    "paralelismo": "parallelism",
+    "utilidades": "utilities",
+    # opções do wiebepy
+    "número de estágios, 1 a 5 (padrão 2)": "number of stages, 1 to 5 (default 2)",
+    "ajusta e compara estes números de estágios (ex.: 1 2 3 4 5); requer "
+    "--input":
+        "fits and compares these stage counts (e.g. 1 2 3 4 5); requires "
+        "--input",
+    "eficiência a_j fixa (padrão 6.908 = ln 1000)":
+        "fixed efficiency a_j (default 6.908 = ln 1000)",
+    "ajusta a_j de cada estágio em vez de fixá-lo":
+        "fits a_j of each stage instead of fixing it",
+    "parametrização das frações β (padrão stick)":
+        "parametrization of the β fractions (default stick)",
+    "modelo salvo (model.json) para avaliar sem ajuste":
+        "saved model (model.json) to evaluate without fitting",
+    "unidade angular de θ, θ0 e Δθ (padrão deg)":
+        "angle unit of θ, θ0 and Δθ (default deg)",
+    "início da grade (padrão -20)": "start of the grid (default -20)",
+    "fim da grade (padrão 100)": "end of the grid (default 100)",
+    "passo da grade (padrão 0.1)": "grid step (default 0.1)",
+    "dados experimentais (.csv .txt .dat .json)":
+        "experimental data (.csv .txt .dat .json)",
+    "mfb = fração queimada x_b/dx_b (padrão); pressure = curva de pressão "
+    "do cilindro θ, P — ajuste pelo modelo 0-D do Double Wiebe com N "
+    "estágios":
+        "mfb = burned fraction x_b/dx_b (default); pressure = cylinder "
+        "pressure curve θ, P — fitted with the 0-D Double Wiebe model with "
+        "N stages",
+    "unidade da pressão no arquivo (padrão bar)":
+        "pressure unit in the file (default bar)",
+    "modo pressão: não ajusta Rc (usa engine.Rc)":
+        "pressure mode: does not fit Rc (uses engine.Rc)",
+    "diretório de resultados (padrão results)":
+        "results directory (default results)",
+    "configuração .json/.yaml/.toml (a CLI prevalece)":
+        "configuration .json/.yaml/.toml (the CLI takes precedence)",
+    "também grava results.json": "also writes results.json",
+    "mostra os gráficos na tela": "shows the charts on screen",
+    "grava os gráficos PNG em <output>/plots":
+        "writes the PNG charts to <output>/plots",
+    "ajusta os parâmetros aos dados de --input":
+        "fits the parameters to the data from --input",
+    "otimizador global (pso)": "global optimizer (pso)",
+    "partículas do PSO (padrão 100)": "PSO particles (default 100)",
+    "iterações máximas do PSO (padrão 1000)":
+        "maximum PSO iterations (default 1000)",
+    "iterações sem melhora antes de parar (padrão 200)":
+        "iterations without improvement before stopping (default 200)",
+    "topologia do PSO (padrão ring: menos convergência prematura)":
+        "PSO topology (default ring: less premature convergence)",
+    "runs independentes com sementes seed+i (padrão 5)":
+        "independent runs with seeds seed+i (default 5)",
+    "semente base (padrão 42)": "base seed (default 42)",
+    "função objetivo (padrão rmse)": "objective function (default rmse)",
+    "série ajustada (padrão: as disponíveis nos dados)":
+        "fitted series (default: whichever the data has)",
+    "peso de x_b no alvo both": "weight of x_b in the both target",
+    "peso de dx_b/dθ no alvo both": "weight of dx_b/dθ in the both target",
+    "desliga o refinamento local após o PSO":
+        "turns off the local refinement after the PSO",
+    "blocos da validação cruzada em --compare-stages (padrão 5; 0 desliga)":
+        "cross-validation blocks in --compare-stages (default 5; 0 turns it "
+        "off)",
+    "backend de avaliação (padrão auto)":
+        "evaluation backend (default auto)",
+    "threads (numba) ou processos (multiprocessing e runs paralelos); "
+    "padrão: núcleos − 1":
+        "threads (numba) or processes (multiprocessing and parallel runs); "
+        "default: cores − 1",
+    "atalho para --backend cupy": "shortcut for --backend cupy",
+    "precisão (padrão float64; float32 é mais rápido em GPU)":
+        "precision (default float64; float32 is faster on the GPU)",
+    "benchmark dos backends nesta máquina":
+        "benchmark of the backends on this machine",
+    "benchmark incluindo n = 1e5 no cenário do PSO":
+        "benchmark including n = 1e5 in the PSO scenario",
+    "mostra o hardware detectado e sai":
+        "shows the detected hardware and exits",
+    "abre a interface gráfica no navegador (requer pip install -e \".[gui]\")":
+        "opens the graphical interface in the browser (requires pip install "
+        "-e \".[gui]\")",
+    "mostra a formulação matemática e sai":
+        "shows the mathematical formulation and exits",
+    "mostra comandos prontos e sai": "shows ready-made commands and exits",
+    "só avisos e erros": "warnings and errors only",
+    "hardware, backend e progresso do PSO":
+        "hardware, backend and PSO progress",
+    "mensagens de depuração": "debug messages",
+    "idioma das telas e dos relatórios HTML: pt (padrão) ou en":
+        "language of the screens and of the HTML reports: pt (default) or en",
+    # cabeçalho e progresso da execução
+    "Modo              : %s": "Mode              : %s",
+    "Backend pedido    : %s": "Requested backend : %s",
+    "GPU               : %s": "GPU               : %s",
+    "Workers de CPU    : %s": "CPU workers       : %s",
+    "Número de estágios: %s": "Number of stages  : %s",
+    "Otimização        : PSO (%s partículas × %s iterações, %s runs)":
+        "Optimization      : PSO (%s particles × %s iterations, %s runs)",
+    "Precisão          : %s": "Precision         : %s",
+    "Run %02d/%02d | %d-Wiebe | iteração %4d/%d | melhor %.3e | %.1f s":
+        "Run %02d/%02d | %d-Wiebe | iteration %4d/%d | best %.3e | %.1f s",
+    # resultados
+    "Melhor ajuste (%d-Wiebe) — backend: %s — %.1f s":
+        "Best fit (%d-Wiebe) — backend: %s — %.1f s",
+    "  objetivo (%s): best %.4e | mean %.4e | std %.2e | median %.4e | "
+    "worst %.4e  (%d runs)":
+        "  objective (%s): best %.4e | mean %.4e | std %.2e | median %.4e | "
+        "worst %.4e  (%d runs)",
+    "  %s: RMSE %.4e  MAE %.4e  SEE %.4e  R² %.6f  AIC %.1f  BIC %.1f  "
+    "DW %.2f":
+        "  %s: RMSE %.4e  MAE %.4e  SEE %.4e  R² %.6f  AIC %.1f  BIC %.1f  "
+        "DW %.2f",
+    "%s... e mais %d avisos (lista completa em warnings.txt)":
+        "%s... and %d more warnings (full list in warnings.txt)",
+    "Modelo %d-Wiebe avaliado em %d pontos (θ = %g … %g %s).":
+        "%d-Wiebe model evaluated at %d points (θ = %g … %g %s).",
+    "  estágio %d: %s": "  stage %d: %s",
+    "  estágio %d: β=%.4f θ0=%.3f° Δθ=%.3f° m=%.4f":
+        "  stage %d: β=%.4f θ0=%.3f° Δθ=%.3f° m=%.4f",
+    "Resultados em %s": "Results in %s",
+    "Modo pressão: %d pontos (θ %.1f° a %.1f°), P máx %.0f kPa":
+        "Pressure mode: %d points (θ %.1f° to %.1f°), P max %.0f kPa",
+    "Melhor ajuste de pressão (%d-Wiebe) — RMSE %.3f kPa, R² %.6f, Rc %.4f":
+        "Best pressure fit (%d-Wiebe) — RMSE %.3f kPa, R² %.6f, Rc %.4f",
+    "Modelo recomendado: %d-Wiebe — %s.":
+        "Recommended model: %d-Wiebe — %s.",
+    "O menor RMSE de treino NÃO é usado sozinho como critério (ver "
+    "--help-model).":
+        "The lowest training RMSE is NOT used alone as the criterion (see "
+        "--help-model).",
+    "Benchmark gravado em %s": "Benchmark written to %s",
+    "WARNING: %s": "WARNING: %s",
+    "ERRO: %s": "ERROR: %s",
+    "ERRO: a GUI requer Streamlit: pip install -e \".[gui]\"":
+        "ERROR: the GUI requires Streamlit: pip install -e \".[gui]\"",
+    "Interrompido pelo usuário.": "Interrupted by the user.",
+    "ERRO inesperado (%s): %s — use --debug para detalhes.":
+        "Unexpected ERROR (%s): %s — use --debug for details.",
+    # hardware (--devices)
+    "CPU               : {v}": "CPU               : {v}",
+    "Núcleos lógicos   : {v}": "Logical cores     : {v}",
+    "Núcleos físicos   : {v}": "Physical cores    : {v}",
+    "RAM               : {v}": "RAM               : {v}",
+    "Plataforma        : {v}": "Platform          : {v}",
+    "Python            : {v}": "Python            : {v}",
+    "Numba             : {v}": "Numba             : {v}",
+    "CuPy              : {v}": "CuPy              : {v}",
+    "GPU               : {nome} ({mem})": "GPU               : {nome} ({mem})",
+    "CUDA (runtime)    : {v}": "CUDA (runtime)    : {v}",
+    "CuPy / GPU        : indisponível ({motivo})":
+        "CuPy / GPU        : unavailable ({motivo})",
+    "não disponível": "not available",
+    # ------------------------------------------------ subcomando cfd
+    "diagnóstico do ambiente (WSL2, OpenFOAM)":
+        "diagnosis of the environment (WSL2, OpenFOAM)",
+    "diagnóstico do ambiente (WSL2/OpenFOAM)":
+        "diagnosis of the environment (WSL2/OpenFOAM)",
+    "distribuição WSL2 específica": "a specific WSL2 distribution",
+    "além de diagnosticar, conecta: verifica o foamRun e grava a conexão "
+    "(distro/root) usada como padrão pela GUI e pela CLI":
+        "besides diagnosing, connects: checks foamRun and stores the "
+        "connection (distro/root) used as the default by the GUI and the CLI",
+    "gera o caso para inspeção (sem executar)":
+        "builds the case for inspection (without running it)",
+    "configuração YAML/JSON do caso (engine + cfd)":
+        "YAML/JSON configuration of the case (engine + cfd)",
+    "sobrescreve cfd.case_directory": "overrides cfd.case_directory",
+    "gera o caso sem fonte de calor (compressão motrada; usa max_Co 0,25)":
+        "builds the case without a heat source (motored compression; uses "
+        "max_Co 0.25)",
+    "gera com pistão fixo (volume constante)":
+        "builds it with a fixed piston (constant volume)",
+    "valida o caso antes da execução": "validates the case before running",
+    "diretório do caso (com case_config.yaml)":
+        "case directory (with case_config.yaml)",
+    "distribuição WSL2 com o solver": "WSL2 distribution with the solver",
+    "executa o caso validado": "runs the validated case",
+    "diretório do caso (estado VALIDATED)":
+        "case directory (state VALIDATED)",
+    "configuração (workers/distro; o caso prevalece para a física)":
+        "configuration (workers/distro; the case prevails for the physics)",
+    "processos MPI do SOLVER (padrão: configuração)":
+        "SOLVER MPI processes (default: from the configuration)",
+    "mostra a saída do solver no terminal":
+        "shows the solver output in the terminal",
+    "estado do caso": "state of the case",
+    "cancela a execução ativa": "cancels the active run",
+    "gera o relatório HTML do caso": "generates the case's HTML report",
+    "submódulo OPCIONAL crevice_flow (fresta top-land; não é blow-by)":
+        "OPTIONAL crevice_flow submodule (top-land crevice; not blow-by)",
+    "ver: wiebepy cfd crevice --help": "see: wiebepy cfd crevice --help",
+    "Caso preparado em %s (estado: %s).":
+        "Case prepared in %s (state: %s).",
+    "Inspecione os arquivos; então: wiebepy cfd validate --case \"%s\"":
+        "Inspect the files; then: wiebepy cfd validate --case \"%s\"",
+    "Caso válido: %s": "Valid case: %s",
+    "Executando caso %s (workers=%s, distro=%s)…":
+        "Running case %s (workers=%s, distro=%s)…",
+    "Concluído — relatório: wiebepy cfd report --case \"%s\"":
+        "Done — report: wiebepy cfd report --case \"%s\"",
+    "Status: %s (%.1f s)": "Status: %s (%.1f s)",
+    "Nenhuma execução ativa no caso %s.": "No active run in case %s.",
+    "Cancelamento solicitado — o executor atual vai interromper o solver "
+    "(incluindo filhos/MPI).":
+        "Cancellation requested — the current runner will stop the solver "
+        "(including children/MPI).",
+    "Estado do caso: %s — o relatório refletirá apenas o que houver de "
+    "resultados.":
+        "State of the case: %s — the report will reflect only whatever "
+        "results exist.",
+    "Relatório gravado em %s": "Report written to %s",
+    "CONEXÃO NÃO ESTABELECIDA.": "CONNECTION NOT ESTABLISHED.",
+    "Módulo crevice_flow indisponível: %s":
+        "crevice_flow module unavailable: %s",
+    "Interrompido.": "Interrupted.",
+    "ERRO inesperado (%s): %s — reporte com o log do caso.":
+        "Unexpected ERROR (%s): %s — report it with the case log.",
+    # ------------------------------------------ subcomando cfd crevice
+    "gera o caso de fresta para inspeção (sem executar)":
+        "builds the crevice case for inspection (without running it)",
+    "config YAML com a seção crevice: (ver "
+    "examples/crevice/crevice_exemplo.yaml)":
+        "YAML config with the crevice: section (see "
+        "examples/crevice/crevice_exemplo.yaml)",
+    "sobrescreve case_directory da config":
+        "overrides case_directory from the config",
+    "processos MPI do solver (padrão 1 = serial)":
+        "solver MPI processes (default 1 = serial)",
+    "mostra a saída do solver em tempo real":
+        "shows the solver output in real time",
+    "gera o relatório HTML autônomo":
+        "generates the standalone HTML report",
+    "crevice_flow: sem OpenFOAM — a execução exige o solver; "
+    "prepare/validate seguem disponíveis.":
+        "crevice_flow: no OpenFOAM — running requires the solver; "
+        "prepare/validate remain available.",
+    "Caso de fresta preparado em %s (estado: %s).":
+        "Crevice case prepared in %s (state: %s).",
+    "Inspecione os arquivos; então: wiebepy cfd crevice validate "
+    "--case \"%s\"":
+        "Inspect the files; then: wiebepy cfd crevice validate --case \"%s\"",
+    "Caso de fresta válido: %s": "Valid crevice case: %s",
+    "Executando caso de fresta %s (workers=%s, distro=%s)…":
+        "Running crevice case %s (workers=%s, distro=%s)…",
+    "Concluído — relatório: wiebepy cfd crevice report --case \"%s\"":
+        "Done — report: wiebepy cfd crevice report --case \"%s\"",
+    # mensagens de execução (otimização, backends, modo pressão)
+    "Backend de execução: %s": "Execution backend : %s",
+    "Backend de execução: %s (%s)": "Execution backend : %s (%s)",
+    "auto: %s": "auto: %s",
+    "WARNING: backend '%s' indisponível (%s). Usando '%s'.":
+        "WARNING: backend '%s' unavailable (%s). Using '%s'.",
+    "WARNING: backend '%s' falhou no teste (%s).":
+        "WARNING: backend '%s' failed the probe (%s).",
+    "Runs em paralelo: %d processos (%s por processo)":
+        "Runs in parallel: %d processes (%s per process)",
+    "Run %02d/%02d  objetivo = %.6e": "Run %02d/%02d  objective = %.6e",
+    "Run %02d/%02d  objetivo = %.6e  (%.1f s, %s)":
+        "Run %02d/%02d  objective = %.6e  (%.1f s, %s)",
+    "=== Modelo %d-Wiebe ===": "=== %d-Wiebe model ===",
+    "N=%d: candidato aninhado (de N=%d) melhora o objetivo %.6e -> %.6e":
+        "N=%d: nested candidate (from N=%d) improves the objective "
+        "%.6e -> %.6e",
+    "=== Modelo %d-Wiebe (pressão) ===": "=== %d-Wiebe model (pressure) ===",
+    "N=%d: candidato aninhado (de N=%d) %.4f -> %.4f kPa":
+        "N=%d: nested candidate (from N=%d) %.4f -> %.4f kPa",
+    "Run %02d/%02d  RMSE = %.4f kPa (RK4 %.4f)  %.1f s%s":
+        "Run %02d/%02d  RMSE = %.4f kPa (RK4 %.4f)  %.1f s%s",
+    "WARNING: numba indisponível; usando numpy.":
+        "WARNING: numba unavailable; using numpy.",
+    "WARNING: CuPy/GPU indisponível; usando %s.":
+        "WARNING: CuPy/GPU unavailable; using %s.",
+    "refinamento falhou: %s": "refinement failed: %s",
+
+    # avisos de identificabilidade (optimization/identifiability.py)
+    "AVISO: o estágio {j} contribui com menos de {pct:.1f}% "
+    "(beta_{j} = {beta:.3g}).":
+        "WARNING: stage {j} contributes less than {pct:.1f}% "
+        "(beta_{j} = {beta:.3g}).",
+    "AVISO: theta0_{a} e theta0_{b} são quase iguais ({va:.4g} vs {vb:.4g}).":
+        "WARNING: theta0_{a} and theta0_{b} are nearly identical "
+        "({va:.4g} vs {vb:.4g}).",
+    " Os estágios {a} e {b} são quase idênticos (redundantes).":
+        " Stages {a} and {b} are nearly identical (redundant).",
+    "AVISO: o parâmetro {nome} atingiu o limite {lado} ({valor:.4g}).":
+        "WARNING: parameter {nome} reached its {lado} bound ({valor:.4g}).",
+    "inferior": "lower",
+    "superior": "upper",
+    "AVISO: o parâmetro {nome} varia muito entre os runs "
+    "(desvio = {pct:.1f}% da faixa).":
+        "WARNING: parameter {nome} varies strongly between runs "
+        "(std = {pct:.1f}% of its range).",
+    "AVISO: o parâmetro {nome} não tem efeito no ajuste "
+    "(sensibilidade nula).":
+        "WARNING: parameter {nome} has no effect on the fit (zero "
+        "sensitivity).",
+    "AVISO: {a} e {b} são fortemente correlacionados (rho = {rho:+.3f}).":
+        "WARNING: {a} and {b} are strongly correlated (rho = {rho:+.3f}).",
 }

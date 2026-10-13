@@ -247,10 +247,22 @@ O idioma vale para toda a interface — rótulos, mensagens, títulos de
 gráfico e nomes de coluna — e também para os **relatórios HTML** gerados
 por ela (modo pressão, CFD e fresta), com rótulos de gráfico e avisos
 científicos traduzidos. É lembrado entre sessões (gravado em
-`~/.wiebepy/gui.json`) e também pode vir da URL (`?lang=en`). Na linha de
-comando: `wiebepy --lang en …` (vale inclusive para `wiebepy cfd report`).
-Continuam em português as mensagens de erro de leitura/validação de dados;
-os avisos de identificabilidade estão em inglês desde sempre.
+`~/.wiebepy/gui.json`) e também pode vir da URL (`?lang=en`).
+
+**A linha de comando acompanha**: `wiebepy --lang en …` traduz `--help`,
+`--help-model`, `--help-examples`, `--devices`, as mensagens de execução
+(cabeçalho, progresso do PSO, resultado, avisos de identificabilidade) e os
+relatórios gerados ali — inclusive em `wiebepy cfd …` e
+`wiebepy cfd crevice …`. A opção vale só para aquela execução e não altera
+a preferência gravada pela interface:
+
+```bash
+wiebepy --lang en --stages 2 --optimize --input data.csv --save-plots
+wiebepy --lang en cfd report --case results/cfd/case_006
+```
+
+Continuam em português as mensagens de erro de leitura e de validação de
+dados (pendência registrada no handoff).
 
 Páginas (menu no topo):
 

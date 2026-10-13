@@ -42,6 +42,7 @@ from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
+from ..i18n import t as _, tf
 from ..core.core import multistage_wiebe
 from ..core.derivatives import multistage_wiebe_derivative
 from .fit import (FitResult, FitSettings, RunResult, build_problem, fit,
@@ -140,7 +141,7 @@ def compare_stages(data: FitData, ns: Sequence[int], base: FitSettings,
     resultados: Dict[int, FitResult] = {}
     tempos: Dict[int, float] = {}
     for N in ns:
-        log.info("=== Modelo %d-Wiebe ===", N)
+        log.info(_("=== Modelo %d-Wiebe ==="), N)
         t0 = time.perf_counter()
         cb = None
         if progress is not None:
@@ -156,8 +157,8 @@ def compare_stages(data: FitData, ns: Sequence[int], base: FitSettings,
             cand = nested_candidate(resultados[N + 1], N, data, s)
             r = resultados[N]
             if cand.objective < r.best.objective * (1 - 1e-9):
-                log.info("N=%d: candidato aninhado (de N=%d) melhora o "
-                         "objetivo %.6e -> %.6e", N, N + 1, r.best.objective,
+                log.info(_("N=%d: candidato aninhado (de N=%d) melhora o "
+                         "objetivo %.6e -> %.6e"), N, N + 1, r.best.objective,
                          cand.objective)
                 cand.run = len(r.runs)
                 resultados[N] = summarize(data, s, r.param, r.spec,

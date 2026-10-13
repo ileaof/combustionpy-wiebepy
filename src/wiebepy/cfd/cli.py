@@ -29,6 +29,7 @@ import signal
 from pathlib import Path
 from typing import List, Optional
 
+from ..i18n import t as _, tf
 from ..io.config import ConfigError, resolve
 from ..pressure.engine import EngineConfig
 from .adapters.base import AdapterError
@@ -53,57 +54,57 @@ def build_cfd_parser() -> argparse.ArgumentParser:
                     "e docs/cfd/.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("doctor", help="diagnóstico do ambiente (WSL2, "
-                                      "OpenFOAM)")
-    s.add_argument("--distro", help="distribuição WSL2 específica")
+    s = sub.add_parser("doctor", help=_("diagnóstico do ambiente (WSL2, "
+                                      "OpenFOAM)"))
+    s.add_argument("--distro", help=_("distribuição WSL2 específica"))
     s.add_argument("--connect", action="store_true",
-                   help="além de diagnosticar, conecta: verifica o "
+                   help=_("além de diagnosticar, conecta: verifica o "
                         "foamRun e grava a conexão (distro/root) usada "
-                        "como padrão pela GUI e pela CLI")
+                        "como padrão pela GUI e pela CLI"))
 
-    s = sub.add_parser("prepare", help="gera o caso para inspeção (sem "
-                                       "executar)")
+    s = sub.add_parser("prepare", help=_("gera o caso para inspeção (sem "
+                                       "executar)"))
     s.add_argument("--config", required=True, metavar="ARQ",
-                   help="configuração YAML/JSON do caso (engine + cfd)")
+                   help=_("configuração YAML/JSON do caso (engine + cfd)"))
     s.add_argument("--output", metavar="DIR",
-                   help="sobrescreve cfd.case_directory")
+                   help=_("sobrescreve cfd.case_directory"))
     s.add_argument("--no-heat", action="store_true",
-                   help="gera o caso sem fonte de calor (compressão motrada; "
-                        "usa max_Co 0,25)")
+                   help=_("gera o caso sem fonte de calor (compressão motrada; "
+                        "usa max_Co 0,25)"))
     s.add_argument("--fixed-piston", action="store_true",
-                   help="gera com pistão fixo (volume constante)")
+                   help=_("gera com pistão fixo (volume constante)"))
 
-    s = sub.add_parser("validate", help="valida o caso antes da execução")
+    s = sub.add_parser("validate", help=_("valida o caso antes da execução"))
     s.add_argument("--case", required=True, metavar="DIR",
-                   help="diretório do caso (com case_config.yaml)")
+                   help=_("diretório do caso (com case_config.yaml)"))
     s.add_argument("--distro", metavar="NOME",
-                   help="distribuição WSL2 com o solver")
+                   help=_("distribuição WSL2 com o solver"))
 
-    s = sub.add_parser("run", help="executa o caso validado")
+    s = sub.add_parser("run", help=_("executa o caso validado"))
     s.add_argument("--case", required=True, metavar="DIR",
-                   help="diretório do caso (estado VALIDATED)")
+                   help=_("diretório do caso (estado VALIDATED)"))
     s.add_argument("--config", metavar="ARQ",
-                   help="configuração (workers/distro; o caso prevalece "
-                        "para a física)")
+                   help=_("configuração (workers/distro; o caso prevalece "
+                        "para a física)"))
     s.add_argument("--workers", type=int, metavar="N",
-                   help="processos MPI do SOLVER (padrão: configuração)")
+                   help=_("processos MPI do SOLVER (padrão: configuração)"))
     s.add_argument("--distro", metavar="NOME")
     s.add_argument("--follow", action="store_true",
-                   help="mostra a saída do solver no terminal")
+                   help=_("mostra a saída do solver no terminal"))
 
-    s = sub.add_parser("status", help="estado do caso")
+    s = sub.add_parser("status", help=_("estado do caso"))
     s.add_argument("--case", required=True, metavar="DIR")
 
-    s = sub.add_parser("cancel", help="cancela a execução ativa")
+    s = sub.add_parser("cancel", help=_("cancela a execução ativa"))
     s.add_argument("--case", required=True, metavar="DIR")
 
-    s = sub.add_parser("report", help="gera o relatório HTML do caso")
+    s = sub.add_parser("report", help=_("gera o relatório HTML do caso"))
     s.add_argument("--case", required=True, metavar="DIR")
 
-    s = sub.add_parser("crevice", help="submódulo OPCIONAL crevice_flow "
-                                       "(fresta top-land; não é blow-by)")
+    s = sub.add_parser("crevice", help=_("submódulo OPCIONAL crevice_flow "
+                                       "(fresta top-land; não é blow-by)"))
     s.add_argument("args", nargs=argparse.REMAINDER,
-                   help="ver: wiebepy cfd crevice --help")
+                   help=_("ver: wiebepy cfd crevice --help"))
     return p
 
 
@@ -149,7 +150,7 @@ def _cmd_doctor(a) -> int:
         for m in msgs:
             print(f"• {m}")
         if conn is None:
-            print("CONEXÃO NÃO ESTABELECIDA.")
+            print(_("CONEXÃO NÃO ESTABELECIDA."))
             return EXIT_USO
         print(f"Conectado: OpenFOAM {conn.get('version') or '?'} na distro "
               f"'{conn.get('distro')}' ({conn.get('root')}).")
@@ -161,7 +162,7 @@ def _cmd_prepare(a) -> int:
     erros = cfg.validate()
     if erros:
         for e in erros:
-            log.error("ERRO: %s", e)
+            log.error(_("ERRO: %s"), e)
         return EXIT_USO
     if a.output:
         cfg.case_directory = a.output
@@ -171,22 +172,22 @@ def _cmd_prepare(a) -> int:
                        solver_info=inst or {"version": None})
     d = runner.prepare(heat_enabled=not a.no_heat,
                        moving_override=False if a.fixed_piston else None)
-    log.info("Caso preparado em %s (estado: %s).", d,
+    log.info(_("Caso preparado em %s (estado: %s)."), d,
              CaseState.PREPARED.label)
-    log.info("Inspecione os arquivos; então: wiebepy cfd validate --case "
-             "\"%s\"", d)
+    log.info(_("Inspecione os arquivos; então: wiebepy cfd validate --case "
+             "\"%s\""), d)
     return EXIT_OK
 
 
 def _cmd_validate(a) -> int:
     ok, erros, avisos = validate_case(a.case, distro=a.distro)
     for w in avisos:
-        log.warning("WARNING: %s", w)
+        log.warning(_("WARNING: %s"), w)
     if ok:
-        log.info("Caso válido: %s", a.case)
+        log.info(_("Caso válido: %s"), a.case)
         return EXIT_OK
     for e in erros:
-        log.error("ERRO: %s", e)
+        log.error(_("ERRO: %s"), e)
     return EXIT_USO
 
 
@@ -198,18 +199,18 @@ def _cmd_run(a) -> int:
     distro = a.distro or cfg.wsl_distro
     engine = _engine_from_case(a.case)
     runner = CfdRunner(cfg, engine=engine, distro=distro)
-    ok, erros, _ = validate_case(a.case, cfg.adapter, distro,
+    ok, erros, _info = validate_case(a.case, cfg.adapter, distro,
                                  set_validated=False)
     if not ok:
         for e in erros:
-            log.error("ERRO: %s", e)
+            log.error(_("ERRO: %s"), e)
         return EXIT_USO
-    log.info("Executando caso %s (workers=%s, distro=%s)…", a.case,
+    log.info(_("Executando caso %s (workers=%s, distro=%s)…"), a.case,
              a.workers or cfg.workers or 1, distro or "auto")
     ev, poll = make_cancel_poller(a.case)
     import threading
 
-    def _segv(*_):
+    def _segv(*_a):
         ev.set()
     try:
         prev = signal.signal(signal.SIGINT, _segv)
@@ -220,17 +221,17 @@ def _cmd_run(a) -> int:
                          on_output=(lambda linha: print(linha))
                          if a.follow else None)
     except (RunnerError, AdapterError) as e:
-        log.error("ERRO: %s", e)
+        log.error(_("ERRO: %s"), e)
         return EXIT_USO
     finally:
         if prev is not None:
             signal.signal(signal.SIGINT, prev)
-    log.info("Status: %s (%.1f s)", res["status"], res["elapsed_s"])
+    log.info(_("Status: %s (%.1f s)"), res["status"], res["elapsed_s"])
     for s in res.get("steps", []):
         log.info("  %s: rc=%s (%s s) — %s", s["step"], s["returncode"],
                  s["elapsed_s"], s["log"])
     if res["status"] == "completed":
-        log.info("Concluído — relatório: wiebepy cfd report --case \"%s\"",
+        log.info(_("Concluído — relatório: wiebepy cfd report --case \"%s\""),
                  a.case)
         return EXIT_OK
     if res.get("note"):
@@ -246,10 +247,10 @@ def _cmd_status(a) -> int:
 
 def _cmd_cancel(a) -> int:
     if CfdRunner.cancel(a.case):
-        log.info("Cancelamento solicitado — o executor atual vai "
-                 "interromper o solver (incluindo filhos/MPI).")
+        log.info(_("Cancelamento solicitado — o executor atual vai "
+                 "interromper o solver (incluindo filhos/MPI)."))
         return EXIT_OK
-    log.warning("Nenhuma execução ativa no caso %s.", a.case)
+    log.warning(_("Nenhuma execução ativa no caso %s."), a.case)
     return EXIT_USO
 
 
@@ -260,8 +261,8 @@ def _cmd_report(a) -> int:
     case = Path(a.case)
     state = read_state(case)
     if state != CaseState.COMPLETED:
-        log.warning("Estado do caso: %s — o relatório refletirá apenas o "
-                    "que houver de resultados.", state.label)
+        log.warning(_("Estado do caso: %s — o relatório refletirá apenas o "
+                    "que houver de resultados."), state.label)
     engine = _engine_from_case(case)
     import yaml
     from ..core.parameters import as_stages
@@ -275,7 +276,7 @@ def _cmd_report(a) -> int:
     from .reporting import load_exp_data
     exp_data = load_exp_data(case, engine=engine)
     p = write_report(case, res, exp_data=exp_data)
-    log.info("Relatório gravado em %s", p)
+    log.info(_("Relatório gravado em %s"), p)
     return EXIT_OK
 
 
@@ -285,7 +286,7 @@ def _cmd_crevice(a) -> int:
     try:
         from ..crevice_flow.cli import main_crevice
     except ImportError as e:
-        log.error("Módulo crevice_flow indisponível: %s", e)
+        log.error(_("Módulo crevice_flow indisponível: %s"), e)
         return EXIT_USO
     return main_crevice(a.args)
 
@@ -306,13 +307,13 @@ def main_cfd(argv: Optional[List[str]] = None) -> int:
         return _COMANDOS[a.cmd](a)
     except (CfdConfigError, ConfigError, AdapterError, RunnerError,
             FileNotFoundError) as e:
-        log.error("ERRO: %s", e)
+        log.error(_("ERRO: %s"), e)
         return EXIT_USO
     except KeyboardInterrupt:
-        log.error("Interrompido.")
+        log.error(_("Interrompido."))
         return EXIT_ERR
     except Exception as e:                              # noqa: BLE001
-        log.error("ERRO inesperado (%s): %s — reporte com o log do caso.",
+        log.error(_("ERRO inesperado (%s): %s — reporte com o log do caso."),
                   type(e).__name__, e)
         return EXIT_ERR
 

@@ -190,10 +190,17 @@ wiebepy --gui               <em># abre no navegador</em></code></pre>
   <div class="box nota">O idioma escolhido vale também para os
   <b>relatórios HTML</b> (modo pressão, CFD e fresta), incluindo os rótulos
   dos gráficos e os avisos científicos: gere o relatório com a interface em
-  inglês e ele sai em inglês. Na linha de comando, use
-  <code>wiebepy --lang en …</code>. Ainda saem em português: as mensagens de
-  erro de leitura de dados e de validação, e os avisos de identificabilidade
-  (esses estão em inglês desde sempre).</div>
+  inglês e ele sai em inglês.</div>
+  <div class="box nota"><b>A linha de comando acompanha</b>:
+  <code>wiebepy --lang en …</code> traduz <code>--help</code>,
+  <code>--help-model</code>, <code>--help-examples</code>,
+  <code>--devices</code>, as mensagens de execução (cabeçalho, progresso do
+  PSO, resultado, avisos de identificabilidade) e os relatórios gerados ali
+  — inclusive em <code>wiebepy cfd …</code> e
+  <code>wiebepy cfd crevice …</code>. A opção vale só para aquela execução:
+  não altera a preferência gravada pela interface. Ainda saem em português
+  as mensagens de erro de leitura e de validação de dados (pendência
+  registrada no handoff).</div>
 </section>
 
 <section id="pressao">
@@ -624,10 +631,16 @@ wiebepy --gui               <em># opens in the browser</em></code></pre>
   <div class="box nota">The chosen language also applies to the
   <b>HTML reports</b> (pressure mode, CFD and crevice), including the chart
   labels and the scientific warnings: generate the report with the interface
-  in English and it comes out in English. On the command line, use
-  <code>wiebepy --lang en …</code>. Still in Portuguese: the data-reading and
-  validation error messages (the identifiability warnings have always been in
-  English).</div>
+  in English and it comes out in English.</div>
+  <div class="box nota"><b>The command line follows too</b>:
+  <code>wiebepy --lang en …</code> translates <code>--help</code>,
+  <code>--help-model</code>, <code>--help-examples</code>,
+  <code>--devices</code>, the run messages (header, PSO progress, result,
+  identifiability warnings) and the reports generated there — including
+  <code>wiebepy cfd …</code> and <code>wiebepy cfd crevice …</code>. The
+  option applies to that run only: it does not change the preference stored
+  by the interface. Still in Portuguese: the data-reading and validation
+  error messages (a pendency recorded in the handoff).</div>
 </section>
 
 <section id="pressao-en">

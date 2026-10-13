@@ -162,10 +162,17 @@ def test_fit_metrics_valores():
 
 
 def test_avisos_de_estagios():
+    """Os avisos saem no idioma corrente (chave em português)."""
+    from wiebepy.i18n import idioma_fixo
     st = [Stage(0.002, 0.0, 10, 1), Stage(0.5, 10.0, 20, 1),
           Stage(0.498, 10.1, 20.5, 1.02)]
     w = stage_warnings(st, theta_range=120.0)
-    assert any("Stage 1 contributes less than 0.5%" in x for x in w)
+    assert any("o estágio 1 contribui com menos de 0.5%" in x for x in w)
+    assert any("theta0_2 e theta0_3 são quase iguais" in x for x in w)
+    assert any("redundantes" in x for x in w)
+    with idioma_fixo("en"):
+        w = stage_warnings(st, theta_range=120.0)
+    assert any("stage 1 contributes less than 0.5%" in x for x in w)
     assert any("theta0_2 and theta0_3 are nearly identical" in x for x in w)
     assert any("redundant" in x for x in w)
 
@@ -173,7 +180,7 @@ def test_avisos_de_estagios():
 def test_aviso_de_limite_no_ajuste():
     d = _dados(1)
     r = fit(d, FitSettings(n_stages=1, bounds={"m": [0.05, 1.0]}, **RAPIDO))
-    assert any("m_1 reached upper bound" in w for w in r.warnings)
+    assert any("m_1 atingiu o limite superior" in w for w in r.warnings)
 
 
 # ---------------------------------------------------------------------------

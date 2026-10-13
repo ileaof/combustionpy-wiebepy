@@ -209,6 +209,8 @@ def test_cli_erros_de_uso(tmp_path):
 
 def test_cli_devices(capsys):
     assert _main(["--devices"]) == 0
+    assert "Núcleos lógicos" in capsys.readouterr().out
+    assert _main(["--lang", "en", "--devices"]) == 0
     assert "Logical cores" in capsys.readouterr().out
 
 

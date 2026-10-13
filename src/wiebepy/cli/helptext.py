@@ -182,3 +182,214 @@ wiebepy cfd report   --case results/cfd/case_001          # relatório HTML do c
 wiebepy --benchmark --workers 8 --output results/bench
 wiebepy --devices
 """
+
+
+# =============================================================================
+# Inglês — os textos longos ficam em constantes paralelas (e não no
+# dicionário de i18n): são documentos, revisados como documentos.
+# =============================================================================
+DESCRIPTION_EN = """\
+wiebepy — Wiebe functions with 1 to 5 stages (single, double, triple, 4- and
+5-stage): evaluation of the mass fraction burned x_b(θ) and of the burn rate
+dx_b/dθ, fitting to experimental data (PSO + local refinement), multiple runs
+with statistics, objective comparison across stage counts, and serial,
+parallel (CPU) or NVIDIA GPU execution.
+
+What a Wiebe function is
+  An S-shaped curve describing the fraction of the fuel mass already burned
+  as a function of the crank angle θ. Each stage j starts at θ0_j, lasts
+  Δθ_j, has shape m_j and efficiency a_j; the stage contributes the fraction
+  β_j of the total mass (Σβ_j = 1). Several stages represent distinct phases
+  of the combustion (e.g. premixed + diffusion + late burning).
+
+Parameters of each stage (units)
+  beta      mass fraction of the stage [-], 0 ≤ β ≤ 1, Σβ = 1
+  theta0    start of the stage's combustion [°] (or rad with --angle-unit rad)
+  duration  duration Δθ [same unit as θ], > 0
+  m         shape factor [-], > 0 (small m: abrupt start)
+  a         efficiency [-]; a = 6.908 ⇒ 99.9 % burned by the end of Δθ
+  x_b is dimensionless; dx_b/dθ has unit 1/° (or 1/rad).
+
+Execution modes
+  (default)           evaluates a model on a θ grid (--theta-min/max/step)
+  --optimize          fits N stages to the data from --input
+  --compare-stages    fits several N and compares them (RMSE, MAE, SEE, R²,
+                      AIC, BIC, blocked cross-validation, time)
+  --benchmark         measures the backends on this machine
+  --devices           shows the detected hardware
+  wiebepy cfd …       OPTIONAL CFD subcommand (OpenFOAM 13 through WSL2):
+                      doctor/prepare/validate/run/status/cancel/report — the
+                      heat release is PRESCRIBED by the calibrated Wiebe
+                      function; it does not predict chemical kinetics, flame
+                      front or emissions (see the README, CFD section)
+
+Backends (--backend)
+  auto             measures the available ones with the real problem size
+                   and picks the fastest (default)
+  numpy            vectorized swarm (S candidates × n points), 1 core
+  numba            compiled kernel, --workers threads (requires numba)
+  multiprocessing  swarm split across --workers processes (NumPy)
+  cupy             NVIDIA GPU (requires cupy-cuda12x); --gpu is a shortcut
+  An unavailable backend ⇒ WARNING and fallback (cupy → numba → numpy).
+  Independent runs (--runs) go to parallel processes with the numpy backend;
+  with numba/cupy they run in sequence (already parallel inside).
+
+Input formats (--input)
+  .csv/.txt/.dat with a header: theta,xb  |  theta,dxb_dtheta  |
+  theta,xb,dxb_dtheta  (+ optional weight or sigma); without a header:
+  2 columns = theta,xb and 3 columns = theta,xb,dxb_dtheta.
+  .json: {"theta": [...], "xb": [...], "dxb_dtheta": [...]}.
+  Configuration (--config): .json, .yaml or .toml (see the README).
+"""
+
+EPILOG_EN = """\
+examples:
+  wiebepy --stages 3 --plot
+  wiebepy --stages 2 --optimize --input data.csv --runs 10 --save-plots
+  wiebepy --compare-stages 1 2 3 4 5 --input data.csv --backend auto
+  wiebepy --benchmark --workers 8
+  wiebepy --help-model      (mathematical formulation)
+  wiebepy --help-examples   (ready-made commands for each case)
+"""
+
+HELP_MODEL_EN = r"""
+MATHEMATICAL FORMULATION — N-stage Wiebe (N = 1..5)
+===================================================
+
+For each stage j = 1..N:
+
+    z_j(θ) = (θ − θ0_j) / Δθ_j
+
+    x_j(θ) = 0                                  if θ < θ0_j
+    x_j(θ) = 1 − exp[ −a_j · z_j^(m_j+1) ]      if θ ≥ θ0_j
+
+    dx_j/dθ = a_j (m_j + 1) / Δθ_j · z_j^m_j · exp[ −a_j · z_j^(m_j+1) ]
+
+Mass fraction burned and burn rate:
+
+    x_b(θ)    = Σ_j β_j · x_j(θ)
+    dx_b/dθ   = Σ_j β_j · dx_j/dθ
+
+Constraints: 0 ≤ β_j ≤ 1, Σ β_j = 1, Δθ_j > 0, m_j > 0, a_j > 0.
+With them each x_j is monotonic in [0, 1), hence 0 ≤ x_b ≤ 1 (the code clips
+floating-point noise). a = 6.908 = ln(1000) makes the stage reach 99.9 % at
+θ0 + Δθ. N = 1 is the plain Wiebe; N = 2 with β_1 = α is the classic
+double-Wiebe.
+
+PARAMETRIZATION USED IN THE FIT (boxed search vector)
+  starts    θ0_1 and increments δθ_j ≥ 0:  θ0_j = θ0_1 + Σ_{k≤j} δθ_k
+            (imposes θ0_1 ≤ … ≤ θ0_N and removes stage permutations);
+            θ0_N ≤ θ0_max (default: the data's θ_max) with a soft penalty
+  weights   --beta-param stick (default): s_1..s_{N−1} ∈ [0, 1]
+                β_1 = s_1, β_j = s_j Π_{k<j}(1 − s_k), β_N = Π_{k<N}(1 − s_k)
+            --beta-param softmax: z_1..z_{N−1}, z_N = 0,  β = softmax(z)
+            --beta-param explicit: β_1..β_{N−1} free, β_N = 1 − Σ
+                (a sum > 1 is penalized) — the traditional mode, for
+                comparison
+  a_j       fixed at --a-fixed (6.908) or fitted with --fit-a
+  k (number of free parameters) = 4N − 1, or 5N − 1 with --fit-a.
+
+OBJECTIVE FUNCTION (r = simulated − experimental)
+  rmse  √(Σr²/n)   mse  Σr²/n   mae  Σ|r|/n   see  √(Σr²/(n−k))
+  wrmse √(Σw r²/Σw)  (w from the file, or w = 1/σ²)
+  --fit-target xb | dxb | both;  both: J = w_x·J(x_b)/s_x + w_d·J(dx_b)/s_d,
+  with s_x, s_d = the standard deviation of the experimental series.
+
+MODEL COMPARISON
+  AIC = n ln(SSE/n) + 2k      BIC = n ln(SSE/n) + k ln(n)
+  They assume independent residuals; in x_b curves the residuals are
+  autocorrelated (Durbin-Watson is reported), which favours larger models.
+  The recommendation uses cross-validation over short contiguous blocks of θ
+  interleaved between the folds (no extrapolation) and the rule: the
+  smallest N whose CV error stays within 5 % of the best one and that has no
+  negligible (β < 0.5 %) or coincident stages. Beforehand, each N is refined
+  from the optimum of N+1 with one stage removed (nested models), which
+  corrects occasional failures of the optimizer.
+"""
+
+HELP_EXAMPLES_EN = """
+READY-MADE EXAMPLES
+===================
+(use `python main.py` instead of `wiebepy` if you did not install the package)
+
+# Evaluate models (without data) on a grid from -20° to 100°, step 0.1°
+wiebepy --stages 1 --theta-min -20 --theta-max 100 --theta-step 0.1 --plot   # single-Wiebe
+wiebepy --stages 2 --save-plots --output results/double                      # double-Wiebe
+wiebepy --stages 3 --plot                                                    # triple-Wiebe
+wiebepy --stages 4 --save-plots --output results/four                        # 4-stage
+wiebepy --stages 5 --save-plots --output results/five                        # 5-stage
+
+# Evaluate a saved model (model.json from an earlier fit)
+wiebepy --model results/fit/model.json --theta-min -30 --theta-max 120 --plot
+
+# Experimental fit (x_b), 10 runs, charts saved
+wiebepy --stages 3 --optimize --input examples/data/synthetic_3stage.csv \\
+        --population 60 --iterations 500 --runs 10 --save-plots --output results/fit3
+
+# Fit using x_b and dx_b/dθ together, with a_j fitted
+wiebepy --stages 2 --optimize --input data.csv --fit-target both --fit-a
+
+# Parallel execution on the CPU
+wiebepy --stages 4 --optimize --input data.csv --runs 16 --backend numba --workers 8
+        # swarm in Numba with 8 threads (runs in sequence) — the fastest on
+        # the CPU in this project's measurements
+wiebepy --stages 4 --optimize --input data.csv --runs 16 --backend numpy --workers 8
+        # 16 runs spread over 8 processes (NumPy in each one)
+
+# NVIDIA GPU (CuPy). It only pays off on large problems (swarm × points
+# ≳ 1e6); float32 is faster still, but the search becomes less precise
+wiebepy --stages 5 --optimize --input large_data.csv --gpu --population 1000
+
+# Compare 1 to 5 stages (AIC/BIC + blocked cross-validation)
+wiebepy --compare-stages 1 2 3 4 5 --input examples/data/synthetic_3stage.csv \\
+        --optimize --population 100 --iterations 1000 --runs 20 \\
+        --backend auto --workers 8 --save-plots
+
+# PRESSURE curve from a test (θ in rad, P in bar): the 0-D Double Wiebe
+# model with N heat-release stages; Rc fitted
+wiebepy --stages 2 --optimize --input examples/data/ensaio_P_exp_carga3_45.txt \\
+        --input-type pressure --pressure-unit bar --runs 5 --save-plots
+wiebepy --compare-stages 1 2 3 --input test.txt --input-type pressure
+
+# Use a configuration file (the CLI overrides the file)
+wiebepy --config examples/config_example.yaml --input data.csv --optimize
+
+# Optional CFD (requires OpenFOAM 13 on WSL2): the complete flow
+wiebepy cfd doctor                                        # WSL2/OpenFOAM environment
+wiebepy cfd prepare  --config examples/config_cfd.yaml    # builds the case, does not run it
+wiebepy cfd validate --case results/cfd/case_001          # validates before running
+wiebepy cfd run      --case results/cfd/case_001 --follow # runs with a live log
+wiebepy cfd status   --case results/cfd/case_001          # state of the case
+wiebepy cfd cancel   --case results/cfd/case_001          # stops the run
+wiebepy cfd report   --case results/cfd/case_001          # HTML report of the case
+# Preparation variants: --no-heat (motored case, no source) and
+# --fixed-piston (fixed piston). The Wiebe source is checked
+# energetically during preparation (∫Q̇dt = m_f·LHV·Δx_b within 0.1 %).
+
+# Benchmark of the backends on this machine, and detected hardware
+wiebepy --benchmark --workers 8 --output results/bench
+wiebepy --devices
+"""
+
+
+# =============================================================================
+# Acesso pelo idioma corrente
+# =============================================================================
+def descricao() -> str:
+    from ..i18n import em_ingles
+    return DESCRIPTION_EN if em_ingles() else DESCRIPTION
+
+
+def epilogo() -> str:
+    from ..i18n import em_ingles
+    return EPILOG_EN if em_ingles() else EPILOG
+
+
+def help_model() -> str:
+    from ..i18n import em_ingles
+    return HELP_MODEL_EN if em_ingles() else HELP_MODEL
+
+
+def help_examples() -> str:
+    from ..i18n import em_ingles
+    return HELP_EXAMPLES_EN if em_ingles() else HELP_EXAMPLES

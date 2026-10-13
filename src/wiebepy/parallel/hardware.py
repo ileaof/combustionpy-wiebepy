@@ -13,6 +13,8 @@ import platform
 from functools import lru_cache
 from typing import Dict, Optional
 
+from ..i18n import t as _, tf
+
 
 def _ram_bytes() -> Optional[int]:
     try:
@@ -124,19 +126,22 @@ def hardware_report() -> str:
     h = detect_hardware()
     nb, cp = h["numba"], h["cupy"]
     linhas = [
-        f"CPU               : {h['cpu']}",
-        f"Logical cores     : {h['logical_cores']}",
-        f"Physical cores    : {h['physical_cores'] or '?'}",
-        f"RAM               : {_gib(h['ram_bytes'])}",
-        f"Platform          : {h['platform']}",
-        f"Python            : {h['python']}",
-        f"Numba             : {nb['version'] if nb['available'] else 'não disponível'}",
+        tf("CPU               : {v}", v=h["cpu"]),
+        tf("Núcleos lógicos   : {v}", v=h["logical_cores"]),
+        tf("Núcleos físicos   : {v}", v=h["physical_cores"] or "?"),
+        tf("RAM               : {v}", v=_gib(h["ram_bytes"])),
+        tf("Plataforma        : {v}", v=h["platform"]),
+        tf("Python            : {v}", v=h["python"]),
+        tf("Numba             : {v}",
+           v=nb["version"] if nb["available"] else _("não disponível")),
     ]
     if cp["available"]:
-        linhas += [f"CuPy              : {cp['version']}",
-                   f"GPU               : {cp['gpu_name']} "
-                   f"({_gib(cp['gpu_memory_bytes'])})",
-                   f"CUDA (runtime)    : {cp['cuda_runtime']}"]
+        linhas += [tf("CuPy              : {v}", v=cp["version"]),
+                   tf("GPU               : {nome} ({mem})",
+                      nome=cp["gpu_name"],
+                      mem=_gib(cp["gpu_memory_bytes"])),
+                   tf("CUDA (runtime)    : {v}", v=cp["cuda_runtime"])]
     else:
-        linhas.append(f"CuPy / GPU        : indisponível ({cp['reason']})")
+        linhas.append(tf("CuPy / GPU        : indisponível ({motivo})",
+                         motivo=cp["reason"]))
     return "\n".join(linhas)

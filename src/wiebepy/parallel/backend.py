@@ -26,6 +26,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
+from ..i18n import t as _, tf
 from .cpu import (ArrayObjective, BatchObjective, MultiprocessingObjective,
                   NumbaObjective, numba_available)
 from .gpu import CupyObjective, cupy_available
@@ -78,8 +79,8 @@ def make_objective(nome: str, data, param, spec, precision="float64",
         try:
             obj = _build(cand, data, param, spec, precision, workers)
             if cand != nome:
-                log.warning("WARNING: backend '%s' indisponível (%s). "
-                            "Usando '%s'.", nome, "; ".join(erros), cand)
+                log.warning(_("WARNING: backend '%s' indisponível (%s). "
+                            "Usando '%s'."), nome, "; ".join(erros), cand)
             return obj
         except Exception as e:                      # noqa: BLE001
             erros.append(f"{cand}: {e}")
@@ -107,16 +108,16 @@ def choose_auto(data, param, spec, precision="float64",
             obj = _build(nome, data, param, spec, precision, workers)
             obj(X[:2])                              # aquecimento/compilação
             t0 = time.perf_counter()
-            for _ in range(reps):
+            for _i in range(reps):
                 obj(X)
             tempos[nome] = (time.perf_counter() - t0) / reps
             objs[nome] = obj
         except Exception as e:                      # noqa: BLE001
-            log.warning("WARNING: backend '%s' falhou no teste (%s).", nome, e)
+            log.warning(_("WARNING: backend '%s' falhou no teste (%s)."), nome, e)
     melhor = min(tempos, key=tempos.get)
     for nome, obj in objs.items():
         if nome != melhor:
             obj.close()
-    log.info("auto: %s", ", ".join(f"{k}={v * 1e3:.2f} ms" for k, v in
+    log.info(_("auto: %s"), ", ".join(f"{k}={v * 1e3:.2f} ms" for k, v in
                                   sorted(tempos.items(), key=lambda t: t[1])))
     return objs[melhor], tempos

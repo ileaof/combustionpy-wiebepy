@@ -29,6 +29,7 @@ from typing import Callable, Dict, List, Optional
 
 import numpy as np
 
+from ..i18n import t as _, tf
 from ..core.core import multistage_wiebe
 from ..core.derivatives import multistage_wiebe_derivative
 from ..core.parameters import A_DEFAULT, Parametrization, Stage
@@ -282,7 +283,7 @@ def fit(data: FitData, s: FitSettings,
     obj = make_objective(s.backend, data, param, spec, s.precision,
                          s.workers, s.particles)
     backend_desc = obj.describe()
-    log.info("Execution backend : %s", backend_desc)
+    log.info(_("Backend de execução: %s"), backend_desc)
     workers = s.workers or max(1, (os.cpu_count() or 2) - 1)
     paralelo = (s.parallel_runs == "yes" or (
         s.parallel_runs == "auto" and s.runs >= 2 and workers >= 2
@@ -293,14 +294,14 @@ def fit(data: FitData, s: FitSettings,
         if paralelo:
             from ..parallel.procs import spawn_pool
             n_proc = min(workers, s.runs)
-            log.info("Runs em paralelo: %d processos (%s por processo)",
+            log.info(_("Runs em paralelo: %d processos (%s por processo)"),
                      n_proc, obj.name)
             with spawn_pool(n_proc) as ex:
                 futs = [ex.submit(_run_worker, (data, s, i, seeds[i], obj.name))
                         for i in range(s.runs)]
                 for i, fu in enumerate(futs):
                     runs.append(fu.result())
-                    log.info("Run %02d/%02d  objetivo = %.6e", i + 1, s.runs,
+                    log.info(_("Run %02d/%02d  objetivo = %.6e"), i + 1, s.runs,
                              runs[-1].objective)
             backend_desc = f"{obj.name} × {n_proc} processos (runs paralelos)"
         else:
@@ -311,7 +312,7 @@ def fit(data: FitData, s: FitSettings,
                         return progress(_i, it, fb, xb)
                 runs.append(single_run(obj, param, s, i, seeds[i], cb,
                                        data=data, spec=spec))
-                log.info("Run %02d/%02d  objetivo = %.6e  (%.1f s, %s)",
+                log.info(_("Run %02d/%02d  objetivo = %.6e  (%.1f s, %s)"),
                          i + 1, s.runs, runs[-1].objective,
                          runs[-1].elapsed_s, runs[-1].stopped_by)
     finally:

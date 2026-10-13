@@ -23,6 +23,7 @@ import signal
 from pathlib import Path
 from typing import List, Optional
 
+from ..i18n import t as _, tf
 from ..cfd.adapters.base import AdapterError
 from ..cfd.config import CaseState, read_state
 from ..cfd.runner import RunnerError, make_cancel_poller
@@ -42,36 +43,36 @@ def build_crevice_parser() -> argparse.ArgumentParser:
                     "óleo, sem combustão, sem emissões.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("doctor", help="diagnóstico do ambiente (WSL2/OpenFOAM)")
+    s = sub.add_parser("doctor", help=_("diagnóstico do ambiente (WSL2/OpenFOAM)"))
     s.add_argument("--distro", metavar="NOME")
 
-    s = sub.add_parser("prepare", help="gera o caso de fresta para "
-                                       "inspeção (sem executar)")
+    s = sub.add_parser("prepare", help=_("gera o caso de fresta para "
+                                       "inspeção (sem executar)"))
     s.add_argument("--config", required=True, metavar="ARQ",
-                   help="config YAML com a seção crevice: (ver "
-                        "examples/crevice/crevice_exemplo.yaml)")
+                   help=_("config YAML com a seção crevice: (ver "
+                        "examples/crevice/crevice_exemplo.yaml)"))
     s.add_argument("--output", metavar="DIR",
-                   help="sobrescreve case_directory da config")
+                   help=_("sobrescreve case_directory da config"))
 
-    s = sub.add_parser("validate", help="valida o caso antes da execução")
+    s = sub.add_parser("validate", help=_("valida o caso antes da execução"))
     s.add_argument("--case", required=True, metavar="DIR")
 
-    s = sub.add_parser("run", help="executa o caso validado")
+    s = sub.add_parser("run", help=_("executa o caso validado"))
     s.add_argument("--case", required=True, metavar="DIR")
     s.add_argument("--workers", type=int, metavar="N",
-                   help="processos MPI do solver (padrão 1 = serial)")
+                   help=_("processos MPI do solver (padrão 1 = serial)"))
     s.add_argument("--distro", metavar="NOME",
-                   help="distribuição WSL2 com o solver")
+                   help=_("distribuição WSL2 com o solver"))
     s.add_argument("--follow", action="store_true",
-                   help="mostra a saída do solver em tempo real")
+                   help=_("mostra a saída do solver em tempo real"))
 
-    s = sub.add_parser("status", help="estado do caso")
+    s = sub.add_parser("status", help=_("estado do caso"))
     s.add_argument("--case", required=True, metavar="DIR")
 
-    s = sub.add_parser("cancel", help="cancela a execução ativa")
+    s = sub.add_parser("cancel", help=_("cancela a execução ativa"))
     s.add_argument("--case", required=True, metavar="DIR")
 
-    s = sub.add_parser("report", help="gera o relatório HTML autônomo")
+    s = sub.add_parser("report", help=_("gera o relatório HTML autônomo"))
     s.add_argument("--case", required=True, metavar="DIR")
     return p
 
@@ -103,8 +104,8 @@ def _cmd_doctor(a) -> int:
     print(rep.format())
     best = rep.best()
     if not best:
-        print("crevice_flow: sem OpenFOAM — a execução exige o solver; "
-              "prepare/validate seguem disponíveis.")
+        print(_("crevice_flow: sem OpenFOAM — a execução exige o solver; "
+              "prepare/validate seguem disponíveis."))
         return EXIT_OK
     print(f"crevice_flow: pronto para executar com OpenFOAM "
           f"{best.get('version')} na distro '{best.get('distro')}'.")
@@ -118,16 +119,16 @@ def _cmd_prepare(a) -> int:
     erros = cfg.validate()
     if erros:
         for e in erros:
-            log.error("ERRO: %s", e)
+            log.error(_("ERRO: %s"), e)
         return EXIT_USO
     inst, distro = _solver_install(None)
     runner = CreviceRunner(cfg, distro=distro,
                            solver_info=inst or {"version": None})
     d = runner.prepare()
-    log.info("Caso de fresta preparado em %s (estado: %s).", d,
+    log.info(_("Caso de fresta preparado em %s (estado: %s)."), d,
              CaseState.PREPARED.label)
-    log.info("Inspecione os arquivos; então: wiebepy cfd crevice validate "
-             "--case \"%s\"", d)
+    log.info(_("Inspecione os arquivos; então: wiebepy cfd crevice validate "
+             "--case \"%s\""), d)
     return EXIT_OK
 
 
@@ -135,30 +136,30 @@ def _cmd_validate(a) -> int:
     from .validation import validate_case
     ok, erros, avisos = validate_case(a.case)
     for w in avisos:
-        log.warning("WARNING: %s", w)
+        log.warning(_("WARNING: %s"), w)
     if ok:
-        log.info("Caso de fresta válido: %s", a.case)
+        log.info(_("Caso de fresta válido: %s"), a.case)
         return EXIT_OK
     for e in erros:
-        log.error("ERRO: %s", e)
+        log.error(_("ERRO: %s"), e)
     return EXIT_USO
 
 
 def _cmd_run(a) -> int:
     from .runner import CreviceRunner, _t_end, check_completion
     d = Path(a.case)
-    ok, erros, _ = _validate_silent(d)
+    ok, erros, _info = _validate_silent(d)
     if not ok:
         for e in erros:
-            log.error("ERRO: %s", e)
+            log.error(_("ERRO: %s"), e)
         return EXIT_USO
     inst, distro = _solver_install(a.distro)
     runner = CreviceRunner(None, distro=distro, solver_info=inst or {})
-    log.info("Executando caso de fresta %s (workers=%s, distro=%s)…", d,
+    log.info(_("Executando caso de fresta %s (workers=%s, distro=%s)…"), d,
              a.workers or 1, distro or "auto")
     ev, poll = make_cancel_poller(d)
 
-    def _segv(*_):
+    def _segv(*_a):
         ev.set()
     try:
         prev = signal.signal(signal.SIGINT, _segv)
@@ -169,18 +170,18 @@ def _cmd_run(a) -> int:
                          on_output=(lambda linha: print(linha))
                          if a.follow else None)
     except (RunnerError, AdapterError) as e:
-        log.error("ERRO: %s", e)
+        log.error(_("ERRO: %s"), e)
         return EXIT_USO
     finally:
         if prev is not None:
             signal.signal(signal.SIGINT, prev)
-    log.info("Status: %s (%.1f s)", res["status"], res["elapsed_s"])
+    log.info(_("Status: %s (%.1f s)"), res["status"], res["elapsed_s"])
     for s in res.get("steps", []):
         log.info("  %s: rc=%s (%s s) — %s", s["step"], s["returncode"],
                  s["elapsed_s"], s["log"])
     if res["status"] == "completed":
-        log.info("Concluído — relatório: wiebepy cfd crevice report "
-                 "--case \"%s\"", d)
+        log.info(_("Concluído — relatório: wiebepy cfd crevice report "
+                 "--case \"%s\""), d)
         return EXIT_OK
     if res.get("note"):
         log.warning("%s", res["note"])
@@ -202,10 +203,10 @@ def _cmd_status(a) -> int:
 def _cmd_cancel(a) -> int:
     from .runner import CreviceRunner
     if CreviceRunner.cancel(a.case):
-        log.info("Cancelamento solicitado — o executor atual vai "
-                 "interromper o solver (incluindo filhos/MPI).")
+        log.info(_("Cancelamento solicitado — o executor atual vai "
+                 "interromper o solver (incluindo filhos/MPI)."))
         return EXIT_OK
-    log.warning("Nenhuma execução ativa no caso %s.", a.case)
+    log.warning(_("Nenhuma execução ativa no caso %s."), a.case)
     return EXIT_USO
 
 
@@ -214,10 +215,10 @@ def _cmd_report(a) -> int:
     case = Path(a.case)
     state = read_state(case)
     if state != CaseState.COMPLETED:
-        log.warning("Estado do caso: %s — o relatório refletirá apenas o "
-                    "que houver de resultados.", state.label)
+        log.warning(_("Estado do caso: %s — o relatório refletirá apenas o "
+                    "que houver de resultados."), state.label)
     p = write_report(case)
-    log.info("Relatório gravado em %s", p)
+    log.info(_("Relatório gravado em %s"), p)
     return EXIT_OK
 
 
@@ -236,7 +237,7 @@ def main_crevice(argv: Optional[List[str]] = None) -> int:
     try:
         return _COMANDOS[a.cmd](a)
     except (RunnerError, AdapterError) as e:
-        log.error("ERRO: %s", e)
+        log.error(_("ERRO: %s"), e)
         return EXIT_USO
 
 

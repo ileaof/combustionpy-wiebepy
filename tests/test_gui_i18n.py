@@ -282,3 +282,42 @@ def test_estados_de_caso_sempre_traduzidos():
                 if re.search(r"(?<![\w(])\w*state\.label", l, re.I)
                 and "_(" not in l]
         assert not crus, f"{p.name}: {crus}"
+
+
+# ------------------------------------------------------------------- CLI
+def test_cli_em_ingles(capsys):
+    """--lang en alcança ajudas, hardware e mensagens de execução."""
+    from wiebepy.cli.parser import _main
+    assert _main(["--lang", "en", "--devices"]) == 0
+    out = capsys.readouterr().out
+    assert "Logical cores" in out and "Núcleos" not in out
+    with pytest.raises(SystemExit):
+        _main(["--lang", "en", "--help"])
+    out = capsys.readouterr().out
+    for termo in ("number of stages", "evaluation backend", "Input formats"):
+        assert termo.lower() in out.lower(), termo
+    assert _main(["--lang", "en", "--help-model"]) == 0
+    assert "MATHEMATICAL FORMULATION" in capsys.readouterr().out
+    assert _main(["--lang", "en", "--help-examples"]) == 0
+    assert "READY-MADE EXAMPLES" in capsys.readouterr().out
+
+
+def test_cli_em_portugues_por_padrao(capsys):
+    from wiebepy.cli.parser import _main
+    assert _main(["--devices"]) == 0
+    assert "Núcleos lógicos" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        _main(["--help"])
+    out = capsys.readouterr().out
+    assert "número de estágios" in out.lower()
+    assert _main(["--help-model"]) == 0
+    assert "FORMULAÇÃO MATEMÁTICA" in capsys.readouterr().out
+
+
+def test_lang_nao_grava_a_preferencia(tmp_path, monkeypatch):
+    """--lang vale só para a execução: não mexe no arquivo do usuário."""
+    arq = tmp_path / "gui.json"
+    monkeypatch.setattr(i18n, "ARQUIVO", arq)
+    from wiebepy.cli.parser import _main
+    assert _main(["--lang", "en", "--devices"]) == 0
+    assert not arq.exists()
