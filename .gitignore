@@ -13,3 +13,5 @@ results_*/
 *.png
 !docs/*.png
 !docs/cfd/*.png
+# brasões dos agradecimentos (CNPq, CAPES, UFPA)
+!docs/logos/*.png
