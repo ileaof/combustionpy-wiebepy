@@ -217,3 +217,27 @@ def test_resultados_comparam_estagos_truncados(ensaio, tmp_path):
         assert (tmp_path / f).exists(), f
     h = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert "comparação entre estágios" in h
+
+
+def test_batch_rk4_sem_numba_cai_para_numpy(monkeypatch):
+    """O numba é extra OPCIONAL: sem ele, `batch_rk4` usa NumPy.
+
+    O padrão do parâmetro é "numba"; quem chama sem escolher (o relatório
+    de pressão) quebrava com ModuleNotFoundError em instalação mínima.
+    """
+    import numpy as np
+    from wiebepy.parallel import cpu
+    from wiebepy.pressure import model as M
+    from wiebepy.pressure.engine import EngineConfig
+
+    e = EngineConfig()
+    th = np.linspace(-0.5, 0.5, 60)
+    par = {"beta": np.array([[1.0]]), "theta0": np.array([[-0.1]]),
+           "duration": np.array([[0.5]]), "m": np.array([[2.0]]),
+           "a": np.array([[6.9078]])}
+    rc = np.array([float(e.Rc)])
+    esperado = M.batch_rk4(th, 100.0, rc, par, e, backend="numpy")
+
+    monkeypatch.setattr(cpu, "numba_available", lambda: False)
+    obtido = M.batch_rk4(th, 100.0, rc, par, e)          # padrão = numba
+    assert np.allclose(obtido, esperado, equal_nan=True)

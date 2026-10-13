@@ -3,6 +3,21 @@
 Registro das alterações feitas no código, para quem continuar o trabalho.
 A mais recente fica no topo.
 
+## 2026-10-13 — Modo pressao exigia numba sem precisar
+
+Achado na MESMA varredura do ambiente novo (suite completa no venv limpo):
+`batch_rk4` em `pressure/model.py` tem `backend="numba"` como PADRAO, e
+quem chama sem escolher backend — `pressure/report.py`, nos modelos
+reduzidos do relatorio — quebrava com `ModuleNotFoundError: No module
+named 'numba'` numa instalacao minima (numba e extra OPCIONAL).
+
+Agora o despachante consulta `numba_available()` e cai para NumPy (mesma
+fisica, mais lento). Teste novo em `test_pressure.py` com
+`monkeypatch` em `numba_available`.
+
+Licao: o padrao de um parametro nao pode ser uma dependencia opcional.
+Vale reler os outros padroes com o mesmo olhar.
+
 ## 2026-10-13 — Relatorio CFD nao gerava em instalacao nova (NumPy 2)
 
 Reportado: "wiebepy nao instalou direito na outra maquina; o relatorio do

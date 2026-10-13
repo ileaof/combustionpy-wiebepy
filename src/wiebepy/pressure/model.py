@@ -393,9 +393,18 @@ def batch_rk4_cuda_device(theta_d, P1, Rc, params, engine: EngineConfig,
 
 def batch_rk4(theta, P1, Rc, params, engine: EngineConfig, substeps: int = 4,
               backend: str = "numba", precision: str = "float64") -> np.ndarray:
-    """P_sim (S, n) [kPa] para S candidatos; NaN = candidato falho."""
+    """P_sim (S, n) [kPa] para S candidatos; NaN = candidato falho.
+
+    O padrão é ``numba``, mas o pacote funciona SEM ele (extra opcional):
+    sem numba instalado cai para NumPy — mesma física, mais lento. Sem
+    isso, quem chama sem escolher backend (o relatório de pressão) morria
+    com ModuleNotFoundError numa instalação mínima.
+    """
     if backend == "numba":
-        return batch_rk4_numba(theta, P1, Rc, params, engine, substeps)
+        from ..parallel.cpu import numba_available
+        if numba_available():
+            return batch_rk4_numba(theta, P1, Rc, params, engine, substeps)
+        backend = "numpy"
     if backend == "cupy":
         import cupy as cp
         out = batch_rk4_cuda_device(cp.asarray(np.asarray(theta, float)), P1,
