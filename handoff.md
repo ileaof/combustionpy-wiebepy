@@ -3,6 +3,21 @@
 Registro das alterações feitas no código, para quem continuar o trabalho.
 A mais recente fica no topo.
 
+## 2026-10-13 — README em ingles (README.en.md)
+
+Traducao completa do README (944 linhas, ~49 KB) em `README.en.md`, com o
+seletor no topo dos dois arquivos: `**Portugues** · [English](README.en.md)`
+e o espelho. Nao e dicionario de i18n — e um documento, revisado como
+documento, igual ao que foi feito com `--help-model`/`--help-examples`.
+
+Quem editar o README em portugues precisa espelhar em `README.en.md`
+(nao ha teste que amarre os dois; o que existe e o indice de secoes, que
+e igual nos dois).
+
+Corrigido de passagem no README em portugues: o bloco de identificabilidade
+ainda dizia "avisos em ingles" e mostrava as mensagens antigas — agora os
+avisos saem no idioma em uso, e os exemplos estao em portugues.
+
 ## 2026-10-13 — A CLI tambem em ingles (`--lang en`)
 
 `cli/parser.py`, `cli/helptext.py`, `cfd/cli.py`, `crevice_flow/cli.py`,

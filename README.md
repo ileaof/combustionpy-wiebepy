@@ -1,5 +1,7 @@
 # wiebepy — funções Wiebe de 1 a 5 estágios
 
+**Português** · 🌐 [English](README.en.md)
+
 Ferramenta científica em Python para modelar, avaliar, ajustar e comparar
 funções Wiebe **single, double, triple, 4- e 5-stage**: fração de massa
 queimada $x_b(\theta)$, taxa de queima $dx_b/d\theta$ (derivada analítica),
@@ -684,15 +686,15 @@ recomenda-se 10 ou mais.
 best / mean / std / median / worst do objetivo e média ± desvio de cada
 parâmetro entre runs (`run_statistics.csv`, `parameters.csv`).
 
-**Identificabilidade** (avisos em inglês, lista completa em `warnings.txt`;
-formato das mensagens):
+**Identificabilidade** (os avisos saem no idioma em uso — `--lang en` para
+os de inglês; lista completa em `warnings.txt`):
 
 ```
-WARNING: Stage 4 contributes less than 0.5% (beta_4 = 0.0031).
-WARNING: theta0_2 and theta0_3 are nearly identical (5.02 vs 5.04).
-WARNING: parameter m_5 reached upper bound (5).
-WARNING: parameter duration_2 varies strongly between runs (std = 21.0% of its range).
-WARNING: theta0_1 and dtheta0_2 are strongly correlated (rho = -0.995).
+AVISO: o estágio 4 contribui com menos de 0.5% (beta_4 = 0.0031).
+AVISO: theta0_2 e theta0_3 são quase iguais (5.02 vs 5.04).
+AVISO: o parâmetro m_5 atingiu o limite superior (5).
+AVISO: o parâmetro duration_2 varia muito entre os runs (desvio = 21.0% da faixa).
+AVISO: theta0_1 e dtheta0_2 são fortemente correlacionados (rho = -0.995).
 ```
 
 A correlação vem de $(J^TJ)^{-1}$ com o jacobiano dos resíduos no ótimo
