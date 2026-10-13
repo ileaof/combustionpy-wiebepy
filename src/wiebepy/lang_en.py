@@ -2027,4 +2027,44 @@ EN = {
         "sensitivity).",
     "AVISO: {a} e {b} são fortemente correlacionados (rho = {rho:+.3f}).":
         "WARNING: {a} and {b} are strongly correlated (rho = {rho:+.3f}).",
+
+    # avisos do modo pressão e dos módulos opcionais
+    "a referência solve_ivp falhou no melhor candidato do RK4; usado o "
+    "próximo que valida":
+        "the solve_ivp reference failed on the RK4's best candidate; the "
+        "next one that validates was used",
+    "AVISO: run {n}: {nota}.": "WARNING: run {n}: {nota}.",
+    "AVISO: a referência solve_ivp falhou em todos os runs; resultado "
+    "inválido.":
+        "WARNING: the solve_ivp reference failed in every run; invalid "
+        "result.",
+    "AVISO: modelo reduzido {k}-Wiebe falhou (solve_ivp); colunas "
+    "*_wiebe{k} em NaN.":
+        "WARNING: the reduced {k}-Wiebe model failed (solve_ivp); columns "
+        "*_wiebe{k} are NaN.",
+    "AVISO: {k}-Wiebe refinado avaliado com RK4 f64 — a referência "
+    "solve_ivp falhou na fronteira de falha do passo adaptativo (candidato "
+    "válido no RK4 da busca).":
+        "WARNING: the refined {k}-Wiebe was evaluated with f64 RK4 — the "
+        "solve_ivp reference failed at the failure boundary of the adaptive "
+        "step (a valid candidate in the search's RK4).",
+    "AVISO: refinamento do {k}-Wiebe não convergiu; usada a curva truncada "
+    "(β renormalizado) sem refinamento.":
+        "WARNING: the refinement of the {k}-Wiebe did not converge; the "
+        "truncated curve (renormalized β) was used without refinement.",
+    "AVISO: {msg}": "WARNING: {msg}",
+    "AVISO: conexão detectada mas não gravada em {arquivo}: {erro}":
+        "WARNING: connection detected but not stored in {arquivo}: {erro}",
+    "AVISO: distribuição “{distro}” não listada.":
+        "WARNING: distribution “{distro}” is not listed.",
+    "AVISO: extrapolação da pressão da câmara fora da janela do arquivo "
+    "({detalhe}) — opção marcada explicitamente em "
+    "crevice.chamber.extrapolate":
+        "WARNING: extrapolation of the chamber pressure outside the file's "
+        "window ({detalhe}) — explicitly enabled in "
+        "crevice.chamber.extrapolate",
+    "AVISO: max_delta_t_s excede o passo equivalente a 0,1° de manivela — "
+    "verifique a resolução temporal":
+        "WARNING: max_delta_t_s exceeds the step equivalent to 0.1° of "
+        "crank angle — check the time resolution",
 }

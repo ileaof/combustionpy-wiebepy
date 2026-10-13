@@ -25,6 +25,8 @@ from typing import Dict, List, Optional, Tuple
 
 import yaml
 
+from ..i18n import t as _, tf
+
 
 class CreviceConfigError(ValueError):
     """Erro de configuração do crevice_flow (uso/configuração: exit 2)."""
@@ -352,19 +354,19 @@ class CreviceConfig:
             msg = (f"janela {j} excede a cobertura do arquivo de pressão "
                    f"[{th_lo:.3f}, {th_hi:.3f}]")
             if self.chamber.extrapolate:
-                self.notes.append("AVISO: extrapolação da pressão da "
-                                  "câmara fora da janela do arquivo "
-                                  f"({msg}) — opção marcada "
-                                  "explicitamente em crevice.chamber."
-                                  "extrapolate")
+                self.notes.append(tf(
+                    "AVISO: extrapolação da pressão da câmara fora da "
+                    "janela do arquivo ({detalhe}) — opção marcada "
+                    "explicitamente em crevice.chamber.extrapolate",
+                    detalhe=msg))
             else:
                 raise CreviceConfigError(msg + "; reduza a janela ou "
                                               "marque extrapolate "
                                               "explicitamente")
         if self.numerics.max_delta_t_s > self.theta_to_t(0.1):
             self.notes.append(
-                "AVISO: max_delta_t_s excede o passo equivalente a 0,1° "
-                "de manivela — verifique a resolução temporal")
+                _("AVISO: max_delta_t_s excede o passo equivalente a "
+                  "0,1° de manivela — verifique a resolução temporal"))
         return self.notes
 
     def resumo(self) -> Dict:

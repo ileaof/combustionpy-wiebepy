@@ -174,17 +174,19 @@ def write_outputs(outdir, r, d, comp: Optional[Dict] = None,
     (out / "warnings.txt").write_text(
         "".join(f"{w}\n" for w in
                 list(r.warnings)
-                + [f"WARNING: modelo reduzido {k}-Wiebe falhou (solve_ivp); "
-                   f"colunas *_wiebe{k} em NaN."
+                + [tf("AVISO: modelo reduzido {k}-Wiebe falhou "
+                      "(solve_ivp); colunas *_wiebe{k} em NaN.", k=k)
                    for k, c in comp_est.items()
                    if not np.all(np.isfinite(c["P"]))]
-                + [f"AVISO: {k}-Wiebe refinado avaliado com RK4 f64 — a "
-                   f"referência solve_ivp falhou na fronteira de falha do "
-                   f"passo adaptativo (candidato válido no RK4 da busca)."
+                + [tf("AVISO: {k}-Wiebe refinado avaliado com RK4 f64 — "
+                      "a referência solve_ivp falhou na fronteira de "
+                      "falha do passo adaptativo (candidato válido no "
+                      "RK4 da busca).", k=k)
                    for k, c in comp_est.items()
                    if c["refinado"] and c["avaliador"] == "rk4"]
-                + [f"AVISO: refinamento do {k}-Wiebe não convergiu; usada "
-                   f"a curva truncada (β renormalizado) sem refinamento."
+                + [tf("AVISO: refinamento do {k}-Wiebe não convergiu; "
+                      "usada a curva truncada (β renormalizado) sem "
+                      "refinamento.", k=k)
                    for k, c in comp_est.items()
                    if not c["refinado"]
                    and np.all(np.isfinite(c["P"]))]),

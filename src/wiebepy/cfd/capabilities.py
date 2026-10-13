@@ -22,6 +22,8 @@ from __future__ import annotations
 import json
 import os
 import platform
+
+from ..i18n import t as _, tf
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -83,7 +85,7 @@ class EnvironmentReport:
                      "'Conectar OpenFOAM ao código' (GUI) ou "
                      "'wiebepy cfd doctor --connect'")
         for e in self.errors:
-            L.append(f"AVISO: {e}")
+            L.append(tf("AVISO: {msg}", msg=e))
         L.append("")
         L.append("Nota: este diagnóstico apenas localiza o solver; a "
                  "validação do caso (wiebepy cfd validate) verifica o "
@@ -199,8 +201,9 @@ def connect_openfoam(distro: Optional[str] = None,
         p.write_text(json.dumps(conn, ensure_ascii=False, indent=2),
                      encoding="utf-8")
     except OSError as e:
-        return conn, msgs + [f"AVISO: conexão detectada mas não gravada "
-                             f"em {p}: {e}"]
+        return conn, msgs + [tf("AVISO: conexão detectada mas não "
+                                "gravada em {arquivo}: {erro}",
+                                arquivo=p, erro=e)]
     msgs.append(f"conexão gravada em {p}")
     return conn, msgs
 

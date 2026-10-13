@@ -355,8 +355,8 @@ def single_run(obj: PressureObjective, param: PressureParam,
         if ref < PENALTY:
             melhor_x, melhor_ref = candidatos[int(i)], ref
             if i != ordem[0]:
-                nota = ("a referência solve_ivp falhou no melhor candidato do "
-                        "RK4; usado o próximo que valida")
+                nota = _("a referência solve_ivp falhou no melhor "
+                         "candidato do RK4; usado o próximo que valida")
             break
     return PressureRun(run=run, seed=seed, x=melhor_x, rmse=melhor_ref,
                        rmse_rk4=float(obj(melhor_x[None, :])[0]),
@@ -441,8 +441,8 @@ def summarize_pressure(data, s, param, runs, backend, elapsed) -> PressureFitRes
                                  s.engine, Rc)
     except ODEFailure:
         P_sim = Tg = Qw = np.full(data.n, np.nan)
-        avisos.append("WARNING: a referência solve_ivp falhou em todos os runs; "
-                      "resultado inválido.")
+        avisos.append(_("AVISO: a referência solve_ivp falhou em todos "
+                        "os runs; resultado inválido."))
     metrics = pressure_metrics(data.P, P_sim, param.size) if np.all(
         np.isfinite(P_sim)) else {}
     validos = vals[vals < PENALTY]
@@ -451,7 +451,8 @@ def summarize_pressure(data, s, param, runs, backend, elapsed) -> PressureFitRes
               "std": float(validos.std(ddof=1)) if validos.size > 1 else 0.0,
               "median": float(np.median(vals)), "worst": float(vals.max()),
               "runs": int(vals.size)}
-    avisos += [f"WARNING: run {r.run + 1}: {r.note}." for r in runs if r.note]
+    avisos += [tf("AVISO: run {n}: {nota}.", n=r.run + 1, nota=r.note)
+               for r in runs if r.note]
     avisos += stage_warnings(stages, float(np.ptp(data.theta)))
     avisos += bound_warnings(best.x, param)
     avisos += dispersion_warnings(np.array([r.x for r in runs]), param)

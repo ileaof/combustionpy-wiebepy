@@ -3,6 +3,20 @@
 Registro das alterações feitas no código, para quem continuar o trabalho.
 A mais recente fica no topo.
 
+## 2026-10-13 — Avisos que escapavam da traducao
+
+Reportado pelo usuario num ajuste da GUI: tres avisos juntos, um com
+prefixo `WARNING:` e texto em portugues, dois em ingles. Eram strings
+fora de `_()/tf()` em `pressure/fit.py` (nota do solve_ivp, "falhou em
+todos os runs", prefixo do `run N:`), `pressure/report.py` (os tres avisos
+dos modelos reduzidos — que ainda misturavam WARNING:/AVISO:),
+`cfd/capabilities.py`, `cfd/cli.py` e `crevice_flow/config.py`.
+
+Todos passaram a usar a chave em portugues com prefixo AVISO: (em ingles
+sai WARNING:), como os de identificabilidade. Teste de regressao novo:
+nenhuma string do pacote pode comecar com "WARNING:"/"AVISO:" fora de
+`_()/tf()/ts()`.
+
 ## 2026-10-13 — README em ingles (README.en.md)
 
 Traducao completa do README (944 linhas, ~49 KB) em `README.en.md`, com o

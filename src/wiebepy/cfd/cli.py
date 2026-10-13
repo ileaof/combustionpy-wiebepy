@@ -144,7 +144,8 @@ def _cmd_doctor(a) -> int:
     rep = doctor()
     print(rep.format())
     if a.distro and not any(d["name"] == a.distro for d in rep.distros):
-        print(f"AVISO: distribuição '{a.distro}' não listada.")
+        print(tf("AVISO: distribuição “{distro}” não listada.",
+                 distro=a.distro))
     if getattr(a, "connect", False):
         conn, msgs = connect_openfoam(distro=a.distro)
         for m in msgs:

@@ -321,3 +321,37 @@ def test_lang_nao_grava_a_preferencia(tmp_path, monkeypatch):
     from wiebepy.cli.parser import _main
     assert _main(["--lang", "en", "--devices"]) == 0
     assert not arq.exists()
+
+
+def test_avisos_nunca_escapam_da_traducao():
+    """Nenhum aviso visível fica fora de _()/tf().
+
+    Foi assim que um "WARNING:" com texto em português apareceu no ajuste
+    de pressão: o prefixo era inglês e a frase, portuguesa.
+    """
+    import ast
+    fugitivos = []
+    for p in sorted(RAIZ.rglob("*.py")):
+        if p.name in ("i18n.py", "lang_en.py"):
+            continue
+        arv = ast.parse(p.read_text(encoding="utf-8-sig"))
+        dentro = set()
+        for n in ast.walk(arv):
+            if isinstance(n, ast.Call):
+                f = n.func
+                nome = (f.attr if isinstance(f, ast.Attribute)
+                        else getattr(f, "id", ""))
+                if nome in ("_", "t", "tf", "ts"):
+                    for a in ast.walk(n):
+                        dentro.add(id(a))
+        for n in ast.walk(arv):
+            texto = None
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) \
+                    and id(n) not in dentro:
+                texto = n.value
+            elif isinstance(n, ast.JoinedStr) and id(n) not in dentro:
+                texto = "".join(x.value for x in n.values
+                                if isinstance(x, ast.Constant))
+            if texto and texto.lstrip().startswith(("WARNING:", "AVISO:")):
+                fugitivos.append(f"{p.name}:{n.lineno} {texto[:60]!r}")
+    assert not fugitivos, fugitivos
