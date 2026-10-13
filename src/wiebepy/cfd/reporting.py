@@ -25,6 +25,12 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
+# np.trapz saiu do NumPy 2 (virou np.trapezoid) e o pacote declara
+# numpy>=1.24: a integral precisa dos dois nomes. O resto do módulo
+# CFD já fazia isso; faltava aqui, e era o que derrubava o relatório
+# em instalação nova (NumPy ≥ 2.2 não tem mais np.trapz).
+_integra = getattr(np, "trapezoid", None) or np.trapz
+
 from ..i18n import idioma, idioma_fixo, rotulo, t as _, tf, ts
 from .config import CfdConfig, CaseState, read_state
 from .fuels import comparison_notice
@@ -164,8 +170,8 @@ def _metricas_experimental(res: Dict, exp: Dict,
         wl_W = np.asarray(wl_W, float)
         m_ate = wl_ca <= ca[imax_c]
         if wl_ca.size > 1 and m_ate.sum() > 1:
-            l_tot = float(np.trapz(wl_W, wl_ca))          # W·°CA
-            l_ate = float(np.trapz(wl_W[m_ate], wl_ca[m_ate]))
+            l_tot = float(_integra(wl_W, wl_ca))          # W·°CA
+            l_ate = float(_integra(wl_W[m_ate], wl_ca[m_ate]))
             omega = 6.0 * float(rpm) if rpm else 0.0          # °/s
             extra = [
                 [_("perda às paredes: total na janela [J]"),

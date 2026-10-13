@@ -1229,7 +1229,8 @@ def test_perda_as_paredes_em_joules(tmp_path):
     ca = np.linspace(-120.0, 120.0, 481)
     p = 1000.0 + 4000.0 * np.exp(-((ca - 10.0) / 15.0) ** 2)
     pot = -300.0 - 900.0 * np.exp(-((ca - 20.0) / 30.0) ** 2)      # W
-    total_J = float(np.trapz(pot, ca) / (6.0 * rpm))
+    integra = getattr(np, "trapezoid", None) or np.trapz
+    total_J = float(integra(pot, ca) / (6.0 * rpm))
     res = {"ca_deg": ca, "p_mean_kPa": p, "wall_loss_ca_deg": ca,
            "wall_loss_W": pot, "wall_loss_J": total_J}
     exp = {"ca_deg": ca, "p_kPa": p}
@@ -1244,3 +1245,26 @@ def test_perda_as_paredes_em_joules(tmp_path):
     # sem rpm: o rótulo deixa claro que não houve conversão
     sem = dict((l[0], l[1]) for l in _metricas_experimental(res, exp, None))
     assert any("W·°CA" in k for k in sem)
+
+
+def test_nenhum_np_trapz_sem_protecao():
+    """`np.trapz` saiu do NumPy 2 (virou `np.trapezoid`).
+
+    Duas chamadas sem proteção em `cfd/reporting.py` derrubavam o relatório
+    CFD em instalação nova (NumPy ≥ 2.2): "module 'numpy' has no attribute
+    'trapz'". O resto do pacote já usava o nome novo com fallback.
+    """
+    import ast
+    from pathlib import Path
+    raiz = Path(__file__).resolve().parents[1] / "src" / "wiebepy"
+    desprotegidos = []
+    for p in sorted(raiz.rglob("*.py")):
+        texto = p.read_text(encoding="utf-8-sig")
+        linhas = texto.splitlines()
+        for n in ast.walk(ast.parse(texto)):
+            if isinstance(n, ast.Attribute) and n.attr == "trapz" \
+                    and isinstance(n.value, ast.Name) and n.value.id == "np":
+                volta = "\n".join(linhas[max(0, n.lineno - 3):n.lineno])
+                if "trapezoid" not in volta:
+                    desprotegidos.append(f"{p.name}:{n.lineno}")
+    assert not desprotegidos, desprotegidos

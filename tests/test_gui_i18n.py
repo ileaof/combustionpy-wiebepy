@@ -355,3 +355,15 @@ def test_avisos_nunca_escapam_da_traducao():
             if texto and texto.lstrip().startswith(("WARNING:", "AVISO:")):
                 fugitivos.append(f"{p.name}:{n.lineno} {texto[:60]!r}")
     assert not fugitivos, fugitivos
+
+
+def test_estados_de_caso_na_cli_tambem_traduzidos():
+    """`CaseState.label` passado como argumento de log/print também precisa
+    de `_()`: saía "Não configurado" no meio de uma frase em inglês."""
+    import re
+    crus = []
+    for p in sorted(RAIZ.rglob("*.py")):
+        for i, l in enumerate(p.read_text(encoding="utf-8-sig").splitlines(), 1):
+            if re.search(r"(?<![\w(])\w*[Ss]tate\.label", l)                     and "_(" not in l and '"state_label"' not in l:
+                crus.append(f"{p.name}:{i} {l.strip()[:60]}")
+    assert not crus, crus

@@ -3,6 +3,39 @@
 Registro das alterações feitas no código, para quem continuar o trabalho.
 A mais recente fica no topo.
 
+## 2026-10-13 — Relatorio CFD nao gerava em instalacao nova (NumPy 2)
+
+Reportado: "wiebepy nao instalou direito na outra maquina; o relatorio do
+CFD nao gerava, so no CFD".
+
+Causa: `cfd/reporting.py` chamava `np.trapz` em dois pontos (perda as
+paredes ate o p_max). `np.trapz` foi REMOVIDO no NumPy 2 (virou
+`np.trapezoid`); aqui o ambiente tem numpy 2.1.2, onde o nome ainda existe
+e so emite DeprecationWarning — por isso passava despercebido. Uma
+instalacao nova pega numpy >= 2.2 (no teste, 2.5.4) e o comando morre com
+`AttributeError: module 'numpy' has no attribute 'trapz'`, sem gerar o
+arquivo. O resto do modulo CFD ja usava
+`np.trapezoid if hasattr(np, "trapezoid") else np.trapz` — faltava so no
+relatorio, o que explica ser "somente no CFD".
+
+Como foi reproduzido (vale repetir a receita antes de publicar versao):
+`pip wheel . --no-deps`, venv limpo SEM system-site-packages, instalar o
+wheel + numpy/scipy/pyyaml/matplotlib das versoes atuais, rodar
+`wiebepy cfd report --case <caso>`. O wheel em si esta correto: contem os
+16 subpacotes (conferido com zipfile).
+
+Corrigido com `_integra = getattr(np, "trapezoid", None) or np.trapz` no
+topo do modulo. Teste de regressao em `test_cfd.py`: nenhum `np.trapz` no
+pacote sem o fallback por perto. Varri tambem os outros nomes removidos no
+NumPy 2 (in1d, row_stack, alltrue, product, NaN, float_, msort...) — so
+havia trapz.
+
+De quebra, dois rotulos de estado do caso saiam em portugues no meio de
+mensagens em ingles (`wiebepy cfd status` e o aviso do relatorio sem
+resultados): `CaseState.label` passado como ARGUMENTO de log nao passava
+por `_()`. O `case_summary` continua devolvendo o rotulo em portugues (e
+dado, pode ser lido por script) e quem exibe traduz.
+
 ## 2026-10-13 — Agradecimentos (CNPq, CAPES, UFPA) nos READMEs
 
 Secao no fim de `README.md` e `README.en.md`, com os tres brasoes e a

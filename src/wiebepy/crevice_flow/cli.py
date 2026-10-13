@@ -126,7 +126,7 @@ def _cmd_prepare(a) -> int:
                            solver_info=inst or {"version": None})
     d = runner.prepare()
     log.info(_("Caso de fresta preparado em %s (estado: %s)."), d,
-             CaseState.PREPARED.label)
+             _(CaseState.PREPARED.label))
     log.info(_("Inspecione os arquivos; então: wiebepy cfd crevice validate "
              "--case \"%s\""), d)
     return EXIT_OK
@@ -216,7 +216,7 @@ def _cmd_report(a) -> int:
     state = read_state(case)
     if state != CaseState.COMPLETED:
         log.warning(_("Estado do caso: %s — o relatório refletirá apenas o "
-                    "que houver de resultados."), state.label)
+                    "que houver de resultados."), _(state.label))
     p = write_report(case)
     log.info(_("Relatório gravado em %s"), p)
     return EXIT_OK

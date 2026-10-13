@@ -29,7 +29,7 @@ import signal
 from pathlib import Path
 from typing import List, Optional
 
-from ..i18n import t as _, tf
+from ..i18n import t as _, tf, ts
 from ..io.config import ConfigError, resolve
 from ..pressure.engine import EngineConfig
 from .adapters.base import AdapterError
@@ -174,7 +174,7 @@ def _cmd_prepare(a) -> int:
     d = runner.prepare(heat_enabled=not a.no_heat,
                        moving_override=False if a.fixed_piston else None)
     log.info(_("Caso preparado em %s (estado: %s)."), d,
-             CaseState.PREPARED.label)
+             _(CaseState.PREPARED.label))
     log.info(_("Inspecione os arquivos; então: wiebepy cfd validate --case "
              "\"%s\""), d)
     return EXIT_OK
@@ -241,8 +241,10 @@ def _cmd_run(a) -> int:
 
 
 def _cmd_status(a) -> int:
+    # o resumo é dado (pode ser lido por script): o rótulo do estado vem em
+    # português e é traduzido aqui, na exibição
     for k, v in case_summary(a.case).items():
-        log.info("%-16s: %s", k, v)
+        log.info("%-16s: %s", k, ts(v))
     return EXIT_OK
 
 
@@ -263,7 +265,7 @@ def _cmd_report(a) -> int:
     state = read_state(case)
     if state != CaseState.COMPLETED:
         log.warning(_("Estado do caso: %s — o relatório refletirá apenas o "
-                    "que houver de resultados."), state.label)
+                    "que houver de resultados."), _(state.label))
     engine = _engine_from_case(case)
     import yaml
     from ..core.parameters import as_stages
