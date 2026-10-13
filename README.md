@@ -171,6 +171,7 @@ wiebepy --compare-stages 1 2 3 4 5 --input experimental.csv --optimize \
 | `--model model.json` | avalia um modelo salvo |
 | `--plot`, `--save-plots`, `--json` | gráficos na tela / PNG / results.json |
 | `--config ARQ` | configuração JSON/YAML/TOML (a CLI prevalece) |
+| `--lang pt\|en` | idioma das mensagens e dos relatórios HTML |
 | `--benchmark`, `--benchmark-full`, `--devices` | utilidades |
 | `--quiet`, `--verbose`, `--debug`, `--version` | mensagens |
 
@@ -813,7 +814,7 @@ $dx_b/d\theta$; (4) $\beta_j\,dx_j/d\theta$; (5) experimental × ajustado;
 ## 10. Validação e testes
 
 ```bash
-python -m pytest                  # 365 testes
+python -m pytest                  # 426 testes
 python -m pytest -m "not slow"    # só os rápidos
 ```
 
@@ -826,6 +827,7 @@ python -m pytest -m "not slow"    # só os rápidos
 | `test_io_cli.py` | leitura CSV/TXT/DAT/JSON (cabeçalho, aliases, σ → peso, ordenação, erros), configs JSON/YAML/TOML e precedência, API (avaliação, `save`/`load`, `fit`), CLI (`--help`, `--help-model`, `--help-examples`, avaliação N = 1…5, modelo salvo, ajuste com todos os arquivos, erros de uso, `--devices`, comparação) |
 | `test_pressure.py` | modelo 0-D de pressão (Hohenberg, EDOs), ajuste em modo pressão, N = 2 ≡ Double Wiebe em pressão, relatório HTML |
 | `test_cfd.py` | configuração e validação do caso CFD (unidades, γ/gás, paredes fixa/adiabática, grade convergente da fonte, erro claro se ∫Q̇dt não fecha), builder (malha, BCs, tabelas fvModels), resultados e métricas do relatório, conversões deg/rad/s da janela |
+| `test_gui_i18n.py` | idioma: dicionário completo (interface e os três relatórios), campos `{…}` preservados na tradução, nenhuma chave morta, a GUI em inglês nas oito páginas, o relatório no idioma da tela, a CLI com `--lang en` e em português por padrão |
 
 Testes de GPU são pulados sem CuPy/GPU; testes de Numba, sem Numba.
 Os testes de equivalência com Single/Double Wiebe são pulados se os projetos
@@ -899,7 +901,7 @@ wiebepy/
 │   │                            # adapters (OpenFOAM 13/WSL2), runner,
 │   │                            # results, reporting, validation
 │   └── cli/                     # parser (argparse), helptext
-├── tests/                       # 365 testes
+├── tests/                       # 426 testes
 ├── examples/                    # dados sintéticos N = 1…5, configs, modelos
 │                                # calibrados, ensaio de pressão
 └── docs/                        # figuras, benchmark medido, docs/cfd/*

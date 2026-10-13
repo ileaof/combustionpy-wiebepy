@@ -816,7 +816,7 @@ $dx_b/d\theta$; (4) $\beta_j\,dx_j/d\theta$; (5) experimental × fitted;
 ## 10. Validation and tests
 
 ```bash
-python -m pytest                  # 365 tests
+python -m pytest                  # 426 tests
 python -m pytest -m "not slow"    # the fast ones only
 ```
 
@@ -903,7 +903,7 @@ wiebepy/
 │   │                            # adapters (OpenFOAM 13/WSL2), runner,
 │   │                            # results, reporting, validation
 │   └── cli/                     # parser (argparse), helptext
-├── tests/                       # 365 tests
+├── tests/                       # 426 tests
 ├── examples/                    # synthetic data N = 1…5, configs, calibrated
 │                                # models, pressure test
 └── docs/                        # figures, measured benchmark, docs/cfd/*
