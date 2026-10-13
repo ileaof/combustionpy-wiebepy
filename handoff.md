@@ -3,6 +3,24 @@
 Registro das alterações feitas no código, para quem continuar o trabalho.
 A mais recente fica no topo.
 
+## 2026-10-13 — Agradecimentos (CNPq, CAPES, UFPA) nos READMEs
+
+Secao no fim de `README.md` e `README.en.md`, com os tres brasoes e a
+frase padrao da CAPES (Codigo de Financiamento 001 / Finance Code 001).
+
+Proveniencia das imagens em `docs/logos/README.md` — importa porque sao
+marcas de terceiros:
+
+- CNPq: extraido do manual oficial de identidade visual (gov.br/cnpq,
+  `CNPq_ManualIdentidade_2021_web.pdf`, p. 2). A marca e VETORIAL no PDF,
+  entao foi renderizada a 600 dpi, nao reamostrada de bitmap.
+- CAPES: `LOGO-CAPES.png` fornecido pelo autor (Area de Trabalho).
+- UFPA: brasao do pt.wikipedia (`Brasao_UFPA.jpg`, 361x500). O portal da
+  UFPA tem o mesmo brasao, mas so em 81x100 — pequeno demais.
+
+Os tres estao em 150 px de altura e sao exibidos a 70 px. Nenhuma marca
+foi alterada em forma ou cor.
+
 ## 2026-10-13 — Avisos que escapavam da traducao
 
 Reportado pelo usuario num ajuste da GUI: tres avisos juntos, um com

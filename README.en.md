@@ -951,3 +951,24 @@ wiebepy/
 - Roberts, D. R. et al. Cross-validation strategies for data with temporal,
   spatial, hierarchical, or phylogenetic structure. *Ecography* 40, 2017
   (blocked cross-validation).
+
+
+---
+
+## Acknowledgements
+
+<p align="center">
+  <img src="docs/logos/cnpq.png" alt="CNPq" height="70">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/capes.png" alt="CAPES" height="70">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/ufpa.png" alt="Federal University of Pará" height="70">
+</p>
+
+This work was supported by the **Conselho Nacional de Desenvolvimento
+Científico e Tecnológico (CNPq)**, the **Coordenação de Aperfeiçoamento de
+Pessoal de Nível Superior (CAPES)** and the **Universidade Federal do Pará
+(UFPA)**.
+
+> This study was financed in part by the Coordenação de Aperfeiçoamento de
+> Pessoal de Nível Superior – Brasil (CAPES) – Finance Code 001.
