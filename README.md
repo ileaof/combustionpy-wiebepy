@@ -85,7 +85,7 @@ $$
 x_b(\theta) =
 \begin{cases}
 0, & \theta < \theta_0 \\[2pt]
-1 - \exp\!\left[-a\left(\dfrac{\theta-\theta_0}{\Delta\theta}\right)^{m+1}\right], & \theta \ge \theta_0
+1 - \exp\left[-a\left(\dfrac{\theta-\theta_0}{\Delta\theta}\right)^{m+1}\right], & \theta \ge \theta_0
 \end{cases}
 $$
 
@@ -96,11 +96,11 @@ Com $a = 6.908 = \ln 1000$, 99.9 % da massa queima até $\theta_0 + \Delta\theta
 Para cada estágio $j$, com $z_j = (\theta - \theta_{0,j})/\Delta\theta_j$:
 
 $$
-x_{b}(\theta)=\sum_{j=1}^{N}\beta_j\left[1-\exp\!\left(-a_j\,z_j^{\,m_j+1}\right)\right]\mathbb{1}[\theta\ge\theta_{0,j}]
+x_{b}(\theta)=\sum_{j=1}^{N}\beta_j\left[1-\exp\left(-a_j\,z_j^{\,m_j+1}\right)\right]\mathbb{1}[\theta\ge\theta_{0,j}]
 $$
 
 $$
-\frac{dx_b}{d\theta}=\sum_{j=1}^{N}\beta_j\,\frac{a_j(m_j+1)}{\Delta\theta_j}\,z_j^{\,m_j}\exp\!\left(-a_j\,z_j^{\,m_j+1}\right)\mathbb{1}[\theta\ge\theta_{0,j}]
+\frac{dx_b}{d\theta}=\sum_{j=1}^{N}\beta_j\,\frac{a_j(m_j+1)}{\Delta\theta_j}\,z_j^{\,m_j}\exp\left(-a_j\,z_j^{\,m_j+1}\right)\mathbb{1}[\theta\ge\theta_{0,j}]
 $$
 
 com $0 \le \beta_j \le 1$, $\sum_j \beta_j = 1$, $\Delta\theta_j > 0$,
