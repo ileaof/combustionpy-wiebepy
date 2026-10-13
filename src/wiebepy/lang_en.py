@@ -461,8 +461,26 @@ EN = {
         "at least 2 columns are required (angle and pressure); check the "
         "separator",
     "Motor (geometria e combustível)": "Engine (geometry and fuel)",
+    "Massa de combustível [kg/ciclo]": "Fuel mass [kg/cycle]",
+    "Rotação DESTE ensaio. O padrão é o da carga 45% (3396,20 rpm).":
+        "Speed of THIS test. The default is the one of the 45% load "
+        "(3396.20 rpm).",
+    "Massa injetada por ciclo NESTE ensaio; entra no modelo só por "
+    "Q_total = m_comb·PCI. O padrão é o da carga 45%.":
+        "Mass injected per cycle in THIS test; it enters the model only "
+        "through Q_total = m_fuel·LHV. The default is the one of the 45% "
+        "load.",
+    "Rotação e massa de combustível mudam com a carga — troque-as ao "
+    "carregar um ensaio de outra carga. O resto do motor fica em “Motor "
+    "(geometria e combustível)”.":
+        "Speed and fuel mass change with the load — replace them when you "
+        "load a test from another load point. The rest of the engine is "
+        "under “Engine (geometry and fuel)”.",
+    "Rotação e massa de combustível ficam acima, junto do arquivo: são o "
+    "que muda de uma carga para outra.":
+        "Speed and fuel mass sit above, next to the file: they are what "
+        "changes from one load point to another.",
     "Rc (inicial/fixo)": "Rc (initial/fixed)",
-    "Massa de comb. [kg/ciclo]": "Fuel mass [kg/cycle]",
     "T parede [K]": "Wall T [K]",
     "Perda de calor (Hohenberg)": "Heat loss (Hohenberg)",
     "medida": "measured",

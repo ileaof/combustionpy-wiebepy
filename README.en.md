@@ -307,7 +307,13 @@ each run is refined by least squares and **re-validated with solve_ivp**
 (DOP853, 1e-9) — that is the reported RMSE. Engine and angle window come
 from the configuration (`engine:` accepts the keys of the Double Wiebe YAML;
 `pressure: {angle_unit, pressure_unit, theta_min_rad, theta_max_rad}`).
-In the GUI: Data page → Data type = **Cylinder pressure**.
+In the GUI: Data page → Data type = **Cylinder pressure**. Next to the
+file sit the **speed [rpm]** and the **fuel mass [kg/cycle]**, which
+change from one load point to another; they come filled in with those
+of the **45% load** (3396.20 rpm and 9.42754647351e-6 kg/cycle) and
+should be replaced when loading a test from another load point — the
+mass sets Q_total = m_fuel·LHV and the speed enters the Hohenberg
+correlation.
 
 **Comparison across stages in the result**: with an N-stage fit, the
 `results.csv` of the pressure mode also brings `P_sim_wiebe{k}_kPa` and

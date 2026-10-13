@@ -291,3 +291,25 @@ def test_cfd_segue_o_ensaio_carregado():
     assert len(f["wiebe_stages"]) == 2
     assert f["Rc"] == float(pm["Rc"])
     assert nome
+
+
+def test_carga_rotacao_e_massa_na_entrada_do_arquivo():
+    """Rotação e massa de combustível ficam na página Dados, junto do
+    arquivo: mudam com a carga do ensaio. Padrão = carga 45%."""
+    at = _app()
+    at.switch_page("app_pages/dados.py").run()
+    _sem_erros(at)
+    campos = {n.key: n for n in at.number_input}
+    assert "e_rpm" in campos and "e_mf" in campos, list(campos)
+    assert campos["e_rpm"].value == pytest.approx(3396.20)      # carga 45%
+    assert campos["e_mf"].value == pytest.approx(9.42754647351e-6)
+
+    campos["e_rpm"].set_value(2500.0).run()
+    campos = {n.key: n for n in at.number_input}
+    campos["e_mf"].set_value(1.2e-5).run()
+    _sem_erros(at)
+    motor = at.session_state["engine"]
+    assert motor.rpm == pytest.approx(2500.0)
+    assert motor.m_fuel == pytest.approx(1.2e-5)
+    # Q_total acompanha a massa informada
+    assert motor.Q_total == pytest.approx(1.2e-5 * motor.LHV)

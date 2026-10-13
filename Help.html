@@ -210,8 +210,14 @@ wiebepy --gui               <em># abre no navegador</em></code></pre>
   modelo 0-D do Double Wiebe, com 1 a 5 estágios de liberação de calor.</p>
   <ol>
     <li>GUI: página <b>Dados</b> → <b>Tipo de dado = Pressão do cilindro</b>;
-    escolha a unidade do ângulo (radianos no ensaio) e da pressão (bar);
-    confira o motor em “Motor (geometria e combustível)”.</li>
+    escolha a unidade do ângulo (radianos no ensaio) e da pressão (bar).
+    Ao lado do arquivo ficam a <b>rotação [rpm]</b> e a <b>massa de
+    combustível [kg/ciclo]</b> — os dois valores que mudam de uma carga
+    para outra. Eles vêm preenchidos com os da <b>carga 45%</b>
+    (3396,20 rpm e 9,42754647351×10⁻⁶ kg/ciclo); <b>troque-os ao carregar
+    um ensaio de outra carga</b>, porque a massa define
+    Q_total = m_comb·PCI e a rotação entra na perda de calor (Hohenberg).
+    O resto do motor fica em “Motor (geometria e combustível)”.</li>
     <li>Página <b>Ajuste</b>: escolha N e clique em <i>Iniciar ajuste</i>.
     O RMSE mostrado é o da referência solve_ivp.</li>
     <li>Página <b>Comparação</b>: compare 1, 2 e 3 estágios.</li>
@@ -649,9 +655,15 @@ wiebepy --gui               <em># opens in the browser</em></code></pre>
   Wiebe test), use pressure mode: wiebepy fits the pressure with the same 0-D
   model as Double Wiebe, with 1 to 5 heat-release stages.</p>
   <ol>
-    <li>GUI: <b>Data</b> page → <b>Data type = Cylinder pressure</b>; choose the
-    angle unit (radians in the test file) and the pressure unit (bar); check the
-    engine under “Engine (geometry and fuel)”.</li>
+    <li>GUI: <b>Data</b> page → <b>Data type = Cylinder pressure</b>; choose
+    the angle unit (radians in the test file) and the pressure unit (bar).
+    Next to the file sit the <b>speed [rpm]</b> and the <b>fuel mass
+    [kg/cycle]</b> — the two values that change from one load point to
+    another. They come filled in with those of the <b>45% load</b>
+    (3396.20 rpm and 9.42754647351×10⁻⁶ kg/cycle); <b>replace them when you
+    load a test from another load point</b>, because the mass sets
+    Q_total = m_fuel·LHV and the speed enters the heat loss (Hohenberg).
+    The rest of the engine is under “Engine (geometry and fuel)”.</li>
     <li><b>Fit</b> page: choose N and click <i>Start fit</i>. The RMSE shown is
     the one from the solve_ivp reference.</li>
     <li><b>Comparison</b> page: compare 1, 2 and 3 stages.</li>

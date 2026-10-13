@@ -98,6 +98,23 @@ def dados() -> None:
                        key="p_un")
     tmin = c6.number_input(_("θ mín [rad]"), value=-2.0, key="p_tmin")
     tmax = c7.number_input(_("θ máx [rad]"), value=2.0, key="p_tmax")
+    # rotação e massa de combustível MUDAM com a carga do ensaio: ficam
+    # aqui, junto do arquivo, e não escondidas no editor do motor
+    e_atual = st.session_state.engine
+    c8, c9 = st.columns(2)
+    c8.number_input(_("Rotação [rpm]"), value=float(e_atual.rpm),
+                    min_value=0.0, step=1.0, format="%.2f", key="e_rpm",
+                    help=_("Rotação DESTE ensaio. O padrão é o da carga "
+                         "45% (3396,20 rpm)."))
+    c9.number_input(_("Massa de combustível [kg/ciclo]"),
+                    value=float(e_atual.m_fuel), min_value=0.0,
+                    step=1e-7, format="%.6e", key="e_mf",
+                    help=_("Massa injetada por ciclo NESTE ensaio; entra "
+                         "no modelo só por Q_total = m_comb·PCI. O padrão "
+                         "é o da carga 45%."))
+    st.caption(_("Rotação e massa de combustível mudam com a carga — "
+               "troque-as ao carregar um ensaio de outra carga. O resto "
+               "do motor fica em “Motor (geometria e combustível)”."))
     with st.container(horizontal=True, vertical_alignment="center"):
         exemplo = st.button(_("Carregar dados de exemplo"), key="p_exemplo",
                             icon=":material/science:",
@@ -213,18 +230,24 @@ def motor() -> EngineConfig:
                                      key="e_stroke")
             rod = st.number_input(_("Biela [mm]"), value=e.rod_length * 1e3,
                                   key="e_rod")
-            rpm = st.number_input(_("Rotação [rpm]"), value=e.rpm, key="e_rpm")
+            rc = st.number_input(_("Rc (inicial/fixo)"), value=e.Rc,
+                                 key="e_rc")
         with st.container(horizontal=True):
-            rc = st.number_input(_("Rc (inicial/fixo)"), value=e.Rc, key="e_rc")
-            mf = st.number_input(_("Massa de comb. [kg/ciclo]"), value=e.m_fuel,
-                                 format="%.6e", key="e_mf")
-            lhv = st.number_input(_("PCI [kJ/kg]"), value=e.LHV, key="e_lhv")
-            kap = st.number_input("κ", value=e.kappa, format="%.3f", key="e_k")
-        with st.container(horizontal=True):
+            lhv = st.number_input(_("PCI [kJ/kg]"), value=e.LHV,
+                                  key="e_lhv")
+            kap = st.number_input("κ", value=e.kappa, format="%.3f",
+                                  key="e_k")
             t1 = st.number_input(_("T inicial [K]"), value=e.T1, key="e_t1")
+        with st.container(horizontal=True):
             tw = st.number_input(_("T parede [K]"), value=e.Tw, key="e_tw")
-            ht = st.toggle(_("Perda de calor (Hohenberg)"), value=e.heat_transfer,
-                           key="e_ht")
+            ht = st.toggle(_("Perda de calor (Hohenberg)"),
+                           value=e.heat_transfer, key="e_ht")
+        st.caption(_("Rotação e massa de combustível ficam acima, junto "
+                   "do arquivo: são o que muda de uma carga para outra."))
+    # os dois campos da carga sao desenhados junto do arquivo; se a pagina
+    # atual nao os desenhou, vale o que ja esta no motor da sessao
+    rpm = float(st.session_state.get("e_rpm", e.rpm))
+    mf = float(st.session_state.get("e_mf", e.m_fuel))
     novo = EngineConfig(bore=bore / 1e3, stroke=stroke / 1e3,
                         rod_length=rod / 1e3, rpm=rpm, Rc=rc, m_fuel=mf,
                         LHV=lhv, kappa=kap, T1=t1, Tw=tw, heat_transfer=ht)

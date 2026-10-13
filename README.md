@@ -303,7 +303,12 @@ run é refinado por mínimos quadrados e **revalidado com solve_ivp**
 (DOP853, 1e-9) — esse é o RMSE relatado. Motor e janela angular na
 configuração (`engine:` aceita as chaves do YAML do Double Wiebe;
 `pressure: {angle_unit, pressure_unit, theta_min_rad, theta_max_rad}`).
-Na GUI: página Dados → Tipo de dado = **Pressão do cilindro**.
+Na GUI: página Dados → Tipo de dado = **Pressão do cilindro**. Ao
+lado do arquivo ficam a **rotação [rpm]** e a **massa de combustível
+[kg/ciclo]**, que mudam de uma carga para outra; vêm preenchidas com
+as da **carga 45%** (3396,20 rpm e 9,42754647351e-6 kg/ciclo) e devem
+ser trocadas ao carregar um ensaio de outra carga — a massa define
+Q_total = m_comb·PCI e a rotação entra na correlação de Hohenberg.
 
 **Comparação entre estágios no resultado**: com o ajuste de N estágios, o
 `results.csv` do modo pressão traz também `P_sim_wiebe{k}_kPa` e

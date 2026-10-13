@@ -3,6 +3,25 @@
 Registro das alterações feitas no código, para quem continuar o trabalho.
 A mais recente fica no topo.
 
+## 2026-10-13 — Rotacao e massa de combustivel na entrada da carga (GUI)
+
+Pedido: poder informar rotacao e massa de combustivel junto do arquivo do
+ensaio, com os valores da carga 45% como padrao.
+
+Os dois campos SAIRAM do expander "Motor (geometria e combustivel)" e
+foram para a pagina Dados, ao lado do arquivo — sao os unicos parametros
+do motor que mudam de uma carga para outra (a massa define
+Q_total = m_comb·PCI; a rotacao entra na correlacao de Hohenberg). Padroes
+inalterados: 3396,20 rpm e 9,42754647351e-6 kg/ciclo, que ja eram os do
+ensaio de 45%.
+
+Detalhe de implementacao: `motor()` continua sendo o unico lugar que monta
+o `EngineConfig`, mas agora LE `e_rpm`/`e_mf` do session_state (com recuo
+para o motor da sessao se a pagina atual nao os desenhou) — nao da para
+ter o mesmo `key=` em dois widgets. Teste novo em `test_gui.py` confere os
+padroes e que editar os campos muda `engine.rpm`, `engine.m_fuel` e
+`Q_total`.
+
 ## 2026-10-13 — Modo pressao exigia numba sem precisar
 
 Achado na MESMA varredura do ambiente novo (suite completa no venv limpo):
