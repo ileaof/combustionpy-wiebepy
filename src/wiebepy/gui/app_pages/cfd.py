@@ -17,8 +17,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from wiebepy.gui.i18n import t as _, tf
-from wiebepy.gui.i18n import t as _, tf
+from wiebepy.i18n import t as _, tf
+from wiebepy.i18n import t as _, tf
 import yaml
 
 from wiebepy.gui import state as S

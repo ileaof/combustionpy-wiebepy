@@ -30,7 +30,7 @@ import streamlit as st
 from ..core.core import multistage_wiebe, stage_contributions
 from ..core.derivatives import multistage_wiebe_derivative
 from ..core.parameters import A_DEFAULT, Stage, as_stages, default_stages
-from .i18n import t as _, tf
+from ..i18n import t as _, tf
 
 CORES = ["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e"]
 UNIDADE = {"deg": "°", "rad": "rad"}

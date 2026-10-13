@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from wiebepy.gui import state as S
-from wiebepy.gui.i18n import t as _, tf
+from wiebepy.i18n import t as _, tf
 from wiebepy.optimization.compare import compare_stages
 from wiebepy.optimization.fit import FitSettings
 from wiebepy.parallel.backend import available_backends

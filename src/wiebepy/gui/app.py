@@ -13,7 +13,7 @@ import streamlit as st
 
 from wiebepy import __version__
 from wiebepy.gui import state as S
-from wiebepy.gui.i18n import seletor as seletor_idioma, t as _, tf
+from wiebepy.i18n import seletor as seletor_idioma, t as _, tf
 
 st.set_page_config(page_title="wiebepy", page_icon=":material/local_fire_department:",
                    layout="wide")

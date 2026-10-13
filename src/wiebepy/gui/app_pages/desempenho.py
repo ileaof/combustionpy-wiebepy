@@ -4,7 +4,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from wiebepy.gui.i18n import t as _, tf
+from wiebepy.i18n import t as _, tf
 from wiebepy.parallel.backend import available_backends
 from wiebepy.parallel.hardware import detect_hardware
 

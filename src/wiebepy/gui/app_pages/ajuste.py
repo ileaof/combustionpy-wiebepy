@@ -9,7 +9,7 @@ import streamlit as st
 
 from wiebepy.core.parameters import MAX_STAGES
 from wiebepy.gui import state as S
-from wiebepy.gui.i18n import t as _, tf
+from wiebepy.i18n import t as _, tf
 from wiebepy.optimization.fit import FitSettings, fit
 from wiebepy.parallel.backend import available_backends
 

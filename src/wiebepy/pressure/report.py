@@ -32,6 +32,7 @@ from typing import Dict, Optional
 import numpy as np
 
 from ..core.core import multistage_wiebe, stage_contributions
+from ..i18n import t as _, tf
 from ..core.derivatives import multistage_wiebe_derivative
 from ..core.parameters import Stage, stages_to_arrays
 
@@ -223,11 +224,12 @@ def _plots(pasta: Path, r, d, st_deg, comp_est: Optional[Dict] = None):
     pasta.mkdir(parents=True, exist_ok=True)
     thd = np.degrees(d.theta)
     f, ax = plt.subplots(figsize=(7, 4.2))
-    ax.plot(thd, d.P, ".", ms=3, color="0.5", label="medida")
+    ax.plot(thd, d.P, ".", ms=3, color="0.5", label=_("medida"))
     ax.plot(thd, r.P_sim, "r-", lw=1.6,
-            label=f"simulada ({r.settings.n_stages}-Wiebe)")
+            label=tf("simulada ({n}-Wiebe)", n=r.settings.n_stages))
     ax.set(xlabel="θ [°]", ylabel="P [kPa]",
-           title=f"Pressão — RMSE {r.metrics.get('rmse', float('nan')):.2f} kPa")
+           title=tf("Pressão — RMSE {rmse:.2f} kPa",
+                    rmse=r.metrics.get("rmse", float("nan"))))
     ax.grid(alpha=0.3); ax.legend(); f.tight_layout()
     f.savefig(pasta / "pressure.png", dpi=150); plt.close(f)
     from .engine import volume
@@ -236,60 +238,65 @@ def _plots(pasta: Path, r, d, st_deg, comp_est: Optional[Dict] = None):
         # refinados a partir do truncamento) + experimental
         N = r.settings.n_stages
         f, ax = plt.subplots(figsize=(7.5, 4.6))
-        ax.plot(thd, d.P, ".", ms=3, color="0.5", label="experimental")
+        ax.plot(thd, d.P, ".", ms=3, color="0.5", label=_("experimental"))
         ax.plot(thd, r.P_sim, "r-", lw=2.0,
-                label=f"{N}-Wiebe (ajuste, RMSE "
-                      f"{r.metrics.get('rmse', float('nan')):.1f} kPa)")
+                label=tf("{n}-Wiebe (ajuste, RMSE {rmse:.1f} kPa)", n=N,
+                         rmse=r.metrics.get("rmse", float("nan"))))
         cores = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
         def _rotulo(k, c):
             if not np.isfinite(c["rmse"]):
-                return f"{k}-Wiebe (falhou)"
-            estado = "refinado" if c["refinado"] else "truncado"
+                return tf("{k}-Wiebe (falhou)", k=k)
+            estado = _("refinado") if c["refinado"] else _("truncado")
             if c["refinado"] and c["avaliador"] == "rk4":
                 estado += ", RK4"
-            return f"{k}-Wiebe ({estado}, RMSE {c['rmse']:.1f} kPa)"
+            return tf("{k}-Wiebe ({estado}, RMSE {rmse:.1f} kPa)", k=k,
+                      estado=estado, rmse=c["rmse"])
 
         for i, k in enumerate(sorted(comp_est, reverse=True)):
             c = comp_est[k]
             ax.plot(thd, c["P"], lw=1.2,
                     color=cores[(i + 1) % len(cores)], label=_rotulo(k, c))
         ax.set(xlabel="θ [°]", ylabel="P [kPa]",
-               title="Pressão × ângulo — comparação entre estágios")
+               title=_("Pressão × ângulo — comparação entre estágios"))
         ax.grid(alpha=0.3); ax.legend(); f.tight_layout()
         f.savefig(pasta / "pressure_stages_comparison.png", dpi=150)
         plt.close(f)
     V = volume(d.theta, r.Rc, r.settings.engine)[0] * 1e6
     if comp_est:
         f, ax = plt.subplots(figsize=(6.5, 5))
-        ax.plot(V, d.P, "+", ms=5, color="0.35", label="experimental")
+        ax.plot(V, d.P, "+", ms=5, color="0.35", label=_("experimental"))
         ax.plot(V, r.P_sim, "r-", lw=2.0,
-                label=f"{r.settings.n_stages}-Wiebe (ajuste, "
-                      f"Rc {r.Rc:.3f})")
+                label=tf("{n}-Wiebe (ajuste, Rc {rc:.3f})",
+                         n=r.settings.n_stages, rc=r.Rc))
         for i, k in enumerate(sorted(comp_est, reverse=True)):
             c = comp_est[k]
             ax.plot(V, c["P"], lw=1.2, color=cores[(i + 1) % len(cores)],
-                    label=f"{k}-Wiebe ({'refinado' if c['refinado'] else 'truncado'}, "
-                          f"Rc {c['Rc']:.3f})")
-        ax.set(xlabel="Volume [cm³]", ylabel="P [kPa]",
-               title="Diagrama P–V — comparação entre estágios")
+                    label=tf("{k}-Wiebe ({estado}, Rc {rc:.3f})", k=k,
+                             estado=_("refinado") if c["refinado"]
+                             else _("truncado"), rc=c["Rc"]))
+        ax.set(xlabel=_("Volume [cm³]"), ylabel="P [kPa]",
+               title=_("Diagrama P–V — comparação entre estágios"))
         ax.grid(alpha=0.3); ax.legend(); f.tight_layout()
         f.savefig(pasta / "pv_diagram_stages_comparison.png", dpi=150)
         plt.close(f)
     for sufixo, log in (("", False), ("_loglog", True)):
         f, ax = plt.subplots(figsize=(6.5, 5))
-        ax.plot(V, d.P, "+", ms=5, color="0.35", label="experimental")
+        ax.plot(V, d.P, "+", ms=5, color="0.35", label=_("experimental"))
         ax.plot(V, r.P_sim, "r-", lw=1.5,
-                label=f"modelo ({r.settings.n_stages}-Wiebe, Rc {r.Rc:.3f})")
+                label=tf("modelo ({n}-Wiebe, Rc {rc:.3f})",
+                         n=r.settings.n_stages, rc=r.Rc))
         if log:
             ax.set_xscale("log"); ax.set_yscale("log")
-        ax.set(xlabel="Volume [cm³]", ylabel="P [kPa]",
-               title="Diagrama P–V" + (" (log-log)" if log else ""))
+        ax.set(xlabel=_("Volume [cm³]"), ylabel="P [kPa]",
+               title=_("Diagrama P–V")
+                     + (" " + _("(log-log)") if log else ""))
         ax.grid(alpha=0.3, which="both"); ax.legend(); f.tight_layout()
         f.savefig(pasta / f"pv_diagram{sufixo}.png", dpi=150); plt.close(f)
     f, ax = plt.subplots(figsize=(7, 3.4))
     ax.plot(thd, r.P_sim - d.P, lw=1); ax.axhline(0, color="k", lw=0.8)
-    ax.set(xlabel="θ [°]", ylabel="P sim − P med [kPa]", title="Resíduo")
+    ax.set(xlabel="θ [°]", ylabel=_("P sim − P med [kPa]"),
+           title=_("Resíduo"))
     ax.grid(alpha=0.3); f.tight_layout()
     f.savefig(pasta / "residual.png", dpi=150); plt.close(f)
     Qt = r.settings.engine.Q_total
@@ -299,17 +306,19 @@ def _plots(pasta: Path, r, d, st_deg, comp_est: Optional[Dict] = None):
     for j in range(len(r.stages)):
         ax.plot(np.degrees(th_r), Qt * cdr[j], label=f"dQ{j + 1}/dθ")
     ax.plot(np.degrees(th_r), Qt * cdr.sum(axis=0), "k-", lw=2.2,
-            label="dQ/dθ total")
-    ax.set(xlabel="θ [°]", ylabel="Taxa de liberação de calor [kJ/rad]",
-           title="Taxa de liberação de calor por estágio e total")
+            label=_("dQ/dθ total"))
+    ax.set(xlabel="θ [°]",
+           ylabel=_("Taxa de liberação de calor [kJ/rad]"),
+           title=_("Taxa de liberação de calor por estágio e total"))
     ax.grid(alpha=0.3); ax.legend(); f.tight_layout()
     f.savefig(pasta / "heat_release.png", dpi=150); plt.close(f)
     for nome, y, rot, tit in (
-            ("temperature", r.Tg, "Temperatura do gás [K]", "Temperatura do gás"),
-            ("heat_loss", r.Q_wall, "Calor perdido acumulado [J]",
-             "Calor perdido para as paredes (Hohenberg)"),
+            ("temperature", r.Tg, _("Temperatura do gás [K]"),
+             _("Temperatura do gás")),
+            ("heat_loss", r.Q_wall, _("Calor perdido acumulado [J]"),
+             _("Calor perdido para as paredes (Hohenberg)")),
             ("volume", volume(d.theta, r.Rc, r.settings.engine)[0] * 1e6,
-             "Volume [cm³]", "Volume do cilindro")):
+             _("Volume [cm³]"), _("Volume do cilindro"))):
         if y is None:
             continue
         f, ax = plt.subplots(figsize=(7, 3.8))
@@ -325,7 +334,7 @@ def _plots(pasta: Path, r, d, st_deg, comp_est: Optional[Dict] = None):
              "dx_b/dθ [1/°]")):
         f, ax = plt.subplots(figsize=(7, 4.2))
         for j in range(len(st_deg)):
-            ax.plot(th, contrib[j], label=f"estágio {j + 1}")
-        ax.plot(th, total, "k--", lw=1.5, label="total")
+            ax.plot(th, contrib[j], label=tf("estágio {j}", j=j + 1))
+        ax.plot(th, total, "k--", lw=1.5, label=_("total"))
         ax.set(xlabel="θ [°]", ylabel=rot); ax.grid(alpha=0.3); ax.legend()
         f.tight_layout(); f.savefig(pasta / f"{nome}.png", dpi=150); plt.close(f)

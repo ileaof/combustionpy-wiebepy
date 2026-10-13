@@ -18,7 +18,7 @@ from wiebepy.cfd.fuels import (
     export_fuels_csv, fuel_names, import_fuels_csv, load_custom_fuels,
     save_custom_fuel,
 )
-from wiebepy.gui.i18n import t as _, tf
+from wiebepy.i18n import t as _, tf
 
 st.header(_("Combustíveis — cadastro permanente"), anchor=False)
 st.caption(tf(

@@ -146,6 +146,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="hardware, backend e progresso do PSO")
     nivel.add_argument("--debug", action="store_true",
                        help="mensagens de depuração")
+    a("--lang", choices=("pt", "en"), metavar="IDIOMA",
+      help="idioma das telas e dos relatórios HTML: pt (padrão) ou en")
     a("--version", action="version", version=f"wiebepy {__version__}")
     return p
 
@@ -318,7 +320,12 @@ def main(argv: Optional[List[str]] = None) -> None:
 
 
 def _main(argv: Optional[List[str]] = None) -> int:
-    args = list(sys.argv[1:] if argv is None else argv)
+    from ..i18n import consumir_lang
+    # --lang vale para os dois caminhos (inclusive "wiebepy cfd …"), por
+    # isso é consumido antes do dispatch
+    args = consumir_lang(list(sys.argv[1:] if argv is None else argv))
+    if argv is not None:
+        argv = list(args)
     # subcomando CFD opcional (wiebepy cfd …) — não altera as opções
     # existentes; o módulo cfd só é importado neste caminho
     if args and args[0] == "cfd":

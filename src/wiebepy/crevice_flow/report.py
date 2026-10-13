@@ -20,6 +20,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from ..cfd.config import read_state
+from ..i18n import idioma, idioma_fixo, rotulo, t as _, tf, ts
 from .results import CreviceResults
 
 
@@ -40,14 +41,20 @@ def _fmt(v, nd: int = 4) -> str:
     return f"{fv:.{nd}g}"
 
 
-def _tabela(cab: List[str], linhas) -> str:
-    th = "".join(f"<th>{_e(c)}</th>" for c in cab)
-    trs = "".join(
-        "<tr>" + "".join(f"<td>{_e(c) if not isinstance(c, float) else _fmt(c)}"
-                         f"</td>" for c in linha) + "</tr>"
-        for linha in linhas)
-    return (f"<table><thead><tr>{th}</tr></thead><tbody>{trs}</tbody>"
-            "</table>")
+def _tabela(cab: List[str], linhas, rotulos: bool = True) -> str:
+    """Cabeçalho e 1ª coluna (rótulos) traduzidos; as demais colunas
+    trazem dados do caso e passam pela tradução branda (ts)."""
+    th = "".join(f"<th>{_e(_(c))}</th>" for c in cab)
+    trs = []
+    for linha in linhas:
+        tds = []
+        for i, c in enumerate(linha):
+            c = rotulo(c) if rotulos and i == 0 else ts(c)
+            tds.append(f"<td>{_fmt(c) if isinstance(c, float) else _e(c)}"
+                       "</td>")
+        trs.append("<tr>" + "".join(tds) + "</tr>")
+    return (f"<table><thead><tr>{th}</tr></thead><tbody>"
+            + "".join(trs) + "</tbody></table>")
 
 
 def _fig(curvas: List[Dict], xlab: str, ylab: str,
@@ -101,8 +108,17 @@ img { max-width: 100%; margin: .4em 0; }
 """
 
 
-def report_html(case_dir, run_summary: Optional[Dict] = None) -> str:
-    """Monta o HTML completo do caso de fresta."""
+def report_html(case_dir, run_summary: Optional[Dict] = None,
+                lang: Optional[str] = None) -> str:
+    """Monta o HTML completo do caso de fresta.
+
+    ``lang`` fixa o idioma; ``None`` usa o corrente (o da interface,
+    quando gerado por ela)."""
+    with idioma_fixo(lang):
+        return _corpo(case_dir, run_summary)
+
+
+def _corpo(case_dir, run_summary: Optional[Dict] = None) -> str:
     case_dir = Path(case_dir)
     import yaml
     info: Dict = {}
@@ -118,69 +134,79 @@ def report_html(case_dir, run_summary: Optional[Dict] = None) -> str:
 
     partes: List[str] = []
     a = partes.append
-    a(f"<h1>wiebepy crevice_flow — Fresta top-land ({_e(case_dir.name)})</h1>")
-    a("<p class='sub'>Submodelo de escoamento na fresta entre pistão, "
-      "primeiro anel e cilindro. <b>NÃO é simulação de blow-by</b>: o "
-      "domínio comunica APENAS com a câmara (fundo fechado no flanco "
-      "acima do 1º anel). A pressão da câmara é prescrita — o escoamento "
-      "calculado <b>não modifica</b> essa pressão (não é acoplamento "
-      "bidirecional).</p>")
+    a("<h1>" + tf("wiebepy crevice_flow — Fresta top-land ({caso})",
+                  caso=_e(case_dir.name)) + "</h1>")
+    a("<p class='sub'>"
+      + _("Submodelo de escoamento na fresta entre pistão, primeiro anel "
+          "e cilindro. <b>NÃO é simulação de blow-by</b>: o domínio "
+          "comunica APENAS com a câmara (fundo fechado no flanco acima "
+          "do 1º anel). A pressão da câmara é prescrita — o escoamento "
+          "calculado <b>não modifica</b> essa pressão (não é acoplamento "
+          "bidirecional).") + "</p>")
 
     # ------------------------------------------------------ identificação
-    a("<h2>Identificação e estado</h2>")
+    a("<h2>" + _("Identificação e estado") + "</h2>")
     si = info.get("solver_info") or {}
     a(_tabela(["Item", "Valor"], [
         ["diretório do caso", str(case_dir.resolve())],
         ["relatório gerado em", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
         ["nível", info.get("nivel", "—")],
-        ["estado do caso", estado.label],
+        ["estado do caso", _(estado.label)],
         ["solver", f"OpenFOAM Foundation {si.get('version', '—')} "
                    f"({si.get('root', '—')})"],
         ["execução", (run_summary or {}).get("elapsed_s", "—")],
     ]))
     if estado.value == "completed":
-        a("<p class='ok'>Concluído: o solver encerrou com 'End' e a "
-          "janela simulada está coberta (verificação de resultados, não "
-          "apenas o fim do processo).</p>")
+        a("<p class='ok'>"
+          + _("Concluído: o solver encerrou com 'End' e a janela "
+              "simulada está coberta (verificação de resultados, não "
+              "apenas o fim do processo).") + "</p>")
     elif estado.value in ("running", "failed", "cancelled", "prepared",
                           "validated"):
-        a("<p class='alerta'>Estado "
-          f"{estado.label.lower()}: este relatório pode refletir "
-          "resultados PARCIAIS ou ausentes. 'Processo terminou' não "
-          "implica 'simulação concluída nem convergiu'.</p>")
+        a("<p class='alerta'>"
+          + tf("Estado {estado}: este relatório pode refletir resultados "
+               "PARCIAIS ou ausentes. 'Processo terminou' não implica "
+               "'simulação concluída nem convergiu'.",
+               estado=_(estado.label).lower()) + "</p>")
 
     # --------------------------------------------------- grandezas e origem
-    a("<h2>Grandezas: simuladas, impostas, medidas</h2>")
-    a("<p><span class='badge sim'>SIMULADO</span> resolvido pelo solver &nbsp;"
-      "<span class='badge imp'>IMPOSTO</span> condição declarada pelo "
-      "usuário/config &nbsp;<span class='badge med'>MEDIDO</span> dado de "
-      "ensaio</p>")
+    a("<h2>" + _("Grandezas: simuladas, impostas, medidas") + "</h2>")
+    a("<p><span class='badge sim'>" + _("SIMULADO") + "</span> "
+      + _("resolvido pelo solver")
+      + " &nbsp;<span class='badge imp'>" + _("IMPOSTO") + "</span> "
+      + _("condição declarada pelo usuário/config")
+      + " &nbsp;<span class='badge med'>" + _("MEDIDO") + "</span> "
+      + _("dado de ensaio") + "</p>")
     a(_tabela(["Grandeza", "Classe", "Origem"], [
-        ["p, T, ρ, U na fresta e no buffer", "SIMULADO",
+        [_("p, T, ρ, U na fresta e no buffer"), _("SIMULADO"),
          "foamRun (fluid, laminar)"],
-        ["vazão mássica nas aberturas (phi)", "SIMULADO",
+        [_("vazão mássica nas aberturas (phi)"), _("SIMULADO"),
          "functionObject surfaceFieldValue"],
-        ["calor trocado com as paredes", "SIMULADO",
+        [_("calor trocado com as paredes"), _("SIMULADO"),
          "wallHeatFlux + areaIntegrate"],
-        ["p da câmara p(θ)", "IMPOSTO",
-         f"{info.get('condicao_camara', {}).get('fonte', '—')} — arquivo "
-         f"{info.get('condicao_camara', {}).get('arquivo', '—')}"],
-        ["temperatura do gás que entra", "IMPOSTO",
-         f"inflow_T_K = {info.get('condicao_camara', {}).get('inflow_T_K', '—')} "
-         "(a pressão sozinha não determina o estado)"],
-        ["temperaturas das paredes", "IMPOSTO", "seção thermal da config"],
-        ["propriedades do gás (R, γ, μ, Pr)", "IMPOSTO",
+        [_("p da câmara p(θ)"), _("IMPOSTO"),
+         tf("{fonte} — arquivo {arquivo}",
+            fonte=info.get("condicao_camara", {}).get("fonte", "—"),
+            arquivo=info.get("condicao_camara", {}).get("arquivo", "—"))],
+        [_("temperatura do gás que entra"), _("IMPOSTO"),
+         tf("inflow_T_K = {t} (a pressão sozinha não determina o "
+            "estado)",
+            t=info.get("condicao_camara", {}).get("inflow_T_K", "—"))],
+        [_("temperaturas das paredes"), _("IMPOSTO"),
+         _("seção thermal da config")],
+        [_("propriedades do gás (R, γ, μ, Pr)"), _("IMPOSTO"),
          info.get("gas_provenance", "—")],
-        ["rotação / conversão θ↔t", "IMPOSTO",
+        [_("rotação / conversão θ↔t"), _("IMPOSTO"),
          f"{info.get('rotacao', {}).get('rpm', '—')} rpm"],
-        ["dados do ensaio", "MEDIDO",
-         "nenhuma grandeza medida entra neste nível"],
+        [_("dados do ensaio"), _("MEDIDO"),
+         _("nenhuma grandeza medida entra neste nível")],
     ]))
-    a("<p class='nota'>A comparação deste submodelo com ensaio é sempre "
-      "DIAGNÓSTICA — nunca validação. Calibrar não é validar.</p>")
+    a("<p class='nota'>"
+      + _("A comparação deste submodelo com ensaio é sempre DIAGNÓSTICA "
+          "— nunca validação. Calibrar não é validar.") + "</p>")
 
     # ------------------------------------------------------------- geometria
-    a("<h2>Geometria, malha e regime</h2>")
+    a("<h2>" + _("Geometria, malha e regime") + "</h2>")
     geo = info.get("geometria_mm") or {}
     mal = info.get("malha") or {}
     reg = info.get("regime") or {}
@@ -199,17 +225,19 @@ def report_html(case_dir, run_summary: Optional[Dict] = None) -> str:
         ["regime", reg.get("turbulencia", "—")],
         ["Re estimado na folga", _fmt(reg.get("Re_estimativa_folga"), 4)],
     ]))
-    a("<p class='nota'>" + _e(reg.get("nota", "")) + " O modelo "
-      "turbulento NÃO foi selecionado automaticamente por se tratar de um "
-      "motor — a justificativa de laminar é local (Re da folga) e fica "
-      "registrada; se o Re real for muito maior, declare e habilite um "
-      "modelo explicitamente.</p>")
-    a("<p class='nota'>Setor periódico (wedge): válido porque geometria e "
-      "BCs são uniformes na circunferência. Uma abertura LOCALIZADA do "
-      "anel (gap do anel) NÃO é representada neste nível.</p>")
+    a("<p class='nota'>" + _e(ts(reg.get("nota", ""))) + " "
+      + _("O modelo turbulento NÃO foi selecionado automaticamente por "
+          "se tratar de um motor — a justificativa de laminar é local "
+          "(Re da folga) e fica registrada; se o Re real for muito "
+          "maior, declare e habilite um modelo explicitamente.")
+      + "</p>")
+    a("<p class='nota'>"
+      + _("Setor periódico (wedge): válido porque geometria e BCs são "
+          "uniformes na circunferência. Uma abertura LOCALIZADA do anel "
+          "(gap do anel) NÃO é representada neste nível.") + "</p>")
 
     # --------------------------------------------------------------- BCs
-    a("<h2>Condições de contorno e conversões</h2>")
+    a("<h2>" + _("Condições de contorno e conversões") + "</h2>")
     cc = info.get("condicao_camara") or {}
     rot = info.get("rotacao") or {}
     a(_tabela(["Item", "Valor"], [
@@ -231,100 +259,110 @@ def report_html(case_dir, run_summary: Optional[Dict] = None) -> str:
         ["referencial", (info.get("referencial") or {}).get("frame")],
     ]))
     for h in info.get("hipoteses") or []:
-        a(f"<p class='nota'>Hipótese: {_e(h)}</p>")
-    a("<p class='nota'>Convenção de sinais: ṁ > 0 = fluxo SAINDO do "
-      "domínio (fresta→câmara); q̇ > 0 = gás PERDE calor para a parede. "
-      "Massas acumuladas de entrada e de saída são integradas "
-      "separadamente a partir do sinal de ṁ.</p>")
-    a("<p class='nota'>" + _e(info.get("balanco_energia", "")) + "</p>")
+        a("<p class='nota'>" + _("Hipótese") + f": {_e(ts(h))}</p>")
+    a("<p class='nota'>"
+      + _("Convenção de sinais: ṁ > 0 = fluxo SAINDO do domínio "
+          "(fresta→câmara); q̇ > 0 = gás PERDE calor para a parede. "
+          "Massas acumuladas de entrada e de saída são integradas "
+          "separadamente a partir do sinal de ṁ.") + "</p>")
+    a("<p class='nota'>" + _e(ts(info.get("balanco_energia", "")))
+      + "</p>")
 
     if not tem_campos:
-        a("<h2>Séries temporais</h2>")
-        a("<p class='alerta'>Sem séries em postProcessing — prepare e "
-          "execute o caso antes de gerar o relatório definitivo.</p>")
+        a("<h2>" + _("Séries temporais") + "</h2>")
+        a("<p class='alerta'>"
+          + _("Sem séries em postProcessing — prepare e execute o caso "
+              "antes de gerar o relatório definitivo.") + "</p>")
     else:
         # ------------------------------------------------------- séries
-        a("<h2>Séries temporais</h2>")
+        a("<h2>" + _("Séries temporais") + "</h2>")
         th = res.theta_deg
         figs = [
             _fig([{"x": th, "y": res.p_camara / 1e5,
-                   "label": "p câmara (imposta/verificada)", "color": "#b3402a"}],
-                 "θ [° CA]", "p [bar]", "Pressão na boca da fresta"),
-            _fig([{"x": th, "y": res.mdot, "label": "ṁ (sinal OF)", "color": "#2a6f97"},
-                  {"x": th, "y": res.mdot_in, "label": "entrada (≥0)",
+                   "label": _("p câmara (imposta/verificada)"),
+                   "color": "#b3402a"}],
+                 "θ [° CA]", "p [bar]", _("Pressão na boca da fresta")),
+            _fig([{"x": th, "y": res.mdot, "label": _("ṁ (sinal OF)"),
+                   "color": "#2a6f97"},
+                  {"x": th, "y": res.mdot_in, "label": _("entrada (≥0)"),
                    "color": "#3c7a3c", "ls": "--"},
-                  {"x": th, "y": res.mdot_out, "label": "saída (≥0)",
+                  {"x": th, "y": res.mdot_out, "label": _("saída (≥0)"),
                    "color": "#b08930", "ls": "--"}],
                  "θ [° CA]", "ṁ [kg/s]",
-                 "Vazão mássica na boca (ṁ>0 sai do domínio)"),
+                 _("Vazão mássica na boca (ṁ>0 sai do domínio)")),
             _fig([{"x": th, "y": res.m_in_cum() * 1e9,
-                   "label": "entrada acumulada", "color": "#3c7a3c"},
+                   "label": _("entrada acumulada"), "color": "#3c7a3c"},
                   {"x": th, "y": res.m_out_cum() * 1e9,
-                   "label": "saída acumulada", "color": "#b08930"}],
+                   "label": _("saída acumulada"), "color": "#b08930"}],
                  "θ [° CA]", "m [mg·10⁻³ = kg·10⁻⁹]",
-                 "Massas acumuladas (entrada e saída separadas)"),
-            _fig([{"x": th, "y": res.m_fresta * 1e9, "label": "fresta",
+                 _("Massas acumuladas (entrada e saída separadas)")),
+            _fig([{"x": th, "y": res.m_fresta * 1e9,
+                   "label": _("fresta"), "color": "#2a6f97"},
+                  {"x": th, "y": res.m_buffer * 1e9,
+                   "label": _("buffer"), "color": "#b08930"}],
+                 "θ [° CA]", "m [kg·10⁻⁹]",
+                 _("Massa armazenada por zona")),
+            _fig([{"x": th, "y": res.q_liner, "label": _("liner"),
                    "color": "#2a6f97"},
-                  {"x": th, "y": res.m_buffer * 1e9, "label": "buffer",
-                   "color": "#b08930"}],
-                 "θ [° CA]", "m [kg·10⁻⁹]", "Massa armazenada por zona"),
-            _fig([{"x": th, "y": res.q_liner, "label": "liner",
-                   "color": "#2a6f97"},
-                  {"x": th, "y": res.q_pistao, "label": "pistão",
+                  {"x": th, "y": res.q_pistao, "label": _("pistão"),
                    "color": "#b3402a"}],
-                 "θ [° CA]", "q̇ [W] (gás→parede > 0)",
-                 "Transferência de calor por parede"),
+                 "θ [° CA]", _("q̇ [W] (gás→parede > 0)"),
+                 _("Transferência de calor por parede")),
             _fig([{"x": th, "y": res.u_total * 1e3, "label": "U",
                    "color": "#5a4e8a"}],
-                 "θ [° CA]", "U [mJ]", "Energia interna (∫p dV/(γ−1))"),
+                 "θ [° CA]", "U [mJ]",
+                 _("Energia interna (∫p dV/(γ−1))")),
         ]
         for titulo, b64 in figs:
             a(f"<h3>{_e(titulo)}</h3>")
             a(f"<img src='data:image/png;base64,{b64}' alt='{_e(titulo)}'>")
 
         # ------------------------------------------------------ balanços
-        a("<h2>Balanços quantificados</h2>")
+        a("<h2>" + _("Balanços quantificados") + "</h2>")
         bm = res.balanco_massa()
         be = res.balanco_energia()
-        a(_tabela(["Balanço", "Resíduo", "Relativo", "Tolerância",
-                   "Estado"], [
-            ["massa", _fmt(bm.valor, 3) + " kg",
+        a(_tabela([_("Balanço"), _("Resíduo"), _("Relativo"),
+                   _("Tolerância"), _("Estado")], [
+            [_("massa"), _fmt(bm.valor, 3) + " kg",
              f"{bm.rel_pct:.4g} %", f"{bm.tolerancia_pct} %",
-             "OK" if bm.ok else "FALHOU"],
-            ["energia", _fmt(be.valor, 4) + " J",
+             _("OK") if bm.ok else _("FALHOU")],
+            [_("energia"), _fmt(be.valor, 4) + " J",
              f"{be.rel_pct:.4g} %", f"{be.tolerancia_pct} %",
-             "FALHOU" if not be.ok else "OK"],
+             _("FALHOU") if not be.ok else _("OK")],
         ]))
         for b in (bm, be):
-            det = "; ".join(f"{k} = {_fmt(v, 5)}" for k, v in
+            det = "; ".join(f"{ts(k)} = {_fmt(v, 5)}" for k, v in
                             b.detalhe.items() if k != "aproximacao")
             cls = "ok" if b.ok else "alerta"
-            a(f"<p class='{cls}'><b>{_e(b.nome)}:</b> {det}</p>")
-        a("<p class='nota'>Aproximações declaradas do balanço de energia: "
-          "h ≈ cp·T (sem energia cinética), entalpia de entrada com "
-          "T_inflow, termo viscoso de parede desprezado, volume constante "
-          "no referencial do domínio (sem trabalho p·dV). A energia usa "
-          "U = ∫p dV/(γ−1) (exato para gás perfeito).</p>")
+            a(f"<p class='{cls}'><b>{_e(ts(b.nome))}:</b> {det}</p>")
+        a("<p class='nota'>"
+          + _("Aproximações declaradas do balanço de energia: h ≈ cp·T "
+              "(sem energia cinética), entalpia de entrada com T_inflow, "
+              "termo viscoso de parede desprezado, volume constante no "
+              "referencial do domínio (sem trabalho p·dV). A energia usa "
+              "U = ∫p dV/(γ−1) (exato para gás perfeito).") + "</p>")
 
         # -------------------------------------------------------- export
         csv = case_dir / "results_series.csv"
         if not csv.exists():
             res.export_serie(case_dir)
         tempos = res.tempos_de_campo(case_dir)
-        a("<h2>Exportações</h2>")
+        a("<h2>" + _("Exportações") + "</h2>")
         a(_tabela(["Arquivo", "Conteúdo"], [
-            ["results_series.csv", "séries completas com convenção de "
-                                   "sinais no cabeçalho"],
-            ["tempos de campo (snapshots)",
-             f"{len(tempos)} instantes: {', '.join(_fmt(t, 5) for t in tempos[:8])}"
+            ["results_series.csv",
+             _("séries completas com convenção de sinais no cabeçalho")],
+            [_("tempos de campo (snapshots)"),
+             tf("{n} instantes: {lista}", n=len(tempos),
+                lista=", ".join(_fmt(t, 5) for t in tempos[:8]))
              + ("…" if len(tempos) > 8 else "")],
-        ]))
-        a("<p class='nota'>Os campos 3D (p, T, U, ρ) ficam no formato "
-          "nativo do OpenFOAM nos diretórios de tempo do caso — abertos "
-          "no paraFoam/paraview sem conversão.</p>")
+        ], rotulos=False))
+        a("<p class='nota'>"
+          + _("Os campos 3D (p, T, U, ρ) ficam no formato nativo do "
+              "OpenFOAM nos diretórios de tempo do caso — abertos no "
+              "paraFoam/paraview sem conversão.") + "</p>")
 
     # ---------------------------------------------------------- limitações
-    a("<h2>Limitações e avisos</h2>")
+    a("<h2>" + _("Limitações e avisos") + "</h2>")
     for h in info.get("hipoteses") or []:
         pass
     limite = [
@@ -339,20 +377,25 @@ def report_html(case_dir, run_summary: Optional[Dict] = None) -> str:
         "Setor wedge só representa fresta anelar completa e uniforme.",
     ]
     for l in limite:
-        a(f"<p class='nota'>Limitação: {_e(l)}</p>")
+        a("<p class='nota'>" + _("Limitação") + f": {_e(_(l))}</p>")
     for av in info.get("avisos") or []:
-        a(f"<p class='alerta'>Aviso (da config): {_e(av)}</p>")
+        a("<p class='alerta'>" + _("Aviso (da config)")
+          + f": {_e(ts(av))}</p>")
 
-    return (f"<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'>"
-            f"<title>wiebepy crevice_flow — relatório</title>"
+    lang_html = "pt-BR" if idioma() == "pt" else "en"
+    titulo = _("wiebepy crevice_flow — relatório")
+    return (f"<!doctype html><html lang='{lang_html}'>"
+            "<head><meta charset='utf-8'>"
+            f"<title>{_e(titulo)}</title>"
             f"<style>{CSS}</style></head><body>"
             + "".join(partes) + "</body></html>")
 
 
-def write_report(case_dir, run_summary: Optional[Dict] = None) -> Path:
+def write_report(case_dir, run_summary: Optional[Dict] = None,
+                 lang: Optional[str] = None) -> Path:
     """Gera report.html no diretório do caso."""
     case_dir = Path(case_dir)
-    html = report_html(case_dir, run_summary)
+    html = report_html(case_dir, run_summary, lang=lang)
     saida = case_dir / "report.html"
     saida.write_text(html, encoding="utf-8")
     return saida

@@ -9,7 +9,7 @@ import streamlit as st
 
 from wiebepy.core.parameters import MAX_STAGES, Stage, validate_stages
 from wiebepy.gui import state as S
-from wiebepy.gui.i18n import t as _, tf
+from wiebepy.i18n import t as _, tf
 from wiebepy.io.readers import theta_grid
 from wiebepy.model import MultiStageWiebe
 from wiebepy.optimization.objective import fit_metrics

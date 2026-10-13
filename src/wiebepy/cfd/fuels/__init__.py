@@ -315,12 +315,14 @@ def fuel_summary(name: str, m_fuel_kg: float) -> Dict:
 
 def comparison_notice(fuels: list, criterion: str) -> str:
     """Aviso sobre comparação entre combustíveis (§11)."""
-    return (
+    from ...i18n import tf
+    return tf(
         "Comparação entre combustíveis sob o critério declarado "
-        f"('{criterion}'): no modo de calor prescrito, cada combustível usa "
+        "('{criterio}'): no modo de calor prescrito, cada combustível usa "
         "parâmetros Wiebe pré-calibrados (origem experimental declarada em "
         "cada caso). Isto NÃO é uma previsão de troca de combustível — a "
-        "combustão foi prescrita por curvas calibradas, não resolvida.")
+        "combustão foi prescrita por curvas calibradas, não resolvida.",
+        criterio=criterion)
 
 
 __all__ = ["FuelSpec", "FUELS", "get_fuel", "fuel_summary",

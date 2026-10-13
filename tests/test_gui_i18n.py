@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from wiebepy.gui import i18n
-from wiebepy.gui.lang_en import EN
+from wiebepy import i18n
+from wiebepy.lang_en import EN
 
 RAIZ = Path(__file__).resolve().parents[1] / "src" / "wiebepy"
 GUI = RAIZ / "gui"
@@ -23,9 +23,9 @@ CAMPO = re.compile(r"\{(\w+)")
 
 
 def _textos_do_codigo() -> dict:
-    """{texto: [arquivo:linha]} de cada _( "..." ) / tf( "..." ) da GUI."""
+    """{texto: [arquivo:linha]} de cada _( "..." ) / tf( "..." ) do pacote."""
     achados: dict = {}
-    for p in sorted(GUI.rglob("*.py")):
+    for p in sorted(RAIZ.rglob("*.py")):
         if p.name in ("i18n.py", "lang_en.py"):
             continue
         for n in ast.walk(ast.parse(p.read_text(encoding="utf-8-sig"))):
@@ -71,13 +71,32 @@ def _literais_do_pacote() -> set:
     return todas
 
 
+def _texto_dos_dados() -> str:
+    """Arquivos de dados que acompanham o projeto (configs de exemplo,
+    registros de combustível): alguns avisos moram neles, não no código."""
+    partes = []
+    for raiz in (RAIZ, RAIZ.parents[1] / "examples"):
+        if not raiz.exists():
+            continue
+        for p in raiz.rglob("*"):
+            if p.is_file() and p.suffix.lower() in (".yaml", ".yml",
+                                                    ".json", ".csv"):
+                try:
+                    partes.append(p.read_text(encoding="utf-8-sig"))
+                except (OSError, UnicodeDecodeError):
+                    pass
+    return "\n".join(partes)
+
+
 def test_nenhuma_chave_morta():
     """Toda chave do dicionário tem de aparecer no código.
 
     Inclui as indiretas: valores de ``format_func``, nomes de tarefa e os
     rótulos de ``CaseState.label`` (em cfd/config.py).
     """
-    mortas = sorted(set(EN) - _literais_do_pacote())
+    dados = _texto_dos_dados()
+    mortas = [k for k in sorted(set(EN) - _literais_do_pacote())
+              if " ".join(k.split()) not in " ".join(dados.split())]
     assert not mortas, f"chaves que não existem mais no código: {mortas}"
 
 
@@ -201,3 +220,54 @@ def test_interface_em_portugues_por_padrao():
     assert not at.exception, [e.value for e in at.exception]
     assert any("funções Wiebe de 1 a 5 estágios" in t.value for t in at.title)
     assert [b for b in at.button if b.label == "Ajuda"]
+
+
+# --------------------------------------------------- relatórios HTML
+def test_relatorios_seguem_o_idioma():
+    """Os três relatórios saem no idioma pedido (e o padrão segue em pt)."""
+    from wiebepy.pressure.fit import PressureSettings, fit_pressure, \
+        read_pressure
+    from wiebepy.pressure.html_report import report_html
+    ensaio = (RAIZ.parents[1] / "examples" / "data"
+              / "ensaio_P_exp_carga3_45.txt")
+    if not ensaio.exists():
+        pytest.skip("ensaio de exemplo ausente")
+    d = read_pressure(ensaio, "rad", "bar")
+    r = fit_pressure(d, PressureSettings(n_stages=2, runs=1, particles=20,
+                                         iterations=40, seed=2))
+    i18n.limpar_faltantes()
+    en = report_html(r, d, lang="en")
+    assert "<html lang='en'" in en
+    assert "<h2>Engine and constants</h2>" in en
+    assert "<h2>Fit configuration</h2>" in en
+    assert "bore" in en and "diâmetro (bore)" not in en
+    assert not i18n.faltantes(), i18n.faltantes()
+    pt = report_html(r, d, lang="pt")
+    assert "<html lang='pt-BR'" in pt
+    assert "<h2>Motor e constantes</h2>" in pt
+
+
+def test_relatorio_da_gui_usa_o_idioma_da_tela(monkeypatch):
+    """O botão de relatório da GUI não recebe idioma: ele vem da tela."""
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+    monkeypatch.setattr(i18n, "_atual", "en")
+    at = AppTest.from_file(APP, default_timeout=180)
+    at.session_state["gui_lang"] = "en"
+    at.run()
+    at.switch_page("app_pages/dados.py").run()
+    exemplo = [b for b in at.button if b.key == "p_exemplo"]
+    if not exemplo:
+        pytest.skip("ensaio de exemplo ausente")
+    exemplo[0].click().run()
+    # modelo padrão + simulação: a página Modelo gera o relatório sem ajuste
+    from wiebepy.pressure.fit import PressureSettings, fit_pressure
+    r = fit_pressure(at.session_state["pdata"],
+                     PressureSettings(n_stages=2, runs=1, particles=20,
+                                      iterations=40, seed=2))
+    at.session_state["pfit_result"] = r
+    at.switch_page("app_pages/exportar.py").run()
+    assert not at.exception, [e.value for e in at.exception]
+    [b for b in at.button if b.key == "exp_rel_gerar"][0].click().run()
+    html = at.session_state.get("_rel_exp_rel", b"").decode("utf-8")
+    assert "<html lang='en'" in html and "Engine and constants" in html

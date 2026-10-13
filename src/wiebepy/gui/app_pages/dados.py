@@ -6,7 +6,7 @@ import streamlit as st
 
 from wiebepy.core.validation import DataError
 from wiebepy.gui import state as S
-from wiebepy.gui.i18n import t as _, tf
+from wiebepy.i18n import t as _, tf
 from wiebepy.io.readers import read_data
 
 st.header(_("Dados experimentais"), anchor=False)

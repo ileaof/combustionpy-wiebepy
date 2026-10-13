@@ -30,7 +30,7 @@ from ..pressure.fit import (PRESSURE_FACTORS_KPA, PressureSettings,
                             pressure_from_arrays, pressure_metrics)
 from ..pressure.model import ODEFailure, simulate
 from . import state as S
-from .i18n import t as _, tf
+from ..i18n import t as _, tf
 
 G = math.pi / 180.0
 EXEMPLO = "ensaio_P_exp_carga3_45"

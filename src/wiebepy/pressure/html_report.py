@@ -22,6 +22,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from .. import __version__
+from ..i18n import idioma, idioma_fixo, rotulo, t as _, tf, ts
 from ..core.core import multistage_wiebe
 from .engine import volume
 
@@ -49,17 +50,23 @@ def _e(v) -> str:
 
 def _fmt(v) -> str:
     if isinstance(v, (bool, np.bool_)):
-        return "sim" if v else "não"
+        return _("sim") if v else _("não")
     if isinstance(v, (float, np.floating)):
         return "—" if not math.isfinite(v) else f"{v:.6g}"
     return _e(v)
 
 
-def _tabela(cab: List[str], linhas) -> str:
-    h = ["<table><thead><tr>"] + [f"<th>{_e(c)}</th>" for c in cab]
+def _tabela(cab: List[str], linhas, rotulos: bool = True) -> str:
+    """Tabela traduzida: cabeçalho e PRIMEIRA coluna (sempre rótulos) com
+    tradução registrada; as outras colunas misturam rótulo e dado, então
+    usam a tradução branda (ts)."""
+    h = ["<table><thead><tr>"] + [f"<th>{_e(_(c))}</th>" for c in cab]
     h.append("</tr></thead><tbody>")
     for l in linhas:
-        h.append("<tr>" + "".join(f"<td>{_fmt(v)}</td>" for v in l) + "</tr>")
+        celulas = [_fmt(rotulo(v) if rotulos and i == 0 else ts(v))
+                   for i, v in enumerate(l)]
+        h.append("<tr>" + "".join(f"<td>{c}</td>" for c in celulas)
+                 + "</tr>")
     h.append("</tbody></table>")
     return "".join(h)
 
@@ -128,24 +135,36 @@ def _figuras(pasta: Optional[Path], r, d) -> List[tuple]:
     for nome, titulo in FIGURAS:
         p = pasta / nome
         if p.exists():
-            out.append((titulo, base64.b64encode(p.read_bytes()).decode("ascii")))
+            out.append((_(titulo),
+                        base64.b64encode(p.read_bytes()).decode("ascii")))
     if tmp is not None:
         tmp.cleanup()
     return out
 
 
 def report_html(r, d, comp: Optional[Dict] = None,
-                plots_dir: Optional[Path] = None) -> str:
+                plots_dir: Optional[Path] = None,
+                lang: Optional[str] = None) -> str:
+    """``lang`` fixa o idioma do relatório; ``None`` usa o corrente (o da
+    interface, quando gerado por ela)."""
+    with idioma_fixo(lang):
+        return _corpo(r, d, comp, plots_dir)
+
+
+def _corpo(r, d, comp: Optional[Dict] = None,
+           plots_dir: Optional[Path] = None) -> str:
     e = r.settings.engine
     s = r.settings
     partes: List[str] = []
     a = partes.append
-    a(f"<h1>wiebepy — Relatório do ajuste de pressão ({s.n_stages}-Wiebe)</h1>")
-    a("<p class='sub'>Ajuste da curva de pressão do cilindro com liberação de "
-      "calor Wiebe de N estágios (modelo 0-D de zona única do Double Wiebe: "
-      "geometria biela-manivela, Hohenberg, EDOs em P e T<sub>g</sub>). "
-      "Extensão do modelo Single Wiebe desenvolvido na dissertação de "
-      "L. Queiroz, sob orientação do Prof. I. L. Ferreira.</p>")
+    a("<h1>" + tf("wiebepy — Relatório do ajuste de pressão ({n}-Wiebe)",
+                  n=s.n_stages) + "</h1>")
+    a("<p class='sub'>"
+      + _("Ajuste da curva de pressão do cilindro com liberação de calor "
+          "Wiebe de N estágios (modelo 0-D de zona única do Double Wiebe: "
+          "geometria biela-manivela, Hohenberg, EDOs em P e T<sub>g</sub>). "
+          "Extensão do modelo Single Wiebe desenvolvido na dissertação de "
+          "L. Queiroz, sob orientação do Prof. I. L. Ferreira.") + "</p>")
     a(_tabela(["Item", "Valor"], [
         ["arquivo do ensaio", d.source or "—"],
         ["pontos usados", d.n],
@@ -156,18 +175,18 @@ def report_html(r, d, comp: Optional[Dict] = None,
     ]))
 
     m = r.metrics or {}
-    a("<h2>Resumo</h2>")
+    a("<h2>" + _("Resumo") + "</h2>")
     a("<div class='cards'>" + "".join(
         f"<div class='card'><div class='k'>{_e(k)}</div>"
         f"<div class='v'>{_e(v)}</div></div>" for k, v in (
             ("RMSE", f"{m.get('rmse', float('nan')):.3f} kPa"),
             ("R²", f"{m.get('r2', float('nan')):.6f}"),
-            ("Rc ajustado", f"{r.Rc:.4f}"),
-            ("estágios", s.n_stages),
-            ("runs", len(r.runs)),
-            ("tempo", f"{r.elapsed_s:.1f} s"))) + "</div>")
+            (_("Rc ajustado"), f"{r.Rc:.4f}"),
+            (_("estágios"), s.n_stages),
+            (_("runs"), len(r.runs)),
+            (_("tempo"), f"{r.elapsed_s:.1f} s"))) + "</div>")
 
-    a("<h2>Motor e constantes</h2>")
+    a("<h2>" + _("Motor e constantes") + "</h2>")
     a(_tabela(["Constante", "Valor", "Unidade"], [
         ["diâmetro (bore)", e.bore * 1e3, "mm"],
         ["curso (stroke)", e.stroke * 1e3, "mm"],
@@ -190,11 +209,11 @@ def report_html(r, d, comp: Optional[Dict] = None,
         ["perda de calor (Hohenberg)", e.heat_transfer, ""],
         ["pressão inicial P1 (medida)", float(d.P[0]), "kPa"],
     ]))
-    a("<p class='nota'>Hohenberg: h = 130·V<sup>−0,06</sup>·(P·10<sup>−2</sup>)"
+    a("<p class='nota'>" + _("Hohenberg") + ": h = 130·V<sup>−0,06</sup>·(P·10<sup>−2</sup>)"
       "<sup>0,8</sup>·T<sub>g</sub><sup>−0,4</sup>·(Vp + 1,4)<sup>0,8</sup> "
       "[W/(m²K)]; dP/dθ = [(κ−1)(dQ/dθ − dQ<sub>w</sub>/dθ) − κP dV/dθ]/V.</p>")
 
-    a("<h2>Modelo ajustado</h2>")
+    a("<h2>" + _("Modelo ajustado") + "</h2>")
     a(_tabela(["estágio", "β [-]", "θ0 [°]", "Δθ [°]", "θ0 [rad]", "Δθ [rad]",
                "m [-]", "a [-]", "Q do estágio [kJ]"],
               [[j, st.beta, math.degrees(st.theta0), math.degrees(st.duration),
@@ -205,8 +224,9 @@ def report_html(r, d, comp: Optional[Dict] = None,
       "</sub>)/Δθ<sub>j</sub>; dQ/dθ = Q_total · Σ β<sub>j</sub> dx<sub>j</sub>/dθ."
       "</p>")
 
-    a("<h2>Coeficientes do modelo</h2>")
-    a("<h3>Transferência de calor — correlação de Hohenberg</h3>")
+    a("<h2>" + _("Coeficientes do modelo") + "</h2>")
+    a("<h3>" + _("Transferência de calor — correlação de Hohenberg")
+      + "</h3>")
     a("<p class='nota'>h = C · V<sup>e<sub>V</sub></sup> · (P·f<sub>P</sub>)"
       "<sup>e<sub>P</sub></sup> · T<sub>g</sub><sup>e<sub>T</sub></sup> · "
       "(Vp + b)<sup>e<sub>Vp</sub></sup> [W/(m²K)];  dQ<sub>w</sub>/dθ = "
@@ -222,7 +242,7 @@ def report_html(r, d, comp: Optional[Dict] = None,
         ["fator (Vp + b)^e_Vp calculado", "", (e.Vp + 1.4) ** 0.8, "-"],
         ["perda de calor ativa", "", e.heat_transfer, ""],
     ]))
-    a("<h3>Balanço de energia e integração</h3>")
+    a("<h3>" + _("Balanço de energia e integração") + "</h3>")
     a(_tabela(["Coeficiente", "Valor", "Observação"], [
         ["κ (razão de calores específicos)", e.kappa, "constante no ciclo"],
         ["T1 (início da integração)", e.T1, "K"],
@@ -236,53 +256,65 @@ def report_html(r, d, comp: Optional[Dict] = None,
         ["limite de sanidade das derivadas", 1.0e12,
          "acima disso o candidato é penalizado"],
     ]))
-    a("<h3>Coeficientes Wiebe de cada estágio</h3>")
+    a("<h3>" + _("Coeficientes Wiebe de cada estágio") + "</h3>")
     linhas_w = []
     for j, st in enumerate(r.stages, start=1):
-        linhas_w += [[j, "β (fração de energia)", st.beta, "-"],
-                     [j, "θ0 (início)", math.degrees(st.theta0), "°"],
-                     [j, "Δθ (duração)", math.degrees(st.duration), "°"],
-                     [j, "m (forma)", st.m, "-"],
-                     [j, "a (eficiência)", st.a, "-"],
-                     [j, "fração queimada ao fim de Δθ, 1 − e^(−a)",
+        linhas_w += [[j, _("β (fração de energia)"), st.beta, "-"],
+                     [j, _("θ0 (início)"), math.degrees(st.theta0), "°"],
+                     [j, _("Δθ (duração)"), math.degrees(st.duration), "°"],
+                     [j, _("m (forma)"), st.m, "-"],
+                     [j, _("a (eficiência)"), st.a, "-"],
+                     [j, _("fração queimada ao fim de Δθ, 1 − e^(−a)"),
                       1.0 - math.exp(-st.a), "-"]]
     a(_tabela(["estágio", "coeficiente", "valor", "unidade"], linhas_w))
-    a("<h3>Vetor de parâmetros ajustados (espaço de busca)</h3>")
+    a("<h3>" + _("Vetor de parâmetros ajustados (espaço de busca)")
+      + "</h3>")
     vivos = r.best.x
     from ..optimization.bounds import at_bounds
     borda = at_bounds(vivos, r.param.lower, r.param.upper)
+    # rotulos=False: a 1ª coluna aqui é DADO (o nome do parâmetro), não rótulo
     a(_tabela(["parâmetro", "valor ajustado", "limite inferior",
                "limite superior", "na borda?"],
-              [[nm, float(v), float(lo), float(hi), "SIM" if bd else "não"]
+              [[nm, float(v), float(lo), float(hi),
+                _("SIM") if bd else _("não")]
                for nm, v, lo, hi, bd in zip(r.param.names, vivos, r.param.lower,
-                                            r.param.upper, borda)]))
-    a("<p class='nota'>Ângulos do vetor de busca em rad. θ0_j = θ0_1 + Σ "
-      "dtheta0_k; pesos por stick-breaking: β_1 = s_1, β_j = s_j·Π(1 − s_k), "
-      "β_N = Π(1 − s_k).</p>")
+                                            r.param.upper, borda)],
+              rotulos=False))
+    a("<p class='nota'>"
+      + _("Ângulos do vetor de busca em rad. θ0_j = θ0_1 + Σ dtheta0_k; "
+          "pesos por stick-breaking: β_1 = s_1, β_j = s_j·Π(1 − s_k), "
+          "β_N = Π(1 − s_k).") + "</p>")
 
-    a("<h2>Configuração do ajuste</h2>")
+    a("<h2>" + _("Configuração do ajuste") + "</h2>")
     b = s.bounds_deg
     a(_tabela(["Item", "Valor"], [
-        ["otimizador", f"PSO ({s.topology}), {s.particles} partículas × "
-                       f"{s.iterations} iterações, paciência {s.patience}"],
+        ["otimizador",
+         tf("PSO ({topo}), {p} partículas × {it} iterações, "
+            "paciência {pac}", topo=s.topology, p=s.particles,
+            it=s.iterations, pac=s.patience)],
         ["runs independentes / semente", f"{s.runs} / {s.seed}"],
-        ["refinamento local", f"mínimos quadrados (TRF), {s.polish_starts} "
-                              f"inícios" if s.polish else "desligado"],
-        ["integrador da busca", f"RK4 em lote, {s.substeps} sub-passos, "
-                                f"backend {r.backend}, {s.precision}"],
-        ["referência (RMSE relatado)", "solve_ivp DOP853, rtol = atol = 1e-9"],
+        ["refinamento local",
+         tf("mínimos quadrados (TRF), {n} inícios", n=s.polish_starts)
+         if s.polish else _("desligado")],
+        ["integrador da busca",
+         tf("RK4 em lote, {n} sub-passos, backend {be}, {prec}",
+            n=s.substeps, be=r.backend, prec=s.precision)],
+        ["referência (RMSE relatado)",
+         _("solve_ivp DOP853, rtol = atol = 1e-9")],
         ["parametrização de β", s.beta_mode],
-        ["Rc", f"ajustado em [{s.rc_bounds[0]}, {s.rc_bounds[1]}]"
-               if s.fit_rc else f"fixo = {e.Rc}"],
+        ["Rc", tf("ajustado em [{lo}, {hi}]", lo=s.rc_bounds[0],
+                  hi=s.rc_bounds[1]) if s.fit_rc
+         else tf("fixo = {rc}", rc=e.Rc)],
         ["limites θ0₁ [°]", f"{b['theta0'][0]} a {b['theta0'][1]}"],
         ["incremento entre inícios [°]", f"{b['dtheta0'][0]} a {b['dtheta0'][1]}"],
         ["limites Δθ [°]", f"{b['duration'][0]} a {b['duration'][1]}"],
         ["último início θ0_N máx [°]", b.get("theta0_max", "—")],
         ["limites m", f"{s.m_bounds[0]} a {s.m_bounds[1]}"],
-        ["a", "ajustado" if s.fit_a else f"fixo = {s.a_fixed}"],
+        ["a", _("ajustado") if s.fit_a
+         else tf("fixo = {a}", a=s.a_fixed)],
     ]))
 
-    a("<h2>Métricas de ajuste (pressão)</h2>")
+    a("<h2>" + _("Métricas de ajuste (pressão)") + "</h2>")
     nomes = {"rmse": "RMSE [kPa]", "mae": "MAE [kPa]", "mse": "MSE [kPa²]",
              "see": "SEE [kPa]", "r2": "R² [-]", "aic": "AIC", "bic": "BIC",
              "durbin_watson": "Durbin-Watson", "lag1_autocorr":
@@ -292,38 +324,41 @@ def report_html(r, d, comp: Optional[Dict] = None,
                                      if k not in ("P_max_sim_kPa",
                                                   "P_max_exp_kPa", "wrmse")]))
 
-    a("<h2>Indicadores termodinâmicos</h2>")
+    a("<h2>" + _("Indicadores termodinâmicos") + "</h2>")
     a(_tabela(["Indicador", "Valor"], list(indicators(r, d).items())))
 
-    a("<h2>Runs</h2>")
+    a("<h2>" + _("Runs") + "</h2>")
     a(_tabela(["run", "semente", "RMSE solve_ivp [kPa]", "RMSE RK4 [kPa]",
                "iterações", "parada", "tempo [s]", "observação"],
               [[x.run + 1, x.seed if x.seed is not None else "—", x.rmse,
                 x.rmse_rk4, x.iterations, x.stopped_by, x.elapsed_s,
                 x.note or ""] for x in r.runs]))
     o = r.objective_stats
-    a(f"<p>RMSE entre runs: melhor {o['best']:.4f} · média {o['mean']:.4f} · "
-      f"desvio {o['std']:.4f} · mediana {o['median']:.4f} · pior "
-      f"{o['worst']:.4f} kPa</p>")
+    a("<p>" + tf("RMSE entre runs: melhor {melhor:.4f} · média {media:.4f} "
+                 "· desvio {desvio:.4f} · mediana {mediana:.4f} · pior "
+                 "{pior:.4f} kPa", melhor=o["best"], media=o["mean"],
+                 desvio=o["std"], mediana=o["median"], pior=o["worst"])
+      + "</p>")
 
-    a("<h2>Avisos</h2>")
+    a("<h2>" + _("Avisos") + "</h2>")
     if r.warnings:
-        a("<ul class='avisos'>" + "".join(f"<li>{_e(w)}</li>" for w in r.warnings)
-          + "</ul>")
+        a("<ul class='avisos'>"
+          + "".join(f"<li>{_e(ts(w))}</li>" for w in r.warnings) + "</ul>")
     else:
-        a("<p>Nenhum aviso.</p>")
+        a("<p>" + _("Nenhum aviso.") + "</p>")
 
     if comp is not None:
-        a("<h2>Comparação entre números de estágios</h2>")
-        a(f"<p><b>Recomendado: {comp['recommended']}-Wiebe</b> — "
-          f"{_e(comp['reason'])}.</p>")
+        a("<h2>" + _("Comparação entre números de estágios") + "</h2>")
+        a("<p><b>" + tf("Recomendado: {n}-Wiebe",
+                        n=comp["recommended"]) + "</b> — "
+          + _e(ts(comp["reason"])) + ".</p>")
         a(_tabela(["N", "k", "RMSE [kPa]", "CV RMSE [kPa]", "R²", "ΔAIC", "ΔBIC",
                    "Durbin-Watson", "avisos", "tempo [s]"],
                   [[l["n_stages"], l["k"], l["rmse"], l["cv_rmse"], l["r2"],
                     l["delta_aic"], l["delta_bic"], l["durbin_watson"],
                     l["n_warnings"], l["time_s"]] for l in comp["table"]]))
 
-    a("<h2>Gráficos</h2>")
+    a("<h2>" + _("Gráficos") + "</h2>")
     for titulo, b64 in _figuras(plots_dir, r, d):
         a(f"<figure><figcaption>{_e(titulo)}</figcaption>"
           f"<img src='data:image/png;base64,{b64}' alt='{_e(titulo)}'></figure>")
@@ -344,8 +379,13 @@ def report_html(r, d, comp: Optional[Dict] = None,
         "figure{margin:18px 0}figcaption{font-weight:600;margin-bottom:6px}"
         "img{max-width:100%;border:1px solid #e3e6ee;border-radius:6px}"
         "@media print{h2{page-break-after:avoid}figure{page-break-inside:avoid}}")
-    return ("<!DOCTYPE html><html lang='pt-BR'><head><meta charset='utf-8'>"
-            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-            f"<title>wiebepy — Relatório de pressão ({s.n_stages}-Wiebe)</title>"
+    lang_html = "pt-BR" if idioma() == "pt" else "en"
+    titulo = tf("wiebepy — Relatório de pressão ({n}-Wiebe)",
+                n=s.n_stages)
+    return (f"<!DOCTYPE html><html lang='{lang_html}'>"
+            "<head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,"
+            "initial-scale=1'>"
+            f"<title>{_e(titulo)}</title>"
             f"<style>{css}</style></head><body>" + "".join(partes)
             + "</body></html>")

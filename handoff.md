@@ -3,6 +3,49 @@
 Registro das alterações feitas no código, para quem continuar o trabalho.
 A mais recente fica no topo.
 
+## 2026-10-13 — Os tres relatorios HTML tambem em ingles
+
+`src/wiebepy/i18n.py` + `lang_en.py` (saidos de `gui/` para a raiz do
+pacote: o CFD nao deve depender da interface) e os tres geradores de
+relatorio: `pressure/html_report.py`, `cfd/reporting.py` e
+`crevice_flow/report.py`, mais as figuras em `pressure/report.py`.
+
+Como o idioma chega ao relatorio: `report_html(..., lang=None)` embrulha o
+corpo em `i18n.idioma_fixo(lang)`; `lang=None` usa o idioma corrente. O
+override e THREAD-LOCAL porque a GUI gera relatorio numa thread de fundo
+enquanto a tela continua desenhando. E, como nessa thread nao ha sessao
+Streamlit, `idioma()` passou a LEMBRAR no processo (`_lembrar`) o idioma
+que a sessao resolveu — sem isso o relatorio saia em portugues com a tela
+em ingles. Na CLI, `--lang pt|en` e consumido antes do dispatch, entao vale
+tambem para `wiebepy cfd report` e `wiebepy cfd crevice report`.
+
+Padrao das tabelas: `_tabela` traduz o cabecalho e a PRIMEIRA coluna
+(rotulo) com traducao registrada, e as demais colunas com `ts()` (traducao
+branda, que nao registra falta) porque ali ha dado do caso — caminho de
+arquivo, "DOP853", nome do combustivel. Tabelas cuja 1a coluna tambem e
+dado (faixas angulares, etapas, vetor de parametros) passam
+`rotulos=False`. `ts` desce por dict/list, senao o valor da linha "modelo
+de gas" (um dict inteiro) sairia em portugues.
+
+Duas armadilhas resolvidas, uteis para quem continuar:
+
+- traducao DUPLA: um rotulo ja formatado por `tf` voltava para `t()` dentro
+  de `_tabela`, procurava a traducao de uma frase inglesa e a contava como
+  pendente. Resolvido com `i18n.Texto` (um `str` marcado) e `rotulo()`.
+- avisos cientificos: ficam GRAVADOS no case_config.yaml em portugues (sao
+  proveniencia). Sao traduzidos na EXIBICAO via `ts`, com as frases no
+  dicionario — vale tambem para casos antigos. O unico aviso com numeros (o
+  do PCI do ensaio) e refeito no relatorio a partir dos valores gravados,
+  em vez de reusar o texto. O `comparison_notice` virou molde `tf`.
+
+Pendencias registradas: as mensagens de erro de leitura/validacao de dados
+(`core/validation.py`, `io/readers.py`, `pressure/engine.py`,
+`cfd/validation.py`) seguem em portugues e aparecem em ingles na GUI; e os
+avisos de identificabilidade (`optimization/identifiability.py`) estao em
+INGLES desde sempre, entao hoje destoam no relatorio em portugues.
+`tests/test_gui_i18n.py` cobre: dicionario completo nos tres relatorios,
+relatorio da GUI no idioma da tela, e PT intacto.
+
 ## 2026-10-12 — GUI bilingue (portugues/ingles)
 
 `src/wiebepy/gui/i18n.py` (novo), `src/wiebepy/gui/lang_en.py` (novo) e todos

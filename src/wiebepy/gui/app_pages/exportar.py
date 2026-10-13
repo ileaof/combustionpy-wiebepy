@@ -5,7 +5,7 @@ import json
 import streamlit as st
 
 from wiebepy.gui import state as S
-from wiebepy.gui.i18n import t as _, tf
+from wiebepy.i18n import t as _, tf
 from wiebepy.model import MultiStageWiebe
 
 st.header(_("Exportar"), anchor=False)

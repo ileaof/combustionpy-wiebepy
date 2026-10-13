@@ -244,10 +244,13 @@ streamlit run src/wiebepy/gui/app.py   # equivalente
 No topo ficam o seletor **Português / English** e o botão **Ajuda**
 (abre o guia `Help.html`, que tem o seu próprio seletor de idioma).
 O idioma vale para toda a interface — rótulos, mensagens, títulos de
-gráfico e nomes de coluna — é lembrado entre sessões (gravado em
-`~/.wiebepy/gui.json`) e também pode vir da URL (`?lang=en`). As
-mensagens do núcleo (leitura de dados, identificabilidade, CFD) ainda
-saem em português.
+gráfico e nomes de coluna — e também para os **relatórios HTML** gerados
+por ela (modo pressão, CFD e fresta), com rótulos de gráfico e avisos
+científicos traduzidos. É lembrado entre sessões (gravado em
+`~/.wiebepy/gui.json`) e também pode vir da URL (`?lang=en`). Na linha de
+comando: `wiebepy --lang en …` (vale inclusive para `wiebepy cfd report`).
+Continuam em português as mensagens de erro de leitura/validação de dados;
+os avisos de identificabilidade estão em inglês desde sempre.
 
 Páginas (menu no topo):
 
