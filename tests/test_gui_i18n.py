@@ -271,3 +271,14 @@ def test_relatorio_da_gui_usa_o_idioma_da_tela(monkeypatch):
     [b for b in at.button if b.key == "exp_rel_gerar"][0].click().run()
     html = at.session_state.get("_rel_exp_rel", b"").decode("utf-8")
     assert "<html lang='en'" in html and "Engine and constants" in html
+
+def test_estados_de_caso_sempre_traduzidos():
+    """`CaseState.label` nunca vai cru para a tela: foi assim que um
+    "Validado" apareceu na interface em inglês (caso de fresta)."""
+    import re
+    for p in sorted((GUI).rglob("*.py")):
+        texto = p.read_text(encoding="utf-8-sig")
+        crus = [l.strip() for l in texto.splitlines()
+                if re.search(r"(?<![\w(])\w*state\.label", l, re.I)
+                and "_(" not in l]
+        assert not crus, f"{p.name}: {crus}"

@@ -819,7 +819,8 @@ with st.expander(_("Fresta top-land (crevice_flow — opcional)"),
         cr_rep = c5.button(_("Relatório HTML"), key="cr_rep",
                            icon=":material/description:",
                            disabled=ocupado)
-        st.metric(_("Estado do caso de fresta"), cr_state.label, border=True)
+        st.metric(_("Estado do caso de fresta"), _(cr_state.label),
+                  border=True)
         with st.expander(_("Logs e resultados do caso de fresta")):
             log_dir = cr_dir / "logs"
             if log_dir.is_dir():
