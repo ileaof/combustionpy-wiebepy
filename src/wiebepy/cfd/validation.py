@@ -135,7 +135,7 @@ def validate_case(case_dir, adapter_name: str = "openfoam",
     if dpd.exists():
         try:
             texto = dpd.read_text(encoding="utf-8")
-            n_sub = int([l.split()[1] for l in texto.splitlines()
+            n_sub = int([l.split()[1].rstrip(";") for l in texto.splitlines()
                          if l.strip().startswith("numberOfSubdomains")][0])
             if n_sub != int(n_workers):
                 erros.append(f"decomposeParDict ({n_sub} subdomínios) "
