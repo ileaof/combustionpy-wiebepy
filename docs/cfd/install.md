@@ -1,4 +1,4 @@
-# Instalação do módulo CFD (opcional) — Windows (WSL2) e Linux
+# Instalação do módulo CFD (opcional) — Windows (WSL2), macOS (Multipass) e Linux
 
 O módulo CFD é **opcional e independente**: sem ele (e sem as etapas
 abaixo), o wiebepy inteiro funciona — ajuste, comparação, GUI, CLI,
@@ -61,9 +61,52 @@ Notas:
 ### 2b. Linux
 
 Siga o guia oficial da sua distribuição em <https://openfoam.org/download/linux>.
+No Linux nativo o solver roda direto (`bash -l` local, sem WSL).
 Depois verifique:
 
     wiebepy cfd doctor
+
+### 2c. macOS (Apple Silicon e Intel) — VM Multipass
+
+O OpenFOAM não roda nativo no macOS. O caminho da OpenFOAM Foundation é uma
+VM Ubuntu 22.04 no [Multipass](https://multipass.run). O wiebepy roda **no
+Mac** (GUI e CLI) e envia cada passo do solver à VM por
+`multipass exec <vm> -- bash -l`, como faz com o `wsl.exe` no Windows.
+O nome da VM faz o papel da "distro" (`wsl_distro` na config).
+
+1. Instale o Multipass (pacote oficial) e crie a VM:
+
+       multipass launch 22.04 --name openfoam --cpus 8 --memory 16G --disk 100G
+
+2. Dentro da VM, instale o OpenFOAM pelo pacote (`/opt/openfoam<v>`) ou
+   compile do fonte. O `doctor` procura em `/opt/openfoam*`,
+   `/usr/lib/openfoam*`, `~/OpenFOAM/OpenFOAM-<v>` e `~/<pasta>/OpenFOAM-<v>`.
+
+3. **Monte na VM a pasta dos casos com o mesmo caminho do Mac** (o
+   multipass não traduz caminhos sozinho; o wiebepy usa as montagens de
+   `multipass info` e avisa quando a pasta não está montada):
+
+       multipass mount ~/Projetos/wiebepy openfoam:$HOME/Projetos/wiebepy
+
+   O Multipass precisa de **Acesso Total ao Disco** (Ajustes do Sistema →
+   Privacidade e Segurança) para montar pastas de `~/Documents`.
+
+4. Conecte e verifique:
+
+       wiebepy cfd doctor --connect
+
+Observações:
+- **Não use pastas sincronizadas pelo iCloud Drive** (por padrão,
+  `~/Documents` e `~/Desktop` quando "Pastas Mesa e Documentos" está ativo)
+  para o repositório e o `.venv`. O iCloud marca `.venv` como oculto, e o
+  Python ≥ 3.11.18 ignora arquivos `.pth` ocultos (`No module named
+  wiebepy`), além de criar cópias de conflito (`lib 2`). Use, por exemplo,
+  `~/Projetos`, ou corrija com `chflags -R nohidden .venv`.
+- Cancelar um caso encerra só o `foamRun`/`mpirun` daquele caso (pasta de
+  trabalho), sem afetar outras simulações na mesma VM.
+- A VM só precisa de rede para instalar pacotes. Se o download dentro da VM
+  for lento, baixe as rodas no Mac (`pip download --platform
+  manylinux2014_aarch64 …`) e instale na VM com `--find-links`.
 
 ## 3. Configuração mínima de um caso
 

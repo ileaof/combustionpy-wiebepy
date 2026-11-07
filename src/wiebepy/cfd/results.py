@@ -313,6 +313,7 @@ def time_directories(case_dir) -> List[str]:
 def export_vtk(case_dir) -> Optional[Path]:
     """Exporta os campos para VTK (foamToVTK) — opcional, requer solver."""
     import subprocess
+    from .multipass import on_macos
     from .wsl import detect_openfoam, list_distros, on_windows
     case_dir = Path(case_dir)
     if on_windows():
@@ -324,6 +325,18 @@ def export_vtk(case_dir) -> Optional[Path]:
                 "--cd", str(case_dir), "--", "bash", "-lc",
                 f"source {insts[0]['root']}/etc/bashrc && foamToVTK"]
         subprocess.run(argv, capture_output=True, timeout=600)
+    elif on_macos():
+        from .multipass import MultipassError, list_vms
+        from .wsl import WslError, run_wsl
+        vms = list_vms()
+        insts = detect_openfoam(vms[0]) if vms else []
+        if not insts or not insts[0].get("foamRun"):
+            return None
+        try:
+            run_wsl(vms[0], f"source {insts[0]['root']}/etc/bashrc && "
+                            f"foamToVTK", timeout=600, cwd_win=case_dir)
+        except (WslError, MultipassError):
+            return None
     else:
         insts = detect_openfoam(None)
         if not insts or not insts[0].get("foamRun"):

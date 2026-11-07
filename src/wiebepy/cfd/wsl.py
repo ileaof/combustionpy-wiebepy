@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-wsl.py — Utilitários de execução no WSL2 (Windows) e local (Linux).
+wsl.py — Utilitários de execução no WSL2 (Windows), numa VM Multipass
+(macOS, ver ``multipass.py``) e local (Linux).
 
 O adapter OpenFOAM executa o solver no WSL2 quando o wiebepy roda no
-Windows. Nada aqui é executado no import — apenas quando o usuário
+Windows, na VM Multipass no macOS e direto no Linux. No macOS o nome da
+VM faz o papel da "distro" (config ``wsl_distro``, GUI, conexão). Nada aqui é executado no import — apenas quando o usuário
 prepara/executa um caso CFD ou pede o diagnóstico (``wiebepy cfd
 doctor``). Sem WSL2 ou solver instalado, o restante do wiebepy continua
 100 % funcional.
@@ -42,12 +44,21 @@ def wsl_available() -> bool:
 def run_wsl(distro: Optional[str], script: str, timeout: int = 600,
             cwd_win: Optional[Path] = None,
             stdin_data: Optional[bytes] = None) -> "tuple[int, str, str]":
-    """Executa ``script`` (bash) na distribuição WSL indicada (via stdin).
+    """Executa ``script`` (bash) onde o solver roda (via stdin).
 
-    Retorna (código, stdout, stderr). Falhas de invocação (wsl ausente,
-    distro inexistente) levantam WslError; o código do script é
-    retornado ao chamador.
+    Windows: distribuição WSL ``distro``. macOS: VM Multipass ``distro``.
+    Linux: ``bash -l`` local. Retorna (código, stdout, stderr). Falhas de
+    invocação (wsl/multipass ausente, distro/VM inexistente) levantam
+    WslError; o código do script é retornado ao chamador.
     """
+    from .multipass import MultipassError, on_macos, run_vm
+    if on_macos():
+        try:
+            return run_vm(distro, script, timeout=timeout, cwd_host=cwd_win)
+        except MultipassError as e:
+            raise WslError(str(e)) from e
+    if not on_windows():
+        return _run_local(script, timeout=timeout, cwd=cwd_win)
     if not wsl_available():
         raise WslError("WSL2 não disponível nesta máquina (wsl.exe não "
                        "encontrado). Instale o solver no WSL2 ou no Linux "
@@ -71,8 +82,28 @@ def run_wsl(distro: Optional[str], script: str, timeout: int = 600,
     return p.returncode, out, err
 
 
+def _run_local(script: str, timeout: int = 600,
+               cwd: Optional[Path] = None) -> "tuple[int, str, str]":
+    """Linux nativo: ``bash -l`` local com o script no stdin."""
+    try:
+        p = subprocess.run(["bash", "-l"], input=script.encode("utf-8"),
+                           capture_output=True, timeout=timeout,
+                           cwd=str(cwd) if cwd is not None else None)
+    except subprocess.TimeoutExpired as e:
+        raise WslError(f"Tempo esgotado ({timeout} s) executando: "
+                       f"{script[:120]}") from e
+    except OSError as e:
+        raise WslError(f"Falha ao invocar bash: {e}") from e
+    return (p.returncode, p.stdout.decode("utf-8", errors="replace"),
+            p.stderr.decode("utf-8", errors="replace"))
+
+
 def list_distros() -> List[str]:
-    """Distribuições WSL registradas (nome padrão incluído)."""
+    """Distribuições WSL registradas (Windows) ou VMs Multipass em
+    execução (macOS); vazia no Linux."""
+    from .multipass import list_vms, on_macos
+    if on_macos():
+        return list_vms()
     if not wsl_available():
         return []
     p = subprocess.run([WSL_EXE, "-l", "-q"], capture_output=True)
@@ -102,15 +133,21 @@ def wsl_path(distro: str, win_path: Path) -> str:
 
 
 def detect_openfoam(distro: Optional[str]) -> List[Dict]:
-    """Procura instalações OpenFOAM (/opt/openfoam*) na distribuição.
+    """Procura instalações OpenFOAM na distribuição/VM/máquina.
+
+    Locais: pacotes (/opt/openfoam*, /usr/lib/openfoam*) e compilações do
+    fonte ($HOME/OpenFOAM/OpenFOAM-<v>, padrão da Foundation, e
+    $HOME/<pasta>/OpenFOAM-<v>).
 
     Retorna lista de dicts {root, version, foamRun, gcc, mpirun, distro}
     — vazia se nenhuma instalação for encontrada. Sem download e sem
     detecção pesada: apenas ls/source/which.
     """
     script = r"""
-for d in /opt/openfoam* /usr/lib/openfoam*; do
-  [ -d "$d" ] || continue
+for d in /opt/openfoam* /usr/lib/openfoam* "$HOME"/OpenFOAM/OpenFOAM-[0-9]* "$HOME"/*/OpenFOAM-[0-9]*; do
+  [ -f "$d/etc/bashrc" ] || continue
+  r=$(readlink -f "$d"); case " $vistos " in *" $r "*) continue;; esac
+  vistos="$vistos $r"
   source "$d/etc/bashrc" 2>/dev/null || continue
   echo "OF|$d|$WM_PROJECT_VERSION|$(command -v foamRun)|$(command -v gcc)|$(command -v mpirun)"
 done

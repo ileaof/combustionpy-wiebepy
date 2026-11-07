@@ -20,19 +20,22 @@ DECISÃO DE SOLVER (registrada em docs/cfd/architecture.md):
     reconstructPar (paralelismo do SOLVER, distinto dos backends do
     wiebepy).
 
-No Windows, a execução é via WSL2 (wsl.exe); no Linux, direto. A GUI e a
+No Windows, a execução é via WSL2 (wsl.exe); no macOS, numa VM Multipass
+(multipass exec, ver ``multipass.py``); no Linux, direto. A GUI e a
 CLI funcionam no Windows mesmo sem WSL2/solver — só a execução CFD exige
 o ambiente (ver capabilities.doctor).
 """
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import threading
 import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
+from ..multipass import MultipassError, exec_argv, on_macos, vm_path
 from ..wsl import WslError, detect_openfoam, list_distros, on_windows, \
     wsl_available
 from .base import AdapterError, CfdAdapter, CancelCheck, OutputCb
@@ -41,7 +44,8 @@ CANCELLED, FAILED, COMPLETED = "cancelled", "failed", "completed"
 
 
 class OpenFoamAdapter(CfdAdapter):
-    """Adapter OpenFOAM 13 (Foundation) — WSL2 no Windows, nativo no Linux."""
+    """Adapter OpenFOAM (Foundation) — WSL2 no Windows, VM Multipass no
+    macOS, nativo no Linux."""
 
     name = "openfoam"
 
@@ -61,7 +65,8 @@ class OpenFoamAdapter(CfdAdapter):
         if self._install is not None:
             return self._install
         distros = ([self._distro] if self._distro
-                   else (list_distros() if on_windows() else [None]))
+                   else (list_distros() if (on_windows() or on_macos())
+                         else [None]))
         for d in distros:
             insts = detect_openfoam(d)
             if insts:
@@ -93,6 +98,8 @@ class OpenFoamAdapter(CfdAdapter):
         errs = []
         if on_windows() and not d.get("distro"):
             errs.append("Distribuição WSL2 não identificada.")
+        if on_macos() and not d.get("distro"):
+            errs.append("VM Multipass não identificada.")
         if not d.get("foamRun"):
             errs.append("foamRun não encontrado no OpenFOAM detectado.")
         return errs
@@ -117,9 +124,16 @@ class OpenFoamAdapter(CfdAdapter):
         if os.name == "nt":
             flags = subprocess.CREATE_NEW_PROCESS_GROUP
         argv = self._argv(case_dir)
+        cwd = None
+        if on_macos():
+            # o multipass exec não tem --cd: entra na pasta do caso na VM
+            cmd = (f"cd {shlex.quote(self._vm_case_path(case_dir))} "
+                   f"|| exit 97\n" + cmd)
+        elif not on_windows():
+            cwd = str(case_dir)
         p = subprocess.Popen(argv, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, stdin=subprocess.PIPE,
-                             creationflags=flags)
+                             creationflags=flags, cwd=cwd)
         self._proc = p
         try:
             p.stdin.write(cmd.encode("utf-8"))
@@ -143,6 +157,8 @@ class OpenFoamAdapter(CfdAdapter):
             if self._distro:
                 argv += ["-d", self._distro]
             argv += ["--cd", str(case_dir), "--", "bash", "-l"]
+        elif on_macos():
+            argv = exec_argv(self._distro)
         else:
             argv = ["bash", "-l"]
         return argv
@@ -172,8 +188,13 @@ class OpenFoamAdapter(CfdAdapter):
                         input=b"pkill -f foamRun 2>/dev/null; "
                               b"pkill -f mpirun 2>/dev/null; true\n",
                         capture_output=True, timeout=30)
+                elif on_macos():
+                    subprocess.run(exec_argv(self._distro),
+                                   input=_kill_case_script(case_wsl),
+                                   capture_output=True, timeout=30)
                 else:
-                    subprocess.run(["pkill", "-f", "foamRun"],
+                    subprocess.run(["bash"],
+                                   input=_kill_case_script(case_wsl),
                                    capture_output=True, timeout=30)
             except (OSError, subprocess.TimeoutExpired):
                 pass
@@ -250,11 +271,34 @@ class OpenFoamAdapter(CfdAdapter):
             time.sleep(0.5)
         return p.returncode or 0
 
+    def _vm_case_path(self, case_dir: Path) -> str:
+        """Pasta do caso dentro da VM Multipass (exige montagem)."""
+        try:
+            return vm_path(self._distro, case_dir)
+        except MultipassError as e:
+            raise AdapterError(str(e)) from e
+
     def _wsl_case_path(self, case_dir: Path) -> str:
+        if on_macos():
+            return self._vm_case_path(case_dir)
+        if not on_windows():
+            return str(case_dir)
         from ..wsl import run_wsl
         code, out, _ = run_wsl(self._distro, f"wslpath -a '{case_dir}'",
                                timeout=30)
         return out.strip() if code == 0 else str(case_dir)
+
+
+def _kill_case_script(case_path: str) -> bytes:
+    """Script que encerra só o foamRun/mpirun DESTE caso (pasta de
+    trabalho = ``case_path``) — outras simulações OpenFOAM na mesma
+    máquina/VM não são tocadas."""
+    caso = shlex.quote(case_path)
+    return (f"c=$(readlink -f {caso})\n"
+            "for p in $(pgrep -x mpirun) $(pgrep -x foamRun); do\n"
+            '  [ "$(readlink -f /proc/$p/cwd 2>/dev/null)" = "$c" ] && '
+            "kill $p 2>/dev/null\n"
+            "done\ntrue\n").encode("utf-8")
 
 
 __all__ = ["OpenFoamAdapter", "AdapterError"]

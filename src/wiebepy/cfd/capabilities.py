@@ -3,8 +3,8 @@
 capabilities.py — Diagnóstico do ambiente CFD (``wiebepy cfd doctor``).
 
 Verifica, sem downloads e sem detecção pesada:
-  • plataforma (Windows + WSL2 / Linux nativo);
-  • distribuições WSL2 disponíveis;
+  • plataforma (Windows + WSL2 / macOS + VM Multipass / Linux nativo);
+  • distribuições WSL2 ou VMs Multipass disponíveis;
   • instalações OpenFOAM (distribuição, versão, foamRun, gcc, mpirun).
 
 Além de LOCALIZAR o solver, o doctor CONECTA: ``connect_openfoam``
@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from .multipass import multipass_available, on_macos
 from .wsl import (WslError, RUN_TIMEOUT_PROBE, detect_openfoam,
                   list_distros, on_windows, run_wsl, wsl_available)
 
@@ -44,6 +45,8 @@ class EnvironmentReport:
     wsl_ok: bool
     distros: List[Dict] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
+    macos: bool = False
+    multipass_ok: bool = False
 
     @property
     def installations(self) -> List[Dict]:
@@ -55,7 +58,8 @@ class EnvironmentReport:
 
     def to_dict(self) -> Dict:
         return {"platform": self.platform, "windows": self.windows,
-                "wsl_ok": self.wsl_ok, "distros": self.distros,
+                "wsl_ok": self.wsl_ok, "macos": self.macos,
+                "multipass_ok": self.multipass_ok, "distros": self.distros,
                 "errors": self.errors,
                 "n_installations": len(self.installations)}
 
@@ -63,8 +67,12 @@ class EnvironmentReport:
         L = [f"Plataforma          : {self.platform}"]
         if self.windows:
             L.append(f"WSL2                : {'disponível' if self.wsl_ok else 'NÃO disponível'}")
+        if self.macos:
+            L.append(f"Multipass           : {'disponível' if self.multipass_ok else 'NÃO disponível'}")
+        rotulo = ("VM Multipass        " if self.macos
+                  else "Distribuição WSL    ")
         for d in self.distros:
-            L.append(f"Distribuição WSL    : {d['name']} — "
+            L.append(f"{rotulo}: {d['name']} — "
                      f"{len(d['openfoam'])} instalação(ões) OpenFOAM")
             for inst in d["openfoam"]:
                 L.append(f"  OpenFOAM          : versão {inst['version'] or '?'} "
@@ -77,7 +85,8 @@ class EnvironmentReport:
                      "— ver docs/cfd/install.md")
         conn = load_connection()
         if conn:
-            L.append(f"Conexão ativa       : distro '{conn.get('distro')}' "
+            L.append(f"Conexão ativa       : "
+                     f"{'VM' if self.macos else 'distro'} '{conn.get('distro')}' "
                      f"— OpenFOAM {conn.get('version') or '?'} em "
                      f"{conn.get('root')} (foamRun: {conn.get('foamRun')})")
         else:
@@ -97,8 +106,27 @@ def doctor() -> EnvironmentReport:
     """Sonda o ambiente (seguro: apenas ls/source/which no WSL)."""
     rep = EnvironmentReport(platform=platform.platform(),
                             windows=on_windows(),
-                            wsl_ok=wsl_available())
-    if on_windows():
+                            wsl_ok=wsl_available(),
+                            macos=on_macos(),
+                            multipass_ok=multipass_available())
+    if on_macos():
+        if not rep.multipass_ok:
+            rep.errors.append("multipass não encontrado — instale o "
+                              "Multipass e uma VM Ubuntu com o OpenFOAM "
+                              "(docs/cfd/install.md).")
+            return rep
+        vms = list_distros()
+        if not vms:
+            rep.errors.append("nenhuma VM Multipass em execução "
+                              "(multipass start <vm>).")
+        for name in vms:
+            try:
+                insts = detect_openfoam(name)
+            except WslError as e:
+                rep.errors.append(f"VM {name}: {e}")
+                insts = []
+            rep.distros.append({"name": name, "openfoam": insts})
+    elif on_windows():
         if not rep.wsl_ok:
             rep.errors.append("wsl.exe não encontrado — instale WSL2 com "
                               "uma distribuição Ubuntu e o OpenFOAM "
