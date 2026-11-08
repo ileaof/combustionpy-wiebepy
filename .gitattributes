@@ -1,0 +1,4 @@
+# Mecanismos cinéticos: comparados byte a byte nos testes; nunca converter
+# fim de linha (core.autocrlf=true no Windows gerava CRLF e quebrava
+# test_case_builder_reactive_r2)
+examples/cfd/mechanisms/** -text

@@ -53,9 +53,10 @@ def test_map_path_montagem_mais_especifica(tmp_path):
     proj = tmp_path / "Projects"
     caso = proj / "wiebepy" / "results" / "cfd" / "c1"
     caso.mkdir(parents=True)
+    # alvos são caminhos POSIX da VM (o teste roda também no Windows)
     pares = [(str(proj), "/mnt/proj"),
-             (str(proj / "wiebepy"), str(proj / "wiebepy"))]
-    assert mp.map_path(caso, pares) == str(caso.resolve())
+             (str(proj / "wiebepy"), "/vm/wiebepy")]
+    assert mp.map_path(caso, pares) == "/vm/wiebepy/results/cfd/c1"
     assert mp.map_path(proj / "x", pares) == "/mnt/proj/x"
     assert mp.map_path(tmp_path / "fora", pares) is None
 

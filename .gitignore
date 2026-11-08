@@ -15,3 +15,6 @@ results_*/
 !docs/cfd/*.png
 # brasões dos agradecimentos (CNPq, CAPES, UFPA)
 !docs/logos/*.png
+
+# macOS (Finder)
+.DS_Store
