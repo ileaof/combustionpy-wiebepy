@@ -66,7 +66,7 @@ Depois verifique:
 
     wiebepy cfd doctor
 
-### 2c. macOS (Apple Silicon e Intel) — VM Multipass
+### 2c. macOS (Apple Silicon; Intel ainda não testado) — VM Multipass
 
 O OpenFOAM não roda nativo no macOS. O caminho da OpenFOAM Foundation é uma
 VM Ubuntu 22.04 no [Multipass](https://multipass.run). O wiebepy roda **no

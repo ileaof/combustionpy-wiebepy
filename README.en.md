@@ -46,7 +46,7 @@ model. Two **optional** modules extend it without changing the core:
 
 ## 1. Installation
 
-Requires Python ≥ 3.11 (Windows, macOS — Apple Silicon or Intel —, Linux
+Requires Python ≥ 3.11 (Windows, macOS — Apple Silicon; Intel not yet tested —, Linux
 or WSL2). On macOS, do not install the project in a folder synchronized by
 iCloud Drive (`~/Documents`, `~/Desktop`): iCloud marks `.venv` as hidden
 and Python then ignores the installation's `.pth` file (`No module named
@@ -375,7 +375,7 @@ fuels H₂, CH₄ (pure — not natural gas), ethanol and diesel (surrogate) —
 the test/reference case uses **Diesel**, the fuel of the pressure test that
 produced the calibrated engine. **It does not predict chemical kinetics,
 flame front or emissions.** Solver: OpenFOAM Foundation 13 or 14 (`foamRun`,
-`fluid` solver): on Windows through WSL2, on macOS (Apple Silicon and Intel)
+`fluid` solver): on Windows through WSL2, on macOS (Apple Silicon; Intel not yet tested)
 in an Ubuntu VM under Multipass, and directly on native Linux — the program
 remains 100 % usable without WSL2/VM/solver (no silent fallback). Architecture details and the
 conservative heat source: `docs/cfd/architecture.md`; installation:
@@ -605,7 +605,7 @@ installation:
 **Native Linux**: install OpenFOAM following the official guide; the solver
 runs directly (`bash -l` locally, in the case folder), without WSL.
 
-#### Installing on macOS (Apple Silicon and Intel) — Multipass VM
+#### Installing on macOS (Apple Silicon; Intel not yet tested) — Multipass VM
 
 OpenFOAM does not run natively on macOS. wiebepy runs **on the Mac** (CLI
 and GUI) and only the solver runs in an Ubuntu 22.04 VM under

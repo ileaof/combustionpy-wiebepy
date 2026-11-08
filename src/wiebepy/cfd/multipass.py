@@ -13,8 +13,9 @@ equivalente do ``wsl.py`` do Windows:
   • ``vm_path()``       — traduz um caminho do Mac para o caminho dentro
                            da VM, pelas montagens de ``multipass info``.
 
-Funciona igual em Apple Silicon e Intel: o binário ``multipass`` tem a
-mesma interface nas duas arquiteturas.
+O binário ``multipass`` tem a mesma interface em Apple Silicon e Intel,
+então o código não distingue as arquiteturas; até agora só Apple Silicon
+foi testado.
 
 Os casos CFD precisam estar numa pasta do Mac MONTADA na VM. O mais
 simples é montar com o mesmo caminho dos dois lados, por exemplo::

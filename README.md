@@ -45,7 +45,7 @@ $(\theta, dx_b/d\theta)$, sem qualquer modelo termodinâmico. Dois módulos
 
 ## 1. Instalação
 
-Requer Python ≥ 3.11 (Windows, macOS — Apple Silicon ou Intel —, Linux
+Requer Python ≥ 3.11 (Windows, macOS — Apple Silicon; Intel ainda não testado —, Linux
 ou WSL2). No macOS, não instale o projeto numa pasta sincronizada pelo
 iCloud Drive (`~/Documents`, `~/Desktop`): o iCloud marca o `.venv` como
 oculto e o Python passa a ignorar o `.pth` da instalação (`No module named
@@ -372,7 +372,7 @@ teste/referência usa **Diesel**, combustível do ensaio de pressão que
 originou o motor calibrado. **Não prevê
 cinética química, frente de chama ou emissões.** Solver: OpenFOAM
 Foundation 13 ou 14 (`foamRun`, solver `fluid`): no Windows via WSL2, no
-macOS (Apple Silicon e Intel) numa VM Ubuntu do Multipass e no Linux
+macOS (Apple Silicon; Intel ainda não testado) numa VM Ubuntu do Multipass e no Linux
 nativo direto — o programa continua 100 % utilizável sem
 WSL2/VM/solver (sem fallback silencioso). Detalhes de arquitetura e da fonte de calor conservativa:
 `docs/cfd/architecture.md`; instalação: `docs/cfd/install.md`;
@@ -605,7 +605,7 @@ dependências Python (PyYAML). O OpenFOAM vem da instalação oficial:
 **Linux nativo**: instale o OpenFOAM pelo guia oficial; o solver roda
 direto (`bash -l` local, na pasta do caso), sem WSL.
 
-#### Instalação no macOS (Apple Silicon e Intel) — VM Multipass
+#### Instalação no macOS (Apple Silicon; Intel ainda não testado) — VM Multipass
 
 O OpenFOAM não roda nativo no macOS. O wiebepy roda **no Mac** (CLI e
 GUI) e só o solver roda numa VM Ubuntu 22.04 do
