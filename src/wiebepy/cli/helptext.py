@@ -30,7 +30,8 @@ Modos de execução
                       BIC, validação cruzada por blocos, tempo)
   --benchmark         mede os backends nesta máquina
   --devices           mostra o hardware detectado
-  wiebepy cfd …       subcomando CFD OPCIONAL (OpenFOAM 13 via WSL2):
+  wiebepy cfd …       subcomando CFD OPCIONAL (OpenFOAM via WSL2 no
+                      Windows, VM Multipass no macOS ou Linux nativo):
                       doctor/prepare/validate/run/status/cancel/report —
                       liberação de calor PRESCRITA pela Wiebe calibrada;
                       não prevê cinética química, frente de chama ou
@@ -166,8 +167,9 @@ wiebepy --compare-stages 1 2 3 --input ensaio.txt --input-type pressure
 # Usar um arquivo de configuração (CLI sobrescreve o arquivo)
 wiebepy --config examples/config_example.yaml --input dados.csv --optimize
 
-# CFD opcional (requer OpenFOAM 13 no WSL2): o fluxo completo
-wiebepy cfd doctor                                        # ambiente WSL2/OpenFOAM
+# CFD opcional (requer OpenFOAM: WSL2 no Windows, VM Multipass no macOS ou
+# Linux nativo): o fluxo completo
+wiebepy cfd doctor                                        # ambiente WSL2/Multipass/OpenFOAM
 wiebepy cfd prepare  --config examples/config_cfd.yaml    # gera o caso, sem rodar
 wiebepy cfd validate --case results/cfd/case_001          # valida antes de rodar
 wiebepy cfd run      --case results/cfd/case_001 --follow # executa com log ao vivo
@@ -217,7 +219,8 @@ Execution modes
                       AIC, BIC, blocked cross-validation, time)
   --benchmark         measures the backends on this machine
   --devices           shows the detected hardware
-  wiebepy cfd …       OPTIONAL CFD subcommand (OpenFOAM 13 through WSL2):
+  wiebepy cfd …       OPTIONAL CFD subcommand (OpenFOAM through WSL2 on
+                      Windows, a Multipass VM on macOS or native Linux):
                       doctor/prepare/validate/run/status/cancel/report — the
                       heat release is PRESCRIBED by the calibrated Wiebe
                       function; it does not predict chemical kinetics, flame
@@ -354,8 +357,9 @@ wiebepy --compare-stages 1 2 3 --input test.txt --input-type pressure
 # Use a configuration file (the CLI overrides the file)
 wiebepy --config examples/config_example.yaml --input data.csv --optimize
 
-# Optional CFD (requires OpenFOAM 13 on WSL2): the complete flow
-wiebepy cfd doctor                                        # WSL2/OpenFOAM environment
+# Optional CFD (requires OpenFOAM: WSL2 on Windows, a Multipass VM on macOS
+# or native Linux): the complete flow
+wiebepy cfd doctor                                        # WSL2/Multipass/OpenFOAM environment
 wiebepy cfd prepare  --config examples/config_cfd.yaml    # builds the case, does not run it
 wiebepy cfd validate --case results/cfd/case_001          # validates before running
 wiebepy cfd run      --case results/cfd/case_001 --follow # runs with a live log

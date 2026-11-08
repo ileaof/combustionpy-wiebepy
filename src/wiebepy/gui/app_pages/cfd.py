@@ -31,7 +31,8 @@ S.init_state()   # idempotente (app.py já chama; garante standalone)
 
 st.header(_("CFD — escoamento 3D no cilindro (opcional)"), anchor=False)
 st.caption(
-    _("Casos OpenFOAM 13 (WSL2 no Windows) com liberação de calor GLOBAL "
+    _("Casos OpenFOAM 13/14 (WSL2 no Windows, VM Multipass no macOS, Linux "
+    "nativo) com liberação de calor GLOBAL "
     "prescrita pela Wiebe calibrada (modo 4.1). NÃO prevê cinética "
     "química, frente de chama ou emissões. O restante do wiebepy não "
     "depende desta página; desabilitar o CFD não apaga resultados."))
@@ -964,7 +965,8 @@ with st.expander(_("Diagnóstico do ambiente (doctor)")):
         if conn_nova is None:
             st.error(_("Não foi possível conectar:") + "\n\n"
                      + "\n".join(f"• {m}" for m in msgs)
-                     + "\n\n" + _("Instale o OpenFOAM no WSL2 seguindo "
+                     + "\n\n" + _("Instale o OpenFOAM (WSL2 no Windows, VM "
+                                   "Multipass no macOS) seguindo "
                                    "docs/cfd/install.md e conecte "
                                    "novamente."))
             st.session_state["cfd_doctor"] = doctor().format()

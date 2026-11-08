@@ -107,9 +107,9 @@
   em cada caso pela identidade ∫Q̇dt = m<sub>f</sub>·PCI·Δx<sub>b</sub>; no
   caso de exemplo o erro relativo é de 2×10⁻⁴.</p>
 
-  <p>A solução das equações de conservação é feita pelo <b>OpenFOAM 13</b>
-  (<code>foamRun</code>, solver <code>fluid</code>), executado no WSL2 ou em
-  Linux. A geometria é um cilindro simplificado com pistão plano, cuja
+  <p>A solução das equações de conservação é feita pelo <b>OpenFOAM 13 ou 14</b>
+  (<code>foamRun</code>, solver <code>fluid</code>), executado no WSL2 (Windows),
+  numa VM Multipass (macOS) ou em Linux nativo. A geometria é um cilindro simplificado com pistão plano, cuja
   cinemática biela-manivela usa exatamente os mesmos parâmetros do modelo
   0-D. O avanço é controlado em ângulo de manivela, com passo entre 0,01° e
   0,5° e Courant máximo de 0,25.</p>
@@ -133,11 +133,11 @@
 
 <section id="instalar">
   <h2>1. Instalação</h2>
-  <p>Requer Python 3.11 ou superior (Windows, Linux ou WSL2). Crie um ambiente
+  <p>Requer Python 3.11 ou superior (Windows, macOS, Linux ou WSL2). Crie um ambiente
   virtual <b>antes</b> de instalar, dentro da pasta do projeto:</p>
 <pre><code>cd wiebepy
 python -m venv .venv
-.venv\Scripts\activate            <em># Windows (Linux/WSL2: source .venv/bin/activate)</em>
+.venv\Scripts\activate            <em># Windows (Linux/macOS/WSL2: source .venv/bin/activate)</em>
 python -m pip install --upgrade pip
 pip install -e ".[numba,dev]"     <em># núcleo + Numba (rápido em CPU) + pytest</em>
 pip install cupy-cuda12x          <em># opcional: só com placa NVIDIA</em></code></pre>
@@ -373,7 +373,8 @@ model.save("model.json")</code></pre>
 <section id="cfd">
   <h2>10b. CFD (opcional) — escoamento 3D no cilindro</h2>
   <p>Página <strong>CFD</strong> (opcional): gera e executa casos
-  <strong>OpenFOAM 13</strong> (no Windows, via WSL2) com a liberação de
+  <strong>OpenFOAM 13/14</strong> (Windows via WSL2, macOS via VM Multipass,
+  Linux nativo) com a liberação de
   calor <strong>prescrita pela Wiebe calibrada</strong> — 1 a 5 estágios,
   combustíveis H₂, CH₄ (puro), etanol e diesel. <strong>Não prevê
   cinética química, frente de chama nem emissões</strong>; os resultados
@@ -389,6 +390,8 @@ model.save("model.json")</code></pre>
           <code>sudo add-apt-repository http://dl.openfoam.org/ubuntu</code>;
           <code>sudo apt update &amp;&amp; sudo apt install openfoam13</code>.</li>
         <li><strong>Verificar</strong>: <code>wiebepy cfd doctor</code> lista as distribuições WSL2 e, para cada uma, o OpenFOAM detectado (<code>/opt/openfoam*</code>, <code>foamRun</code>, gcc, mpirun) e a versão. A execução usa <code>wsl.exe -d &lt;distro&gt;</code> e o caso é lido/escrito direto no projeto via <code>/mnt/c/...</code> — não é preciso copiar. Sem WSL2/solver, só os comandos CFD ficam indisponíveis (diagnóstico, nunca fallback silencioso). Guia completo (incl. Linux nativo): <code>docs/cfd/install.md</code>.</li>
+        <li><strong>macOS (Apple Silicon e Intel)</strong> — o OpenFOAM não roda nativo no Mac: o wiebepy roda no Mac (CLI e GUI) e só o solver roda numa VM Ubuntu 22.04 do <a href="https://multipass.run">Multipass</a>, chamada por <code>multipass exec &lt;vm&gt; -- bash -l</code> (o nome da VM ocupa o lugar da distro). Crie a VM (<code>multipass launch 22.04 --name openfoam --cpus 8 --memory 16G --disk 100G</code>), instale o OpenFOAM nela (pacote em <code>/opt/openfoam&lt;v&gt;</code> ou compilado do fonte) e <strong>monte a pasta do projeto com o MESMO caminho do Mac</strong>: <code>multipass mount ~/Projects/wiebepy openfoam:/Users/&lt;usuario&gt;/Projects/wiebepy</code> (dê <em>Acesso Total ao Disco</em> ao <code>multipassd</code>; fora de uma pasta montada o wiebepy avisa e sugere o comando). Depois: <code>wiebepy cfd doctor --connect</code>. Não deixe o projeto numa pasta do iCloud Drive (<code>~/Documents</code>, <code>~/Desktop</code>). No ARM prefira <code>kOmegaSST</code> e <code>workers: 1</code> (ver Solução de problemas). Guia completo: <code>docs/cfd/install.md</code> §2c.</li>
+        <li><strong>Linux nativo</strong> — instale o OpenFOAM pelo guia oficial; o solver roda direto (<code>bash -l</code> local, na pasta do caso), sem WSL.</li>
       </ol></li>
     <li><strong>Configurar</strong>: motor (mesmos parâmetros dos modos 0-D), janela angular (válvulas fechadas), condições iniciais, paredes, turbulência, combustível e origem dos estágios Wiebe (modelo atual ou <code>model.json</code>).</li>
     <li><strong>Preparar</strong> → caso gerado para inspeção (estado <em>Preparado</em>).</li>
@@ -413,7 +416,7 @@ model.save("model.json")</code></pre>
         <td>Não</td></tr>
   </table>
   <p>A sequência (4 comandos + 1 verificação):</p>
-  <pre><code>wiebepy cfd doctor                <em># 0. uma vez: confere WSL2 + OpenFOAM 13</em>
+  <pre><code>wiebepy cfd doctor                <em># 0. uma vez: confere WSL2/VM Multipass + OpenFOAM</em>
 wiebepy cfd prepare  --config examples/config_cfd_equivalencia.yaml \
     --output results/cfd/meu_caso   <em># 1. gera o caso (NÃO executa)</em>
 wiebepy cfd validate --case results/cfd/meu_caso   <em># 2. valida</em>
@@ -445,9 +448,9 @@ wiebepy cfd report   --case results/cfd/meu_caso   <em># 4. relatório HTML com 
   <strong>CFD</strong> no menu lateral. O passo a passo, com os botões
   na ordem:</p>
   <ol>
-    <li><strong>Verificar o ambiente</strong> (uma vez): no expander <em>Diagnóstico do ambiente (doctor)</em>, botão <strong>Executar diagnóstico</strong> — equivale ao <code>wiebepy cfd doctor</code> (confere WSL2, OpenFOAM, foamRun, mpirun). Se o OpenFOAM estiver instalado mas o código ainda não estiver conectado a ele (a linha <em>Conexão</em> mostra <em>nenhuma</em>), clique <strong>Conectar OpenFOAM ao código</strong>: o botão detecta a instalação, <strong>verifica que o foamRun executa de verdade</strong> (probe <code>-help</code> — detecção por diretório pode achar instalação quebrada), grava a conexão em <code>~/.wiebepy/cfd_env.json</code> e ajusta automaticamente a <em>Distribuição WSL2</em> do formulário — procurando primeiro na distro configurada e, sem instalação lá, usando a melhor de qualquer distro. Na CLI o equivalente é <code>wiebepy cfd doctor --connect</code>. A conexão sobrevive ao reinício da sessão (o padrão da distro passa a vir da conexão gravada).</li>
+    <li><strong>Verificar o ambiente</strong> (uma vez): no expander <em>Diagnóstico do ambiente (doctor)</em>, botão <strong>Executar diagnóstico</strong> — equivale ao <code>wiebepy cfd doctor</code> (confere WSL2 — ou a VM Multipass no macOS —, OpenFOAM, foamRun, mpirun). Se o OpenFOAM estiver instalado mas o código ainda não estiver conectado a ele (a linha <em>Conexão</em> mostra <em>nenhuma</em>), clique <strong>Conectar OpenFOAM ao código</strong>: o botão detecta a instalação, <strong>verifica que o foamRun executa de verdade</strong> (probe <code>-help</code> — detecção por diretório pode achar instalação quebrada), grava a conexão em <code>~/.wiebepy/cfd_env.json</code> e ajusta automaticamente a <em>Distribuição WSL2</em> do formulário — procurando primeiro na distro configurada e, sem instalação lá, usando a melhor de qualquer distro. Na CLI o equivalente é <code>wiebepy cfd doctor --connect</code>. A conexão sobrevive ao reinício da sessão (o padrão da distro passa a vir da conexão gravada).</li>
     <li><strong>Escolher o diretório do caso</strong> — o primeiro ajuste de todo caso novo: em <em>Configuração do caso</em>, troque <strong>"Diretório do caso"</strong> para um diretório NOVO (ex.: <code>results/cfd/caso_gui_001</code>). ⚠️ O padrão aponta para o case_006 arquivado — clicar <strong>Preparar caso</strong> com esse diretório <strong>sobrescreve</strong> o caso arquivado.</li>
-    <li><strong>Conferir os campos</strong> — eles já abrem casados com o case_006: fonte Wiebe em origem <code>model.json</code> = <code>examples/model_cfd_calibrated.json</code> (a calibrada; a manual é <code>model_cfd.json</code> — não use), Rc 17, janela −120…+120°, P 127,6 kPa / T 308,15 K, paredes 440 K, kEpsilon, pistão móvel, 24×36 células, distribuição <code>uniform</code>, combustível diesel, PCI 39191,3, rpm 3396,2. Confirme ainda: <strong>"Distribuição WSL2"</strong> = <code>Ubuntu-22.04</code> (a distro do solver); <strong>"Processos MPI do SOLVER"</strong> = 1 (paralelismo do solver, não do wiebepy); <strong>Estágios Wiebe</strong>: com origem <code>model.json</code> o calor vem do arquivo calibrado; com origem <em>modelo atual</em> a tabela editável 1–5 estágios aparece (a edição NÃO altera o modelo 0-D); <strong>Gás, numérica e comparação</strong> (equivalência completa com a CLI — mesmas chaves <code>cfd.gas</code>/<code>cfd.numerics</code>/<code>cfd.comparison</code>): <em>Modelo do gás</em> <code>simple</code> com Cp 1063,0 J/(kg·K) e M 28,96 ⇒ γ=1,370 = κ do 0-D (o padrão antigo Cp 1005 ⇒ γ=1,400), com μ e Pr editáveis; <em>max_Co</em> 0,25 (0,5 abortou neste motor, §5b do <code>verification.md</code>), Δt 1e-6 s, escrita a cada 10° CA; e o expander <em>Comparação com o ensaio (diagnóstica)</em> com o ensaio de referência (<code>examples/data/ensaio_P_exp_carga3_45.txt</code>, rad/bar, offset 0) — a sobreposição entra no <code>report.html</code>. Em <em>Modelo do gás</em> = <code>multicomponent_inert</code> (degrau R1) Cp/μ/Pr ficam desabilitados: N₂+O₂ com NASA janaf da mistura. Para descartar a comparação, esvazie o campo do arquivo.</li>
+    <li><strong>Conferir os campos</strong> — eles já abrem casados com o case_006: fonte Wiebe em origem <code>model.json</code> = <code>examples/model_cfd_calibrated.json</code> (a calibrada; a manual é <code>model_cfd.json</code> — não use), Rc 17, janela −120…+120°, P 127,6 kPa / T 308,15 K, paredes 440 K, kEpsilon, pistão móvel, 24×36 células, distribuição <code>uniform</code>, combustível diesel, PCI 39191,3, rpm 3396,2. Confirme ainda: <strong>"Distribuição WSL2"</strong> = <code>Ubuntu-22.04</code> (a distro do solver; no macOS o campo se chama <strong>"VM Multipass (macOS)"</strong> e recebe o nome da VM — um nome que não é VM, como o padrão <code>Ubuntu-22.04</code>, cai na VM em execução que tem OpenFOAM); <strong>"Processos MPI do SOLVER"</strong> = 1 (paralelismo do solver, não do wiebepy); <strong>Estágios Wiebe</strong>: com origem <code>model.json</code> o calor vem do arquivo calibrado; com origem <em>modelo atual</em> a tabela editável 1–5 estágios aparece (a edição NÃO altera o modelo 0-D); <strong>Gás, numérica e comparação</strong> (equivalência completa com a CLI — mesmas chaves <code>cfd.gas</code>/<code>cfd.numerics</code>/<code>cfd.comparison</code>): <em>Modelo do gás</em> <code>simple</code> com Cp 1063,0 J/(kg·K) e M 28,96 ⇒ γ=1,370 = κ do 0-D (o padrão antigo Cp 1005 ⇒ γ=1,400), com μ e Pr editáveis; <em>max_Co</em> 0,25 (0,5 abortou neste motor, §5b do <code>verification.md</code>), Δt 1e-6 s, escrita a cada 10° CA; e o expander <em>Comparação com o ensaio (diagnóstica)</em> com o ensaio de referência (<code>examples/data/ensaio_P_exp_carga3_45.txt</code>, rad/bar, offset 0) — a sobreposição entra no <code>report.html</code>. Em <em>Modelo do gás</em> = <code>multicomponent_inert</code> (degrau R1) Cp/μ/Pr ficam desabilitados: N₂+O₂ com NASA janaf da mistura. Para descartar a comparação, esvazie o campo do arquivo.</li>
     <li><strong>Preparar caso</strong> → gera o caso OpenFOAM para inspeção (estado <em>Preparado</em>). A configuração é validada antes: erros aparecem como mensagem vermelha e o caso não é gerado.</li>
     <li><strong>Validar</strong> → estado <em>Validado</em> — o <strong>Executar</strong> exige isso (gate).</li>
     <li><strong>Executar</strong> → painel com o <strong>log do solver ao vivo</strong>; ~2–3 min na malha 24×36. <strong>Cancelar execução</strong> interrompe inclusive os processos MPI, preservando logs e resultados parciais.</li>
@@ -498,6 +501,9 @@ wiebepy cfd crevice report   --case results/crevice_exemplo</code></pre>
     <tr><td>Ajuste ruim / runs muito diferentes</td><td>aumente <code>--runs</code> e <code>--population</code>; confira os avisos; talvez N seja grande demais</td></tr>
     <tr><td>Estágios coincidentes ou com β ≈ 0</td><td>o modelo tem estágios demais para os dados: rode <code>--compare-stages</code></td></tr>
     <tr><td>WARNING: backend indisponível</td><td>normal sem GPU/Numba; <code>wiebepy --devices</code> mostra o que há</td></tr>
+    <tr><td>macOS: “No module named wiebepy” com o <code>.venv</code> ativo</td><td>o projeto está numa pasta do iCloud Drive, que marca o <code>.venv</code> como oculto (o Python ignora o <code>.pth</code>): mova para <code>~/Projects</code> ou rode <code>chflags -R nohidden .venv</code></td></tr>
+    <tr><td>macOS: “A pasta … não está montada na VM”</td><td>monte a pasta do projeto na VM com o mesmo caminho do Mac (<code>multipass mount …</code>) e dê <em>Acesso Total ao Disco</em> ao <code>multipassd</code>; VM parada: <code>multipass start openfoam</code></td></tr>
+    <tr><td>macOS (ARM): CFD diverge (k &lt; 0, Courant explode, T negativa)</td><td>use <code>turbulence.model: kOmegaSST</code> e <code>workers: 1</code> — com <code>kEpsilon</code> o caso de exemplo ficou no limite numérico no ARM, e com <code>workers</code> &gt; 1 e malha móvel o solver divergiu em −22,7°</td></tr>
     <tr><td>Muito lento</td><td>instale Numba (<code>pip install numba</code>) e use <code>--backend numba --workers 8</code></td></tr>
     <tr><td>Erro inesperado</td><td>repita com <code>--debug</code> para ver o detalhe</td></tr>
   </table>
@@ -553,9 +559,9 @@ wiebepy cfd crevice report   --case results/crevice_exemplo</code></pre>
   the identity ∫Q̇dt = m<sub>f</sub>·LHV·Δx<sub>b</sub>; in the example case
   the relative error is 2×10⁻⁴.</p>
 
-  <p>The conservation equations are solved by <b>OpenFOAM 13</b>
-  (<code>foamRun</code>, <code>fluid</code> solver), running under WSL2 or on
-  Linux. The geometry is a simplified cylinder with a flat piston, whose
+  <p>The conservation equations are solved by <b>OpenFOAM 13 or 14</b>
+  (<code>foamRun</code>, <code>fluid</code> solver), running under WSL2 (Windows),
+  in a Multipass VM (macOS) or on native Linux. The geometry is a simplified cylinder with a flat piston, whose
   slider-crank kinematics uses exactly the same parameters as the 0-D model.
   Time advance is controlled in crank angle, with steps between 0.01° and
   0.5° and a maximum Courant number of 0.25.</p>
@@ -579,11 +585,11 @@ wiebepy cfd crevice report   --case results/crevice_exemplo</code></pre>
 
 <section id="instalar-en">
   <h2>1. Installation</h2>
-  <p>Requires Python 3.11 or newer (Windows, Linux or WSL2). Create a virtual
+  <p>Requires Python 3.11 or newer (Windows, macOS, Linux or WSL2). Create a virtual
   environment <b>before</b> installing, inside the project folder:</p>
 <pre><code>cd wiebepy
 python -m venv .venv
-.venv\Scripts\activate            <em># Windows (Linux/WSL2: source .venv/bin/activate)</em>
+.venv\Scripts\activate            <em># Windows (Linux/macOS/WSL2: source .venv/bin/activate)</em>
 python -m pip install --upgrade pip
 pip install -e ".[numba,dev]"     <em># core + Numba (fast on CPU) + pytest</em>
 pip install cupy-cuda12x          <em># optional: only with an NVIDIA card</em></code></pre>
@@ -823,7 +829,8 @@ model.save("model.json")</code></pre>
 <section id="cfd-en">
   <h2>10b. CFD (optional) — 3D flow in the cylinder</h2>
   <p>The <strong>CFD</strong> page (optional) builds and runs
-  <strong>OpenFOAM 13</strong> cases (on Windows, through WSL2) with heat
+  <strong>OpenFOAM 13/14</strong> cases (Windows through WSL2, macOS through a
+  Multipass VM, native Linux) with heat
   release <strong>prescribed by the calibrated Wiebe function</strong> — 1 to 5
   stages, fuels H₂, CH₄ (pure), ethanol and diesel. It <strong>does not predict
   chemical kinetics, flame front or emissions</strong>; the 3D results are
@@ -851,6 +858,8 @@ model.save("model.json")</code></pre>
           no copying needed. Without WSL2/solver only the CFD commands become
           unavailable (a diagnosis, never a silent fallback). Full guide
           (including native Linux): <code>docs/cfd/install.md</code>.</li>
+        <li><strong>macOS (Apple Silicon and Intel)</strong> — OpenFOAM does not run natively on the Mac: wiebepy runs on the Mac (CLI and GUI) and only the solver runs in an Ubuntu 22.04 VM under <a href="https://multipass.run">Multipass</a>, called through <code>multipass exec &lt;vm&gt; -- bash -l</code> (the VM name takes the place of the distro). Create the VM (<code>multipass launch 22.04 --name openfoam --cpus 8 --memory 16G --disk 100G</code>), install OpenFOAM in it (package in <code>/opt/openfoam&lt;v&gt;</code> or built from source) and <strong>mount the project folder at the SAME path as on the Mac</strong>: <code>multipass mount ~/Projects/wiebepy openfoam:/Users/&lt;user&gt;/Projects/wiebepy</code> (give <em>Full Disk Access</em> to <code>multipassd</code>; outside a mounted folder wiebepy warns and suggests the command). Then: <code>wiebepy cfd doctor --connect</code>. Do not keep the project in an iCloud Drive folder (<code>~/Documents</code>, <code>~/Desktop</code>). On ARM prefer <code>kOmegaSST</code> and <code>workers: 1</code> (see Troubleshooting). Full guide: <code>docs/cfd/install.md</code> §2c.</li>
+        <li><strong>Native Linux</strong> — install OpenFOAM following the official guide; the solver runs directly (<code>bash -l</code> locally, in the case folder), without WSL.</li>
       </ol></li>
     <li><strong>Configure</strong>: engine (the same parameters as the 0-D
       modes), crank-angle window (closed valves), initial conditions, walls,
@@ -886,7 +895,7 @@ model.save("model.json")</code></pre>
         <td>No</td></tr>
   </table>
   <p>The sequence (4 commands + 1 check):</p>
-  <pre><code>wiebepy cfd doctor                <em># 0. once: checks WSL2 + OpenFOAM 13</em>
+  <pre><code>wiebepy cfd doctor                <em># 0. once: checks WSL2/Multipass VM + OpenFOAM</em>
 wiebepy cfd prepare  --config examples/config_cfd_equivalencia.yaml \
     --output results/cfd/my_case    <em># 1. builds the case (does NOT run it)</em>
 wiebepy cfd validate --case results/cfd/my_case   <em># 2. validates</em>
@@ -933,7 +942,7 @@ wiebepy cfd report   --case results/cfd/my_case   <em># 4. HTML report with p×�
   <ol>
     <li><strong>Check the environment</strong> (once): in the <em>Environment
       diagnosis (doctor)</em> expander, button <strong>Run diagnosis</strong> —
-      equivalent to <code>wiebepy cfd doctor</code> (checks WSL2, OpenFOAM,
+      equivalent to <code>wiebepy cfd doctor</code> (checks WSL2 — or the Multipass VM on macOS —, OpenFOAM,
       foamRun, mpirun). If OpenFOAM is installed but the code is not connected to
       it yet (the <em>Connection</em> line shows <em>none</em>), click
       <strong>Connect OpenFOAM to the code</strong>: the button detects the
@@ -959,7 +968,10 @@ wiebepy cfd report   --case results/cfd/my_case   <em># 4. HTML report with p×�
       −120…+120°, P 127.6 kPa / T 308.15 K, walls 440 K, kEpsilon, moving piston,
       24×36 cells, <code>uniform</code> distribution, diesel fuel, LHV 39191.3,
       3396.2 rpm. Also confirm: <strong>“WSL2 distribution”</strong> =
-      <code>Ubuntu-22.04</code> (the solver's distro); <strong>“Solver MPI
+      <code>Ubuntu-22.04</code> (the solver's distro; on macOS the field is called
+      <strong>“Multipass VM (macOS)”</strong> and takes the VM name — a name that is
+      not a VM, such as the default <code>Ubuntu-22.04</code>, falls back to the
+      running VM that has OpenFOAM); <strong>“Solver MPI
       processes”</strong> = 1 (solver parallelism, not wiebepy's);
       <strong>Wiebe stages</strong>: with origin <code>model.json</code> the heat
       comes from the calibrated file; with origin <em>current model</em> the
@@ -1032,6 +1044,9 @@ wiebepy cfd crevice report   --case results/crevice_exemplo</code></pre>
     <tr><td>“θ must be strictly increasing”</td><td>remove repeated angles from the file</td></tr>
     <tr><td>“The target requires the dxb_dtheta column”</td><td>the file lacks that column: use <code>--fit-target xb</code></td></tr>
     <tr><td>Poor fit / very different runs</td><td>increase <code>--runs</code> and <code>--population</code>; check the warnings; N may be too large</td></tr>
+    <tr><td>macOS: “No module named wiebepy” with the <code>.venv</code> active</td><td>the project is in an iCloud Drive folder, which marks <code>.venv</code> as hidden (Python ignores the <code>.pth</code>): move it to <code>~/Projects</code> or run <code>chflags -R nohidden .venv</code></td></tr>
+    <tr><td>macOS: “The folder … is not mounted in the VM”</td><td>mount the project folder in the VM at the same path as on the Mac (<code>multipass mount …</code>) and give <em>Full Disk Access</em> to <code>multipassd</code>; stopped VM: <code>multipass start openfoam</code></td></tr>
+    <tr><td>macOS (ARM): CFD diverges (k &lt; 0, Courant blows up, negative T)</td><td>use <code>turbulence.model: kOmegaSST</code> and <code>workers: 1</code> — with <code>kEpsilon</code> the example case sat at the numerical limit on ARM, and with <code>workers</code> &gt; 1 and a moving mesh the solver diverged at −22.7°</td></tr>
     <tr><td>Coincident stages or β ≈ 0</td><td>the model has too many stages for the data: run <code>--compare-stages</code></td></tr>
     <tr><td>WARNING: backend unavailable</td><td>normal without GPU/Numba; <code>wiebepy --devices</code> shows what is there</td></tr>
     <tr><td>Too slow</td><td>install Numba (<code>pip install numba</code>) and use <code>--backend numba --workers 8</code></td></tr>

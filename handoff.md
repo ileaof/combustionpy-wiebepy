@@ -3,6 +3,72 @@
 Registro das alterações feitas no código, para quem continuar o trabalho.
 A mais recente fica no topo.
 
+## 2026-11-07 — `cfd run --case` sem `--config` usava a janela padrão
+
+Achado ao validar a branch macOS no Windows/WSL. Um caso curto (janela
+−120…−100°) rodou até o fim, com `End` e código 0, mas ficou "failed":
+"Último ponto registrado (-100°) não cobre o fim da janela (120°)". O
+problema reproduz no Mac.
+
+Causa: em `cfd/cli.py::_cmd_run`, sem `--config`, o Runner recebia
+`CfdConfig()` com os padrões (janela ±120°, workers 1, distro padrão).
+Depois, o `check_completion` comparava o último ponto com 120°.
+
+Correção: `_cfg_from_case` lê o bloco `configuration` que o case_builder
+já grava no `case_config.yaml` (`to_dict_public()`). Caso antigo sem esse
+bloco cai nos padrões, como antes. Com `--config`, nada muda. Há um teste
+novo em `test_cfd.py`.
+
+Verificado: o mesmo caso curto, rerodado no WSL (OF-13), terminou
+"completed"; no Mac, ver a mensagem de validação abaixo.
+
+Lição: um comando que opera sobre um caso já preparado deve ler a
+configuração do próprio caso, não reconstruir os padrões.
+
+## 2026-11-07 — Suporte a macOS (VM Multipass) e Linux nativo no CFD
+
+Trabalho do agente do Mac (commits `4261cfb`, `65ab69c`, `a7b8797` e
+`aa733ee`), integrado e validado também no Windows.
+
+- **macOS**: o OpenFOAM roda numa VM Ubuntu do Multipass
+  (`cfd/multipass.py`). O wiebepy roda no Mac e envia cada passo por
+  `multipass exec <vm> -- bash -l`. Os caminhos Mac → VM são traduzidos
+  pelas montagens de `multipass info`: a pasta do projeto precisa estar
+  montada com o mesmo caminho. O nome da VM ocupa o lugar de `wsl_distro`.
+  Um nome que não é VM (o padrão `Ubuntu-22.04`) cai na VM em execução
+  que tem OpenFOAM. Na GUI, o campo vira "VM Multipass (macOS)".
+- **Despacho por plataforma** em `wsl.run_wsl` e `list_distros`: no
+  Windows vai para o wsl.exe (inalterado); no macOS, para o Multipass; no
+  Linux nativo, para `bash -l` local com `cwd` (antes, o Linux nativo
+  exigia wsl.exe).
+- **`detect_openfoam`** procura também compilações do fonte
+  (`~/OpenFOAM/OpenFOAM-<v>`, `~/<pasta>/OpenFOAM-<v>`), sem duplicatas.
+  No Windows passou a listar também o OF-14 compilado em
+  `~/dev/OpenFOAM-14`; a conexão ativa continua no `/opt/openfoam13`.
+- **Cancelamento** (macOS e Linux) encerra só o `foamRun`/`mpirun` cuja
+  pasta de trabalho é a do caso.
+- **`cfd validate`** aceita `numberOfSubdomains N;`. Antes, qualquer
+  caso com workers > 1 era recusado.
+- **Portabilidade**: o `.gitattributes` marca
+  `examples/cfd/mechanisms/** -text`. Num checkout novo no Windows
+  (autocrlf), os mecanismos saíam em CRLF e quebravam a cópia byte a byte
+  testada em `test_case_builder_reactive_r2`. O `.DS_Store` foi para o
+  `.gitignore`.
+- **Documentação**: README.md, README.en.md e Help.html (PT/EN) ganharam
+  a instalação no macOS, o Linux nativo e as limitações no ARM. A ajuda
+  da CLI e os textos da página CFD da GUI agora citam WSL2, Multipass e
+  Linux. O guia completo está em `docs/cfd/install.md` §2c.
+
+Limitações observadas no ARM (MacBook Pro M5 Pro, macOS 26.6, Multipass
+1.17, Ubuntu 22.04 arm64):
+- **kEpsilon**: o `config_cfd.yaml` ficou no limite numérico e divergiu
+  (k < 0, Co de 1,8 → 135, depois T negativa; em +16,2° no OF-13). No
+  x86/WSL passa, e o case_006 do ensaio de 45 % passou no Mac.
+  Recomendação no Mac: kOmegaSST (OF-13 e OF-14 deram p_max idêntico,
+  6195,3 kPa a 10,24°).
+- **workers > 1** com malha móvel divergiu em −22,7° (OF-13 e OF-14).
+  Recomendação no Mac: workers 1.
+
 ## 2026-10-13 — Rotacao e massa de combustivel na entrada da carga (GUI)
 
 Pedido: poder informar rotacao e massa de combustivel junto do arquivo do

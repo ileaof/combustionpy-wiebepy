@@ -565,11 +565,13 @@ EN = {
     # ----------------------------------------------------- cfd.py
     "CFD — escoamento 3D no cilindro (opcional)":
         "CFD — 3D flow in the cylinder (optional)",
-    "Casos OpenFOAM 13 (WSL2 no Windows) com liberação de calor GLOBAL "
+    "Casos OpenFOAM 13/14 (WSL2 no Windows, VM Multipass no macOS, Linux "
+    "nativo) com liberação de calor GLOBAL "
     "prescrita pela Wiebe calibrada (modo 4.1). NÃO prevê cinética "
     "química, frente de chama ou emissões. O restante do wiebepy não "
     "depende desta página; desabilitar o CFD não apaga resultados.":
-        "OpenFOAM 13 cases (WSL2 on Windows) with GLOBAL heat release "
+        "OpenFOAM 13/14 cases (WSL2 on Windows, a Multipass VM on macOS, "
+        "native Linux) with GLOBAL heat release "
         "prescribed by the calibrated Wiebe function (mode 4.1). It does "
         "NOT predict chemical kinetics, flame front or emissions. The rest "
         "of wiebepy does not depend on this page; disabling CFD does not "
@@ -793,10 +795,10 @@ EN = {
         "looks first in the configured distro; with nothing installed "
         "there, it takes the best one from any distro.",
     "Não foi possível conectar:": "Could not connect:",
-    "Instale o OpenFOAM no WSL2 seguindo docs/cfd/install.md e conecte "
-    "novamente.":
-        "Install OpenFOAM on WSL2 following docs/cfd/install.md and connect "
-        "again.",
+    "Instale o OpenFOAM (WSL2 no Windows, VM Multipass no macOS) seguindo "
+    "docs/cfd/install.md e conecte novamente.":
+        "Install OpenFOAM (WSL2 on Windows, a Multipass VM on macOS) "
+        "following docs/cfd/install.md and connect again.",
     "Resultados (0-D extraídos do caso 3D)":
         "Results (0-D extracted from the 3D case)",
     "Estado do caso: {estado} — resultados parciais podem estar "
@@ -1901,11 +1903,12 @@ EN = {
         "CuPy / GPU        : unavailable ({motivo})",
     "não disponível": "not available",
     # ------------------------------------------------ subcomando cfd
-    "diagnóstico do ambiente (WSL2, OpenFOAM)":
-        "diagnosis of the environment (WSL2, OpenFOAM)",
+    "diagnóstico do ambiente (WSL2/VM Multipass, OpenFOAM)":
+        "diagnosis of the environment (WSL2/Multipass VM, OpenFOAM)",
     "diagnóstico do ambiente (WSL2/OpenFOAM)":
         "diagnosis of the environment (WSL2/OpenFOAM)",
-    "distribuição WSL2 específica": "a specific WSL2 distribution",
+    "distribuição WSL2 (ou VM Multipass no macOS) específica":
+        "a specific WSL2 distribution (or Multipass VM on macOS)",
     "além de diagnosticar, conecta: verifica o foamRun e grava a conexão "
     "(distro/root) usada como padrão pela GUI e pela CLI":
         "besides diagnosing, connects: checks foamRun and stores the "
@@ -1924,6 +1927,8 @@ EN = {
     "diretório do caso (com case_config.yaml)":
         "case directory (with case_config.yaml)",
     "distribuição WSL2 com o solver": "WSL2 distribution with the solver",
+    "distribuição WSL2 (ou VM Multipass no macOS) com o solver":
+        "WSL2 distribution (or Multipass VM on macOS) with the solver",
     "executa o caso validado": "runs the validated case",
     "diretório do caso (estado VALIDATED)":
         "case directory (state VALIDATED)",

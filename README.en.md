@@ -16,7 +16,8 @@ model. Two **optional** modules extend it without changing the core:
 
 - **pressure mode** (0-D): fits N stages to the cylinder pressure curve with
   a single-zone model (Hohenberg) — §"Pressure mode" below;
-- **CFD** (OpenFOAM 13): compressible flow with the heat release prescribed
+- **CFD** (OpenFOAM 13/14 — Windows through WSL2, macOS through a Multipass
+  VM, native Linux): compressible flow with the heat release prescribed
   by the calibrated Wiebe function — §"CFD" below.
 
 > 📖 Step-by-step guide: open [`Help.html`](Help.html) in the browser (it has
@@ -45,7 +46,11 @@ model. Two **optional** modules extend it without changing the core:
 
 ## 1. Installation
 
-Requires Python ≥ 3.11 (Windows, Linux or WSL2).
+Requires Python ≥ 3.11 (Windows, macOS — Apple Silicon or Intel —, Linux
+or WSL2). On macOS, do not install the project in a folder synchronized by
+iCloud Drive (`~/Documents`, `~/Desktop`): iCloud marks `.venv` as hidden
+and Python then ignores the installation's `.pth` file (`No module named
+wiebepy`) — use, for example, `~/Projects`.
 
 ```bash
 git clone <repository-url> wiebepy
@@ -64,7 +69,7 @@ Optional extras — the program works **without any of them**:
 | `numba` | `numba` | compiled CPU kernels (the fastest backend on the CPU) |
 | `gpu` | `cupy-cuda12x` | NVIDIA GPU (requires a CUDA 12+ driver) |
 | `gui` | `streamlit`, `altair`, `pandas` | graphical interface (`wiebepy --gui`) |
-| `cfd` | dependencies of the CFD module | `wiebepy cfd` subcommand (the OpenFOAM 13 solver on WSL2 is installed separately; see `docs/cfd/install.md`) |
+| `cfd` | dependencies of the CFD module | `wiebepy cfd` subcommand (the OpenFOAM solver is installed separately: WSL2 on Windows, a Multipass VM on macOS, native on Linux; see `docs/cfd/install.md`) |
 | `dev` | `pytest` | tests |
 
 Without installing the package, use `python main.py` instead of `wiebepy`.
@@ -369,15 +374,16 @@ release prescribed by the calibrated Wiebe function** (*prescribed* mode),
 fuels H₂, CH₄ (pure — not natural gas), ethanol and diesel (surrogate) —
 the test/reference case uses **Diesel**, the fuel of the pressure test that
 produced the calibrated engine. **It does not predict chemical kinetics,
-flame front or emissions.** Solver: OpenFOAM Foundation 13 (`foamRun`,
-`fluid` solver), on Windows through WSL2 — the program remains 100 % usable
-without WSL2/solver (no silent fallback). Architecture details and the
+flame front or emissions.** Solver: OpenFOAM Foundation 13 or 14 (`foamRun`,
+`fluid` solver): on Windows through WSL2, on macOS (Apple Silicon and Intel)
+in an Ubuntu VM under Multipass, and directly on native Linux — the program
+remains 100 % usable without WSL2/VM/solver (no silent fallback). Architecture details and the
 conservative heat source: `docs/cfd/architecture.md`; installation:
 `docs/cfd/install.md`; the verification that was run (the energy balance
 closes within ±2 %): `docs/cfd/verification.md`.
 
 ```bash
-wiebepy cfd doctor                 # WSL2/OpenFOAM diagnosis
+wiebepy cfd doctor                 # WSL2/Multipass/OpenFOAM diagnosis
 wiebepy cfd prepare  --config examples/config_cfd.yaml   # without running
 wiebepy cfd validate --case results/cfd/case_001
 wiebepy cfd run      --case results/cfd/case_001 --follow
@@ -481,7 +487,8 @@ order:
 
 1. **Check the environment** (once): in the *Environment diagnosis (doctor)*
    expander, button **Run diagnosis** — equivalent to `wiebepy cfd doctor`
-   (checks WSL2, OpenFOAM, foamRun, mpirun). If the *Connection* line shows
+   (checks WSL2 — or the Multipass VM on macOS —, OpenFOAM, foamRun,
+   mpirun). If the *Connection* line shows
    *none*, click **Connect OpenFOAM to the code**: it verifies that foamRun
    executes (a `-help` probe), stores the connection in
    `~/.wiebepy/cfd_env.json` and adjusts the form's *WSL2 distribution*
@@ -498,7 +505,10 @@ order:
    Rc 17, window −120…+120°, P 127.6 kPa / T 308.15 K, walls 440 K,
    kEpsilon, moving piston, 24×36 cells, `uniform` distribution, diesel
    fuel, LHV 39191.3, 3396.2 rpm. Also confirm:
-   - **"WSL2 distribution"** = `Ubuntu-22.04` (the solver's distro);
+   - **"WSL2 distribution"** = `Ubuntu-22.04` (the solver's distro). On
+     macOS the field is called **"Multipass VM (macOS)"** and takes the VM
+     name (e.g. `openfoam`); a name that is not a VM — such as the default
+     `Ubuntu-22.04` — falls back to the running VM that has OpenFOAM;
    - **"SOLVER MPI processes"** = 1 (the solver's parallelism, not
      wiebepy's);
    - **Wiebe stages**: with origin `model.json` the heat comes from the
@@ -583,19 +593,63 @@ installation:
    `pip install -e ".[cfd]"` — and, if you will use the GUI, `.[gui]`.
 
 4. **Check**: `wiebepy cfd doctor` lists the WSL2 distributions and, for
-   each one, whether OpenFOAM was detected (`/opt/openfoam*`, `foamRun`,
-   gcc, mpirun) and its version. Execution uses `wsl.exe -d <distro>` and
+   each one, whether OpenFOAM was detected (`/opt/openfoam*`,
+   `/usr/lib/openfoam*` or built from source in `~/OpenFOAM/OpenFOAM-<v>` /
+   `~/<folder>/OpenFOAM-<v>`; `foamRun`, gcc, mpirun) and its version. Execution uses `wsl.exe -d <distro>` and
    reads/writes the case directly in the project through `/mnt/c/...` — no
    case copying needed. Without WSL2/solver the whole of wiebepy works; only
    the `cfd` commands fail, with a diagnosis (never a silent fallback). Full
    guide (including native Linux and the post-installation check):
    `docs/cfd/install.md`.
 
+**Native Linux**: install OpenFOAM following the official guide; the solver
+runs directly (`bash -l` locally, in the case folder), without WSL.
+
+#### Installing on macOS (Apple Silicon and Intel) — Multipass VM
+
+OpenFOAM does not run natively on macOS. wiebepy runs **on the Mac** (CLI
+and GUI) and only the solver runs in an Ubuntu 22.04 VM under
+[Multipass](https://multipass.run), called through
+`multipass exec <vm> -- bash -l` (the same role `wsl.exe` plays on Windows;
+the VM name takes the place of the distro, `wsl_distro`). Full guide:
+`docs/cfd/install.md` §2c.
+
+1. Install Multipass and create the VM:
+
+   ```bash
+   multipass launch 22.04 --name openfoam --cpus 8 --memory 16G --disk 100G
+   ```
+
+2. Inside the VM, install OpenFOAM (`.deb` package in `/opt/openfoam<v>` or
+   built from source).
+3. **Mount the project folder in the VM at the SAME path as on the Mac** —
+   outside a mounted folder wiebepy warns and suggests the command:
+
+   ```bash
+   multipass mount ~/Projects/wiebepy openfoam:/Users/<user>/Projects/wiebepy
+   ```
+
+   Give **Full Disk Access** to `multipassd` (System Settings → Privacy &
+   Security) for the mount to work.
+4. Connect and check: `wiebepy cfd doctor --connect` (or the GUI button);
+   the doctor shows the VM and the OpenFOAM it found. Stopped VM:
+   `multipass start openfoam`.
+
+Cancelling a case stops only that case's `foamRun`/`mpirun`, without
+affecting other simulations in the VM. Verified on a MacBook Pro M5 Pro
+(macOS 26.6), Multipass 1.17, Ubuntu 22.04 arm64 with OpenFOAM-14 built
+from source (packaged OF-13 and OF-14 also tested); case_006
+(−120…120°, `workers: 1`) takes ~75 s of `foamRun`. On ARM, prefer
+`kOmegaSST` and `workers: 1` (see §13).
+
 `prepare` accepts `--no-heat` (motored case, no heat source) and
 `--fixed-piston` (constant volume). The case state (Prepared → Validated →
 Running → Completed/Failed/Cancelled) lives in `<case>/estado.yaml`; `run`
 requires the VALIDATED state and checks at the end whether the window was
-covered — **"the process finished" ≠ "it converged"**. Exit codes:
+covered — **"the process finished" ≠ "it converged"**. Without
+`--config`, `run` uses the configuration the case was prepared with (the
+`configuration` block of `case_config.yaml`: window, workers, distro), so
+windows other than −120…120° are checked correctly. Exit codes:
 0 ok | 2 usage/configuration | 1 unexpected.
 
 Main CFD configuration keys (besides `engine:`, already documented in the
@@ -822,7 +876,7 @@ $dx_b/d\theta$; (4) $\beta_j\,dx_j/d\theta$; (5) experimental × fitted;
 ## 10. Validation and tests
 
 ```bash
-python -m pytest                  # 426 tests
+python -m pytest                  # 440 tests
 python -m pytest -m "not slow"    # the fast ones only
 ```
 
@@ -906,10 +960,11 @@ wiebepy/
 │   ├── gui/                     # Streamlit: app.py, state.py, app_pages/
 │   ├── pressure/                # 0-D model: engine, model (Hohenberg, ODEs), fit
 │   ├── cfd/                     # OPTIONAL: config, case_builder, sources,
-│   │                            # adapters (OpenFOAM 13/WSL2), runner,
+│   │                            # adapters (OpenFOAM 13/14), wsl (WSL2),
+│   │                            # multipass (VM on macOS), runner,
 │   │                            # results, reporting, validation
 │   └── cli/                     # parser (argparse), helptext
-├── tests/                       # 426 tests
+├── tests/                       # 440 tests
 ├── examples/                    # synthetic data N = 1…5, configs, calibrated
 │                                # models, pressure test
 └── docs/                        # figures, measured benchmark, docs/cfd/*
@@ -935,6 +990,14 @@ wiebepy/
   aborted by divergence with negative T on this engine — use 0.25 (the new
   default); the Wiebe source is verified energetically during preparation
   and the case is rejected if ∫Q̇dt does not close within 0.1 %.
+- **CFD on macOS (ARM, Multipass VM)**: with `kEpsilon` the example case
+  (`config_cfd.yaml`) sat at the numerical limit and diverged (k < 0, Co
+  from 1.8 → 135, then negative T; at +16.2° on OF-13) — on x86/WSL it
+  passes and case_006 with the 45 % test passed on the Mac, so it is
+  case-dependent; prefer `kOmegaSST` on the Mac (OF-13 and OF-14 gave an
+  identical p_max, 6195.3 kPa at 10.24°). With `workers` > 1 and a moving
+  mesh the solver diverged at −22.7° (OF-13 and OF-14) — use `workers: 1`
+  on the Mac.
 - **Language**: the interface, the reports and the CLI speak Portuguese and
   English; the data-reading and validation error messages are still only in
   Portuguese.
