@@ -578,6 +578,7 @@ EN = {
     "Diretório do caso": "Case directory",
     "Diretório do caso:": "Case directory:",
     "Distribuição WSL2 (Windows)": "WSL2 distribution (Windows)",
+    "VM Multipass (macOS)": "Multipass VM (macOS)",
     "Processos MPI do SOLVER": "SOLVER MPI processes",
     "Paralelismo do SOLVER (decomposePar/mpirun), distinto dos backends "
     "CPU/GPU do wiebepy.":

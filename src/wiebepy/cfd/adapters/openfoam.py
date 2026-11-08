@@ -64,6 +64,15 @@ class OpenFoamAdapter(CfdAdapter):
     def _resolve_install(self) -> Optional[Dict]:
         if self._install is not None:
             return self._install
+        if self._distro and on_macos():
+            # no macOS o nome pode vir de formulários pensados para o WSL
+            # (padrão "Ubuntu-22.04"); se não for uma VM ativa, procura
+            # nas VMs existentes em vez de falhar
+            try:
+                if self._distro not in list_distros():
+                    self._distro = None
+            except WslError:
+                self._distro = None
         distros = ([self._distro] if self._distro
                    else (list_distros() if (on_windows() or on_macos())
                          else [None]))

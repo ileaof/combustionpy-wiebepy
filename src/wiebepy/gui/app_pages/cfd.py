@@ -8,6 +8,7 @@ removidos ao desabilitar. O modo reativo (4.2) aparece como
 indisponível — nunca é substituído silenciosamente pela fonte Wiebe.
 """
 import math
+import sys
 import threading
 import time
 from pathlib import Path
@@ -287,6 +288,12 @@ def _solver_install(distro):
             continue
         if dd["openfoam"]:
             return dd["openfoam"][0], dd["name"]
+    if getattr(rep, "macos", False):
+        # macOS: o nome do campo (padrão do WSL) não é uma VM; usa a VM
+        # Multipass que tiver OpenFOAM
+        for dd in rep.distros:
+            if dd["openfoam"]:
+                return dd["openfoam"][0], dd["name"]
     return None, distro
 
 
@@ -343,7 +350,8 @@ with st.expander(_("Configuração do caso"), expanded=True):
         f["case_directory"] = st.text_input(
             _("Diretório do caso"), f["case_directory"])
         f["wsl_distro"] = st.text_input(
-            _("Distribuição WSL2 (Windows)"), f["wsl_distro"])
+            (_("VM Multipass (macOS)") if sys.platform == "darwin"
+             else _("Distribuição WSL2 (Windows)")), f["wsl_distro"])
         f["workers"] = st.number_input(
             _("Processos MPI do SOLVER"), 1, 64, f["workers"],
             help=_("Paralelismo do SOLVER (decomposePar/mpirun), distinto "
