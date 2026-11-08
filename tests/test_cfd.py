@@ -1268,3 +1268,31 @@ def test_nenhum_np_trapz_sem_protecao():
                 if "trapezoid" not in volta:
                     desprotegidos.append(f"{p.name}:{n.lineno}")
     assert not desprotegidos, desprotegidos
+
+
+def test_run_sem_config_usa_janela_salva_no_caso(tmp_path):
+    """`cfd run --case` sem `--config` usava CfdConfig() (janela ±120°).
+
+    Num caso preparado com janela −120…−100°, o check_completion comparava
+    o último ponto (−100°) com 120° e marcava como falha uma rodada que
+    terminou com 'End'. O run agora lê a seção `configuration` que o
+    case_builder grava no case_config.yaml; caso antigo sem ela cai nos
+    padrões.
+    """
+    from wiebepy.cfd.cli import _cfg_from_case
+    cfg = CfdConfig.from_dict({**CFG_DICT, "workers": 3, "interval": {
+        "angle_unit": "deg", "start": -120.0, "end": -100.0}})
+    caso = tmp_path / "caso"
+    caso.mkdir()
+    (caso / "case_config.yaml").write_text(
+        yaml.safe_dump({"configuration": cfg.to_dict_public()}),
+        encoding="utf-8")
+    lido = _cfg_from_case(caso)
+    assert (lido.interval_start, lido.interval_end) == (-120.0, -100.0)
+    assert lido.workers == 3
+
+    antigo = tmp_path / "antigo"
+    antigo.mkdir()
+    (antigo / "case_config.yaml").write_text("mode: prescribed_wiebe\n",
+                                             encoding="utf-8")
+    assert _cfg_from_case(antigo).interval_end == CfdConfig().interval_end

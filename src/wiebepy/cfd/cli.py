@@ -44,7 +44,8 @@ EXIT_OK, EXIT_ERR, EXIT_USO = 0, 1, 2
 def build_cfd_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="wiebepy cfd",
-        description="Módulo CFD opcional do wiebepy (OpenFOAM 13 via WSL2). "
+        description="Módulo CFD opcional do wiebepy (OpenFOAM via WSL2 no Windows, "
+                    "VM Multipass no macOS ou Linux nativo). "
                     "O CFD é sempre opcional: com cfd.enabled=false o "
                     "restante do programa funciona sem este subcomando. "
                     "Liberação de calor PRESCRITA pela Wiebe calibrada "
@@ -54,9 +55,10 @@ def build_cfd_parser() -> argparse.ArgumentParser:
                     "e docs/cfd/.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("doctor", help=_("diagnóstico do ambiente (WSL2, "
-                                      "OpenFOAM)"))
-    s.add_argument("--distro", help=_("distribuição WSL2 específica"))
+    s = sub.add_parser("doctor", help=_("diagnóstico do ambiente (WSL2/VM "
+                                      "Multipass, OpenFOAM)"))
+    s.add_argument("--distro", help=_("distribuição WSL2 (ou VM Multipass no "
+                                        "macOS) específica"))
     s.add_argument("--connect", action="store_true",
                    help=_("além de diagnosticar, conecta: verifica o "
                         "foamRun e grava a conexão (distro/root) usada "
@@ -78,7 +80,8 @@ def build_cfd_parser() -> argparse.ArgumentParser:
     s.add_argument("--case", required=True, metavar="DIR",
                    help=_("diretório do caso (com case_config.yaml)"))
     s.add_argument("--distro", metavar="NOME",
-                   help=_("distribuição WSL2 com o solver"))
+                   help=_("distribuição WSL2 (ou VM Multipass no macOS) "
+                          "com o solver"))
 
     s = sub.add_parser("run", help=_("executa o caso validado"))
     s.add_argument("--case", required=True, metavar="DIR",
@@ -121,6 +124,22 @@ def _engine_from_case(case_dir: Path) -> EngineConfig:
         raise CfdConfigError(f"Caso sem case_config.yaml: {case_dir}")
     info = yaml.safe_load(yml.read_text(encoding="utf-8")) or {}
     return EngineConfig.from_dict(info.get("engine") or {})
+
+
+def _cfg_from_case(case_dir: Path) -> CfdConfig:
+    """Seção ``cfd`` salva no caso (``configuration`` do case_config.yaml).
+
+    Sem ``--config``, o run usa a configuração com que o caso foi
+    preparado — janela, workers, distro —, não os padrões de CfdConfig()
+    (janela ±120°), que fariam o check_completion recusar janelas menores.
+    Casos antigos sem o bloco caem nos padrões, como antes."""
+    import yaml
+    yml = Path(case_dir) / "case_config.yaml"
+    if not yml.exists():
+        raise CfdConfigError(f"Caso sem case_config.yaml: {case_dir}")
+    info = yaml.safe_load(yml.read_text(encoding="utf-8")) or {}
+    salvo = info.get("configuration")
+    return CfdConfig.from_dict(salvo) if salvo else CfdConfig()
 
 
 def _engine_from_cfg(cfg: dict) -> EngineConfig:
@@ -196,7 +215,7 @@ def _cmd_run(a) -> int:
     if a.config:
         cfg_full, cfg = _cfg_from_file(a.config)
     else:
-        cfg_full, cfg = {}, CfdConfig()
+        cfg_full, cfg = {}, _cfg_from_case(a.case)
     distro = a.distro or cfg.wsl_distro
     engine = _engine_from_case(a.case)
     runner = CfdRunner(cfg, engine=engine, distro=distro)
