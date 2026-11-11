@@ -25,7 +25,7 @@ import yaml
 from wiebepy.gui import state as S
 from wiebepy.core.parameters import (A_DEFAULT, MAX_STAGES, Stage, as_stages,
                                      default_stages, validate_stages)
-from wiebepy.cfd.fuels import fuel_names
+from wiebepy.cfd.fuels import ENSAIO_PADRAO, all_fuel_specs, fuel_names
 
 S.init_state()   # idempotente (app.py já chama; garante standalone)
 
@@ -68,7 +68,7 @@ def _form() -> dict:
             "moving_piston": True,
             "n_radial": 24, "n_axial": 36,
             "distribution": "uniform",
-            "fuel_name": "diesel",   # ensaio de referência: Diesel
+            "fuel_name": ENSAIO_PADRAO["fuel"],   # B10 do ensaio (45 %/60 %)
             # fonte do case_006: Wiebe calibrada 0-D (examples/, não a
             # manual model_cfd.json) — procedência em verification.md §3c
             "wiebe_origem": "model.json",
@@ -380,12 +380,22 @@ with st.expander(_("Configuração do caso"), expanded=True):
                  "e herda uma limitação do OF13 com pistão móvel."))
         lista = _lista_combustiveis()
         if f["fuel_name"] not in lista:
-            f["fuel_name"] = "diesel"     # ensaio de referência: Diesel
+            f["fuel_name"] = ENSAIO_PADRAO["fuel"]   # B10 do ensaio
+        anterior = f.get("fuel_prev")
         f["fuel_name"] = st.select_slider(_("Combustível"), lista,
                                           f["fuel_name"],
                                           help=_("Inclui combustíveis "
                                                "cadastrados na aba "
                                                "'Combustíveis'."))
+        if anterior is not None and anterior != f["fuel_name"]:
+            # trocar o combustível (ou mistura) preenche o PCI do cadastro
+            f["LHV_kJ_per_kg"] = float(
+                all_fuel_specs()[f["fuel_name"]].LHV_kJ_per_kg)
+        f["fuel_prev"] = f["fuel_name"]
+        st.caption(_("Padrão das cargas de 45 % e 60 %: B10 do ensaio "
+                   "(PCI 39 191,3 kJ/kg). Escolher outro combustível ou "
+                   "mistura preenche o PCI; no modo prescrito só m_f·PCI "
+                   "entra no caso."))
     st.markdown(_("**Motor** (mesmos parâmetros dos modos 0-D)"))
     e = st.columns(4)
     f["bore_mm"] = e[0].number_input(_("Diâmetro [mm]"), f["bore_mm"])

@@ -69,6 +69,7 @@
     <li><a href="#primeira">Primeira análise</a></li>
     <li><a href="#gui">Interface gráfica</a></li>
     <li><a href="#pressao">Ajustar a curva de pressão</a></li>
+    <li><a href="#combustiveis">Combustíveis e misturas</a></li>
     <li><a href="#modelo">O modelo e seus parâmetros</a></li>
     <li><a href="#dados">Preparar os dados</a></li>
     <li><a href="#ajuste">Ajustar N estágios</a></li>
@@ -217,7 +218,11 @@ wiebepy --gui               <em># abre no navegador</em></code></pre>
     (3396,20 rpm e 9,42754647351×10⁻⁶ kg/ciclo); <b>troque-os ao carregar
     um ensaio de outra carga</b>, porque a massa define
     Q_total = m_comb·PCI e a rotação entra na perda de calor (Hohenberg).
-    O resto do motor fica em “Motor (geometria e combustível)”.</li>
+    Os botões <b>“Padrão do ensaio: carga 45%”</b> e <b>“…carga 60%”</b>
+    preenchem de uma vez rotação, massa e combustível (B10 do ensaio) —
+    ver <a href="#combustiveis">2d</a>.
+    O resto do motor fica em “Motor (geometria e combustível)”, onde se
+    escolhe o <b>combustível ou mistura</b> (preenche o PCI).</li>
     <li>Página <b>Ajuste</b>: escolha N e clique em <i>Iniciar ajuste</i>.
     O RMSE mostrado é o da referência solve_ivp.</li>
     <li>Página <b>Comparação</b>: compare 1, 2 e 3 estágios.</li>
@@ -225,6 +230,118 @@ wiebepy --gui               <em># abre no navegador</em></code></pre>
 <pre><code>wiebepy --stages 2 --optimize --input ensaio.txt --input-type pressure --pressure-unit bar</code></pre>
   <div class="box warn">Carregar um arquivo de pressão como “Fração queimada”
   dá erro: x<sub>b</sub> precisa estar entre 0 e 1.</div>
+</section>
+
+<section id="combustiveis">
+  <h2>2d. Combustíveis e misturas (blends)</h2>
+  <p>O combustível entra no 0-D e no CFD prescrito apenas por
+  <b>Q_total = m_comb·PCI</b>. Uma <b>mistura</b> de combustíveis injetada
+  pelo mesmo bico (ex.: etanol no diesel) ou com parte admitida junto com o
+  ar (ex.: CH₄ em dual-fuel) é declarada <b>só pelos percentuais</b>: o
+  wiebepy calcula o combustível equivalente e ele passa a valer em todo o
+  programa, como qualquer outro.</p>
+
+  <h3>Padrão das cargas de 45&nbsp;% e 60&nbsp;% do ensaio</h3>
+  <table>
+    <tr><th>Carga</th><th>Combustível</th><th>Rotação [rpm]</th><th>m_comb [kg/ciclo]</th><th>Arquivo</th></tr>
+    <tr><td>45&nbsp;%</td><td><code>B10_ensaio</code></td><td>3396,2</td><td>9,42754647351×10⁻⁶</td><td><code>P_exp-Carga-3_45%.txt</code></td></tr>
+    <tr><td>60&nbsp;%</td><td><code>B10_ensaio</code></td><td>3311,0</td><td>1,15832980973×10⁻⁵</td><td><code>P_exp-Carga-5_60%.txt</code></td></tr>
+  </table>
+  <p><code>B10_ensaio</code> é o B10 comercial do ensaio (90&nbsp;% diesel +
+  10&nbsp;% biodiesel em volume) com propriedades <b>medidas</b>: PCI
+  39&nbsp;191,3&nbsp;kJ/kg (a partir do PCS medido de 43&nbsp;133&nbsp;kJ/kg),
+  A/F estequiométrica 14,74, 816,36&nbsp;kg/m³ a 24,4&nbsp;°C, fórmula
+  ≈&nbsp;C7.13H15.62O0.07 (Queiroz, Ferreira et al., manuscrito submetido,
+  Tab.&nbsp;2). Na GUI, os botões <b>“Padrão do ensaio: carga 45%/60%”</b>
+  (página Dados) aplicam a linha da tabela; a página CFD também abre com o
+  B10.</p>
+  <div class="box warn">Rotação e m_comb das duas cargas são
+  <b>provisórios</b> até o fechamento do ajuste da bancada AVL. Ao fechar,
+  atualize <code>ENSAIO_PADRAO</code> em
+  <code>src/wiebepy/cfd/fuels/__init__.py</code>.</div>
+
+  <h3>Cadastrar uma mistura (GUI)</h3>
+  <ol>
+    <li>Página <b>Combustíveis</b> → aba <b>Misturas</b>.</li>
+    <li><b>Base do percentual</b> (botões de opção):
+      <ul>
+        <li><b>energia</b> — fração da energia do ciclo (taxa de substituição
+        energética; a mais usada na literatura, sobretudo em dual-fuel);</li>
+        <li><b>massa</b> — fração mássica;</li>
+        <li><b>volume</b> — fração volumétrica dos líquidos (como se especificam
+        B10, E10…); exige a <b>massa específica com fonte</b> de cada
+        componente e não aceita gases.</li>
+      </ul></li>
+    <li>De 2 a 5 componentes: escolha cada combustível já cadastrado, o
+    percentual (a soma deve dar 100&nbsp;%) e a <b>alimentação</b>:
+    <i>injetado (bico)</i> ou <i>admissão (com o ar)</i>.</li>
+    <li>Confira PCI, A/F, massa molar, massa específica e as frações mássica,
+    de energia e volumétrica calculadas na hora; dê nome (sem espaços) e
+    clique em <b>Gravar mistura</b>. Ela é gravada em
+    <code>data/fuels_custom.yaml</code> e aparece em todas as listas.</li>
+  </ol>
+
+  <h3>Como o wiebepy calcula</h3>
+  <p>Os percentuais x<sub>i</sub> são convertidos em fração mássica
+  y<sub>i</sub>:</p>
+  <div class="formula">massa: y<sub>i</sub> = x<sub>i</sub> &nbsp;|&nbsp;
+  volume: y<sub>i</sub> = x<sub>i</sub>ρ<sub>i</sub> / Σ x<sub>j</sub>ρ<sub>j</sub> &nbsp;|&nbsp;
+  energia: y<sub>i</sub> = (x<sub>i</sub>/PCI<sub>i</sub>) / Σ (x<sub>j</sub>/PCI<sub>j</sub>)</div>
+  <p>e as propriedades seguem as regras de mistura em base mássica (mistura
+  ideal; exatas para PCI e A/F, pois a demanda de O₂ é aditiva):</p>
+  <div class="formula">PCI = Σ y<sub>i</sub>·PCI<sub>i</sub> &nbsp;&nbsp;
+  (A/F)<sub>est</sub> = Σ y<sub>i</sub>·(A/F)<sub>i</sub> &nbsp;&nbsp;
+  1/M = Σ y<sub>i</sub>/M<sub>i</sub> &nbsp;&nbsp;
+  1/ρ = Σ y<sub>i</sub>/ρ<sub>i</sub></div>
+  <p>A receita (base + componentes) fica gravada e as propriedades são
+  <b>recalculadas</b> a cada leitura: corrigir o PCI de um componente
+  atualiza todas as misturas que o usam. Misturas não podem conter outras
+  misturas (declare os componentes simples).</p>
+
+  <h3>Exemplos cadastrados</h3>
+  <table>
+    <tr><th>Nome</th><th>Receita</th><th>PCI [kJ/kg]</th><th>A/F</th><th>Observação</th></tr>
+    <tr><td><code>B10_E10vol</code></td><td>volume: 90&nbsp;% B10_ensaio + 10&nbsp;% etanol (injetados)</td><td>37&nbsp;993</td><td>14,18</td><td>etanol = 9,7&nbsp;% em massa</td></tr>
+    <tr><td><code>B10_CH4_30E</code></td><td>energia: 70&nbsp;% B10_ensaio (bico) + 30&nbsp;% CH₄ (admissão)</td><td>41&nbsp;911</td><td>15,36</td><td>CH₄ = 25,1&nbsp;% em massa</td></tr>
+  </table>
+  <p class="nota">Os percentuais dos exemplos são livres (demonstração), não
+  condições ensaiadas.</p>
+
+  <h3>Dual-fuel: componente pela admissão</h3>
+  <p>Para o modelo, <b>m_comb é a massa TOTAL da mistura</b> por ciclo. Em
+  “Motor (geometria e combustível)”, ao escolher uma mistura com componente
+  de admissão, ligue <b>“A massa informada é só a parte INJETADA
+  (balança)”</b> se o valor digitado for o que passa pelo bico: o wiebepy
+  soma o gás pela proporção da mistura. A tabela abaixo do seletor mostra a
+  massa e a energia de cada componente e o Q do ciclo; o relatório CFD traz
+  a receita e as massas injetada/admissão.</p>
+  <div class="box warn"><b>Mesma massa não é mesma energia.</b> Trocar o B10
+  por uma mistura mantendo m_comb muda Q_total (ex.: 11,5833&nbsp;mg de
+  <code>B10_CH4_30E</code> liberam 485&nbsp;J contra 454&nbsp;J do B10).
+  Para comparar combustíveis, declare o critério (mesma energia, mesma
+  massa…). Nenhuma propriedade é aceita sem fonte: PCI e massa específica
+  de um componente novo exigem a referência (ficha, certificado,
+  literatura).</div>
+
+  <h3>CSV, Python e plataformas</h3>
+  <p>No CSV da aba <i>Exportar / ler CSV</i>, a coluna <code>blend</code> traz
+  a receita, ex.: <code>energy | B10_ensaio:70:injected ; CH4:30:intake</code>.
+  Em Python:</p>
+<pre><code>from wiebepy.cfd.fuels import compute_blend, save_custom_blend, blend_breakdown, get_fuel
+r = compute_blend([("B10_ensaio", 70, "injected"), ("CH4", 30, "intake")], "energy")
+print(r["LHV_kJ_per_kg"], r["stoich_AFR"])          # 41911.3  15.358
+save_custom_blend("B10_CH4_30E", "Dual-fuel B10 + 30 % CH4",
+                  [("B10_ensaio", 70, "injected"), ("CH4", 30, "intake")], "energy")
+blend_breakdown(get_fuel("B10_CH4_30E"), 11.5833e-6)  # massas e energia por componente</code></pre>
+  <p>O cálculo é Python puro e funciona igual no <b>Windows</b>, no
+  <b>macOS</b> e no <b>Linux</b>; só o caminho até o OpenFOAM muda (WSL2,
+  VM Multipass ou nativo), e a mistura não interfere nele.</p>
+  <div class="box ok"><b>Modo reativo (cinética química, fora do wiebepy por
+  enquanto):</b> cada componente precisa existir no mecanismo e ter campo
+  inicial no <code>0/</code> — com redução DRGEP, espécie sem campo inicial
+  é desativada. O CH₄ pela admissão entra como fração mássica uniforme na
+  carga; etanol + diesel no bico exige spray com líquido
+  multicomponente.</div>
 </section>
 
 <section id="modelo">
@@ -376,7 +493,8 @@ model.save("model.json")</code></pre>
   <strong>OpenFOAM 13/14</strong> (Windows via WSL2, macOS via VM Multipass,
   Linux nativo) com a liberação de
   calor <strong>prescrita pela Wiebe calibrada</strong> — 1 a 5 estágios,
-  combustíveis H₂, CH₄ (puro), etanol e diesel. <strong>Não prevê
+  combustíveis H₂, CH₄ (puro), etanol, diesel, o <strong>B10 do ensaio</strong>
+  (padrão) e <a href="#combustiveis">misturas</a> deles. <strong>Não prevê
   cinética química, frente de chama nem emissões</strong>; os resultados
   3D são condicionados à curva Wiebe informada. O restante do programa
   não depende do CFD, e desabilitá-lo não apaga resultados.</p>
@@ -450,7 +568,7 @@ wiebepy cfd report   --case results/cfd/meu_caso   <em># 4. relatório HTML com 
   <ol>
     <li><strong>Verificar o ambiente</strong> (uma vez): no expander <em>Diagnóstico do ambiente (doctor)</em>, botão <strong>Executar diagnóstico</strong> — equivale ao <code>wiebepy cfd doctor</code> (confere WSL2 — ou a VM Multipass no macOS —, OpenFOAM, foamRun, mpirun). Se o OpenFOAM estiver instalado mas o código ainda não estiver conectado a ele (a linha <em>Conexão</em> mostra <em>nenhuma</em>), clique <strong>Conectar OpenFOAM ao código</strong>: o botão detecta a instalação, <strong>verifica que o foamRun executa de verdade</strong> (probe <code>-help</code> — detecção por diretório pode achar instalação quebrada), grava a conexão em <code>~/.wiebepy/cfd_env.json</code> e ajusta automaticamente a <em>Distribuição WSL2</em> do formulário — procurando primeiro na distro configurada e, sem instalação lá, usando a melhor de qualquer distro. Na CLI o equivalente é <code>wiebepy cfd doctor --connect</code>. A conexão sobrevive ao reinício da sessão (o padrão da distro passa a vir da conexão gravada).</li>
     <li><strong>Escolher o diretório do caso</strong> — o primeiro ajuste de todo caso novo: em <em>Configuração do caso</em>, troque <strong>"Diretório do caso"</strong> para um diretório NOVO (ex.: <code>results/cfd/caso_gui_001</code>). ⚠️ O padrão aponta para o case_006 arquivado — clicar <strong>Preparar caso</strong> com esse diretório <strong>sobrescreve</strong> o caso arquivado.</li>
-    <li><strong>Conferir os campos</strong> — eles já abrem casados com o case_006: fonte Wiebe em origem <code>model.json</code> = <code>examples/model_cfd_calibrated.json</code> (a calibrada; a manual é <code>model_cfd.json</code> — não use), Rc 17, janela −120…+120°, P 127,6 kPa / T 308,15 K, paredes 440 K, kEpsilon, pistão móvel, 24×36 células, distribuição <code>uniform</code>, combustível diesel, PCI 39191,3, rpm 3396,2. Confirme ainda: <strong>"Distribuição WSL2"</strong> = <code>Ubuntu-22.04</code> (a distro do solver; no macOS o campo se chama <strong>"VM Multipass (macOS)"</strong> e recebe o nome da VM — um nome que não é VM, como o padrão <code>Ubuntu-22.04</code>, cai na VM em execução que tem OpenFOAM); <strong>"Processos MPI do SOLVER"</strong> = 1 (paralelismo do solver, não do wiebepy); <strong>Estágios Wiebe</strong>: com origem <code>model.json</code> o calor vem do arquivo calibrado; com origem <em>modelo atual</em> a tabela editável 1–5 estágios aparece (a edição NÃO altera o modelo 0-D); <strong>Gás, numérica e comparação</strong> (equivalência completa com a CLI — mesmas chaves <code>cfd.gas</code>/<code>cfd.numerics</code>/<code>cfd.comparison</code>): <em>Modelo do gás</em> <code>simple</code> com Cp 1063,0 J/(kg·K) e M 28,96 ⇒ γ=1,370 = κ do 0-D (o padrão antigo Cp 1005 ⇒ γ=1,400), com μ e Pr editáveis; <em>max_Co</em> 0,25 (0,5 abortou neste motor, §5b do <code>verification.md</code>), Δt 1e-6 s, escrita a cada 10° CA; e o expander <em>Comparação com o ensaio (diagnóstica)</em> com o ensaio de referência (<code>examples/data/ensaio_P_exp_carga3_45.txt</code>, rad/bar, offset 0) — a sobreposição entra no <code>report.html</code>. Em <em>Modelo do gás</em> = <code>multicomponent_inert</code> (degrau R1) Cp/μ/Pr ficam desabilitados: N₂+O₂ com NASA janaf da mistura. Para descartar a comparação, esvazie o campo do arquivo.</li>
+    <li><strong>Conferir os campos</strong> — eles já abrem casados com o case_006: fonte Wiebe em origem <code>model.json</code> = <code>examples/model_cfd_calibrated.json</code> (a calibrada; a manual é <code>model_cfd.json</code> — não use), Rc 17, janela −120…+120°, P 127,6 kPa / T 308,15 K, paredes 440 K, kEpsilon, pistão móvel, 24×36 células, distribuição <code>uniform</code>, combustível <code>B10_ensaio</code> (padrão das cargas de 45&nbsp;% e 60&nbsp;%), PCI 39191,3, rpm 3396,2. Confirme ainda: <strong>"Distribuição WSL2"</strong> = <code>Ubuntu-22.04</code> (a distro do solver; no macOS o campo se chama <strong>"VM Multipass (macOS)"</strong> e recebe o nome da VM — um nome que não é VM, como o padrão <code>Ubuntu-22.04</code>, cai na VM em execução que tem OpenFOAM); <strong>"Processos MPI do SOLVER"</strong> = 1 (paralelismo do solver, não do wiebepy); <strong>Estágios Wiebe</strong>: com origem <code>model.json</code> o calor vem do arquivo calibrado; com origem <em>modelo atual</em> a tabela editável 1–5 estágios aparece (a edição NÃO altera o modelo 0-D); <strong>Gás, numérica e comparação</strong> (equivalência completa com a CLI — mesmas chaves <code>cfd.gas</code>/<code>cfd.numerics</code>/<code>cfd.comparison</code>): <em>Modelo do gás</em> <code>simple</code> com Cp 1063,0 J/(kg·K) e M 28,96 ⇒ γ=1,370 = κ do 0-D (o padrão antigo Cp 1005 ⇒ γ=1,400), com μ e Pr editáveis; <em>max_Co</em> 0,25 (0,5 abortou neste motor, §5b do <code>verification.md</code>), Δt 1e-6 s, escrita a cada 10° CA; e o expander <em>Comparação com o ensaio (diagnóstica)</em> com o ensaio de referência (<code>examples/data/ensaio_P_exp_carga3_45.txt</code>, rad/bar, offset 0) — a sobreposição entra no <code>report.html</code>. Em <em>Modelo do gás</em> = <code>multicomponent_inert</code> (degrau R1) Cp/μ/Pr ficam desabilitados: N₂+O₂ com NASA janaf da mistura. Para descartar a comparação, esvazie o campo do arquivo.</li>
     <li><strong>Preparar caso</strong> → gera o caso OpenFOAM para inspeção (estado <em>Preparado</em>). A configuração é validada antes: erros aparecem como mensagem vermelha e o caso não é gerado.</li>
     <li><strong>Validar</strong> → estado <em>Validado</em> — o <strong>Executar</strong> exige isso (gate).</li>
     <li><strong>Executar</strong> → painel com o <strong>log do solver ao vivo</strong>; ~2–3 min na malha 24×36. <strong>Cancelar execução</strong> interrompe inclusive os processos MPI, preservando logs e resultados parciais.</li>
@@ -521,6 +639,7 @@ wiebepy cfd crevice report   --case results/crevice_exemplo</code></pre>
     <li><a href="#primeira-en">First analysis</a></li>
     <li><a href="#gui-en">Graphical interface</a></li>
     <li><a href="#pressao-en">Fitting the pressure curve</a></li>
+    <li><a href="#combustiveis-en">Fuels and blends</a></li>
     <li><a href="#modelo-en">The model and its parameters</a></li>
     <li><a href="#dados-en">Preparing the data</a></li>
     <li><a href="#ajuste-en">Fitting N stages</a></li>
@@ -669,7 +788,11 @@ wiebepy --gui               <em># opens in the browser</em></code></pre>
     (3396.20 rpm and 9.42754647351×10⁻⁶ kg/cycle); <b>replace them when you
     load a test from another load point</b>, because the mass sets
     Q_total = m_fuel·LHV and the speed enters the heat loss (Hohenberg).
-    The rest of the engine is under “Engine (geometry and fuel)”.</li>
+    The <b>“Test default: load 45%”</b> and <b>“…load 60%”</b> buttons fill
+    in speed, mass and fuel (test B10) at once — see
+    <a href="#combustiveis-en">2d</a>.
+    The rest of the engine is under “Engine (geometry and fuel)”, where the
+    <b>fuel or blend</b> is chosen (it fills in the LHV).</li>
     <li><b>Fit</b> page: choose N and click <i>Start fit</i>. The RMSE shown is
     the one from the solve_ivp reference.</li>
     <li><b>Comparison</b> page: compare 1, 2 and 3 stages.</li>
@@ -677,6 +800,117 @@ wiebepy --gui               <em># opens in the browser</em></code></pre>
 <pre><code>wiebepy --stages 2 --optimize --input test.txt --input-type pressure --pressure-unit bar</code></pre>
   <div class="box warn">Loading a pressure file as “Burned fraction” raises an
   error: x<sub>b</sub> must lie between 0 and 1.</div>
+</section>
+
+<section id="combustiveis-en">
+  <h2>2d. Fuels and blends</h2>
+  <p>In the 0-D model and in prescribed-heat CFD the fuel enters only through
+  <b>Q_total = m_fuel·LHV</b>. A <b>blend</b> of fuels injected through the
+  same nozzle (e.g. ethanol in diesel) or with a part inducted with the air
+  (e.g. CH₄ in dual-fuel) is declared <b>by its percentages only</b>: wiebepy
+  computes the equivalent fuel, which then works everywhere in the program
+  like any other.</p>
+
+  <h3>Default for the 45&nbsp;% and 60&nbsp;% test loads</h3>
+  <table>
+    <tr><th>Load</th><th>Fuel</th><th>Speed [rpm]</th><th>m_fuel [kg/cycle]</th><th>File</th></tr>
+    <tr><td>45&nbsp;%</td><td><code>B10_ensaio</code></td><td>3396.2</td><td>9.42754647351×10⁻⁶</td><td><code>P_exp-Carga-3_45%.txt</code></td></tr>
+    <tr><td>60&nbsp;%</td><td><code>B10_ensaio</code></td><td>3311.0</td><td>1.15832980973×10⁻⁵</td><td><code>P_exp-Carga-5_60%.txt</code></td></tr>
+  </table>
+  <p><code>B10_ensaio</code> is the commercial B10 used in the test (90&nbsp;%
+  diesel + 10&nbsp;% biodiesel by volume) with <b>measured</b> properties:
+  LHV 39&nbsp;191.3&nbsp;kJ/kg (from the measured HHV of 43&nbsp;133&nbsp;kJ/kg),
+  stoichiometric AFR 14.74, 816.36&nbsp;kg/m³ at 24.4&nbsp;°C, formula
+  ≈&nbsp;C7.13H15.62O0.07 (Queiroz, Ferreira et al., submitted manuscript,
+  Tab.&nbsp;2). In the GUI, the <b>“Test default: load 45%/60%”</b> buttons
+  (Data page) apply the table row; the CFD page also opens with the B10.</p>
+  <div class="box warn">Speed and m_fuel of both loads are
+  <b>provisional</b> until the AVL bench fit is closed. When it is, update
+  <code>ENSAIO_PADRAO</code> in
+  <code>src/wiebepy/cfd/fuels/__init__.py</code>.</div>
+
+  <h3>Registering a blend (GUI)</h3>
+  <ol>
+    <li><b>Fuels</b> page → <b>Blends</b> tab.</li>
+    <li><b>Percentage basis</b> (radio buttons):
+      <ul>
+        <li><b>energy</b> — share of the cycle energy (energy substitution
+        ratio; the most used in the literature, especially dual-fuel);</li>
+        <li><b>mass</b> — mass fraction;</li>
+        <li><b>volume</b> — volume fraction of the liquids (how B10, E10… are
+        specified); requires each component's <b>density with a source</b>
+        and does not accept gases.</li>
+      </ul></li>
+    <li>2 to 5 components: pick each registered fuel, its percentage (the sum
+    must be 100&nbsp;%) and its <b>feed</b>: <i>injected (nozzle)</i> or
+    <i>intake (with the air)</i>.</li>
+    <li>Check the LHV, AFR, molar mass, density and the mass, energy and volume
+    fractions computed on the fly; give it a name (no spaces) and click
+    <b>Save blend</b>. It is saved in <code>data/fuels_custom.yaml</code> and
+    appears in every fuel list.</li>
+  </ol>
+
+  <h3>How wiebepy computes it</h3>
+  <p>The percentages x<sub>i</sub> are converted into mass fractions
+  y<sub>i</sub>:</p>
+  <div class="formula">mass: y<sub>i</sub> = x<sub>i</sub> &nbsp;|&nbsp;
+  volume: y<sub>i</sub> = x<sub>i</sub>ρ<sub>i</sub> / Σ x<sub>j</sub>ρ<sub>j</sub> &nbsp;|&nbsp;
+  energy: y<sub>i</sub> = (x<sub>i</sub>/LHV<sub>i</sub>) / Σ (x<sub>j</sub>/LHV<sub>j</sub>)</div>
+  <p>and the properties follow mass-based mixing rules (ideal mixture; exact
+  for LHV and AFR, since the O₂ demand is additive):</p>
+  <div class="formula">LHV = Σ y<sub>i</sub>·LHV<sub>i</sub> &nbsp;&nbsp;
+  AFR<sub>st</sub> = Σ y<sub>i</sub>·AFR<sub>i</sub> &nbsp;&nbsp;
+  1/M = Σ y<sub>i</sub>/M<sub>i</sub> &nbsp;&nbsp;
+  1/ρ = Σ y<sub>i</sub>/ρ<sub>i</sub></div>
+  <p>The recipe (basis + components) is stored and the properties are
+  <b>recomputed</b> on every read: correcting a component's LHV updates every
+  blend that uses it. Blends cannot contain other blends (declare the simple
+  components).</p>
+
+  <h3>Registered examples</h3>
+  <table>
+    <tr><th>Name</th><th>Recipe</th><th>LHV [kJ/kg]</th><th>AFR</th><th>Note</th></tr>
+    <tr><td><code>B10_E10vol</code></td><td>volume: 90&nbsp;% B10_ensaio + 10&nbsp;% ethanol (injected)</td><td>37&nbsp;993</td><td>14.18</td><td>ethanol = 9.7&nbsp;% by mass</td></tr>
+    <tr><td><code>B10_CH4_30E</code></td><td>energy: 70&nbsp;% B10_ensaio (nozzle) + 30&nbsp;% CH₄ (intake)</td><td>41&nbsp;911</td><td>15.36</td><td>CH₄ = 25.1&nbsp;% by mass</td></tr>
+  </table>
+  <p class="nota">The example percentages are arbitrary (demonstration), not
+  tested conditions.</p>
+
+  <h3>Dual-fuel: component through the intake</h3>
+  <p>For the model, <b>m_fuel is the TOTAL blend mass</b> per cycle. Under
+  “Engine (geometry and fuel)”, when a blend with an intake component is
+  chosen, switch on <b>“The mass given is only the INJECTED part
+  (balance)”</b> if the value typed is what goes through the nozzle: wiebepy
+  adds the gas from the blend proportions. The table below the selector
+  shows each component's mass and energy and the cycle Q; the CFD report
+  shows the recipe and the injected/intake masses.</p>
+  <div class="box warn"><b>Same mass is not same energy.</b> Replacing the
+  B10 by a blend at the same m_fuel changes Q_total (e.g. 11.5833&nbsp;mg of
+  <code>B10_CH4_30E</code> release 485&nbsp;J against 454&nbsp;J for the
+  B10). To compare fuels, declare the criterion (same energy, same
+  mass…). No property is accepted without a source: the LHV and density of
+  a new component require the reference (data sheet, certificate,
+  literature).</div>
+
+  <h3>CSV, Python and platforms</h3>
+  <p>In the CSV of the <i>Export / read CSV</i> tab, the <code>blend</code>
+  column holds the recipe, e.g.
+  <code>energy | B10_ensaio:70:injected ; CH4:30:intake</code>. In Python:</p>
+<pre><code>from wiebepy.cfd.fuels import compute_blend, save_custom_blend, blend_breakdown, get_fuel
+r = compute_blend([("B10_ensaio", 70, "injected"), ("CH4", 30, "intake")], "energy")
+print(r["LHV_kJ_per_kg"], r["stoich_AFR"])          # 41911.3  15.358
+save_custom_blend("B10_CH4_30E", "Dual-fuel B10 + 30 % CH4",
+                  [("B10_ensaio", 70, "injected"), ("CH4", 30, "intake")], "energy")
+blend_breakdown(get_fuel("B10_CH4_30E"), 11.5833e-6)  # mass and energy per component</code></pre>
+  <p>The computation is pure Python and works the same on <b>Windows</b>,
+  <b>macOS</b> and <b>Linux</b>; only the path to OpenFOAM changes (WSL2,
+  Multipass VM or native), and the blend does not affect it.</p>
+  <div class="box ok"><b>Reactive mode (chemical kinetics, outside wiebepy
+  for now):</b> each component must exist in the mechanism and have an
+  initial field in <code>0/</code> — with DRGEP reduction, a species without
+  an initial field is deactivated. CH₄ through the intake enters as a
+  uniform mass fraction in the charge; ethanol + diesel through the nozzle
+  requires a multicomponent liquid spray.</div>
 </section>
 
 <section id="modelo-en">
@@ -832,7 +1066,8 @@ model.save("model.json")</code></pre>
   <strong>OpenFOAM 13/14</strong> cases (Windows through WSL2, macOS through a
   Multipass VM, native Linux) with heat
   release <strong>prescribed by the calibrated Wiebe function</strong> — 1 to 5
-  stages, fuels H₂, CH₄ (pure), ethanol and diesel. It <strong>does not predict
+  stages, fuels H₂, CH₄ (pure), ethanol, diesel, the <strong>test B10</strong>
+  (default) and <a href="#combustiveis-en">blends</a> of them. It <strong>does not predict
   chemical kinetics, flame front or emissions</strong>; the 3D results are
   conditioned on the Wiebe curve provided. The rest of the program does not
   depend on CFD, and disabling it does not erase results.</p>

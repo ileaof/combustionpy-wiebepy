@@ -31,6 +31,7 @@ import numpy as np
 # em instalação nova (NumPy ≥ 2.2 não tem mais np.trapz).
 _integra = getattr(np, "trapezoid", None) or np.trapz
 
+from .fuels import blend_to_text
 from ..i18n import idioma, idioma_fixo, rotulo, t as _, tf, ts
 from .config import CfdConfig, CaseState, read_state
 from .fuels import comparison_notice
@@ -517,7 +518,11 @@ def _corpo(case_dir, res: Dict, cfg: Optional[CfdConfig] = None,
         ["mecanismo químico", fuel.get("mechanism")
          or _("— (não aplicável ao modo prescrito)")],
         ["limitações", fuel.get("validity")],
-    ]))
+    ] + ([["receita da mistura", blend_to_text(fuel["blend"])],
+          ["massa injetada / admissão por ciclo",
+           f"{fuel['blend_breakdown']['m_injected_kg']:.4e} / "
+           f"{fuel['blend_breakdown']['m_intake_kg']:.4e} kg"]]
+         if fuel.get("blend") and fuel.get("blend_breakdown") else [])))
     if fuel.get("notice"):
         # o aviso do PCI traz números: refaz a frase a partir dos valores
         # gravados, para sair no idioma do relatório (e não no do preparo)

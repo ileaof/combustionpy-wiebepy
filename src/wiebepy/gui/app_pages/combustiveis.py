@@ -2,10 +2,11 @@
 """Aba Combustíveis: cadastro PERMANENTE de combustíveis para o módulo
 CFD (gravação em data/fuels_custom.yaml) e exportação/importação CSV.
 
-Os quatro embutidos (H2, CH4, ethanol, diesel) permanecem sempre
+Os embutidos (H2, CH4, ethanol, diesel, B10_ensaio) permanecem sempre
 disponíveis e nunca são alterados no código; um cadastro com o mesmo
 nome sobrepõe o embutido em memória, com o registro marcando a
-substituição. Nenhuma propriedade é aceita sem fonte: o PCI exige
+substituição. Misturas (aba "Misturas") são declaradas por percentual em
+base energia, massa ou volume sobre combustíveis já cadastrados. Nenhuma propriedade é aceita sem fonte: o PCI exige
 `LHV_source` obrigatório.
 """
 import io
@@ -14,9 +15,11 @@ from pathlib import Path
 import streamlit as st
 
 from wiebepy.cfd.fuels import (
-    FuelSpec, FUELS, all_fuel_specs, custom_fuels_path, delete_custom_fuel,
-    export_fuels_csv, fuel_names, import_fuels_csv, load_custom_fuels,
-    save_custom_fuel,
+    BLEND_BASES, BLEND_BASIS_LABEL, BLEND_FEED_LABEL, BLEND_FEEDS,
+    ENSAIO_PADRAO, FUELS, FuelSpec, all_fuel_specs, compute_blend,
+    custom_fuels_path, delete_custom_fuel, export_fuels_csv, fuel_names,
+    import_fuels_csv, load_custom_fuels, save_custom_blend, save_custom_fuel,
+    validate_blend,
 )
 from wiebepy.i18n import t as _, tf
 
@@ -29,8 +32,15 @@ st.caption(tf(
     "(ficha técnica/certificado/literatura).",
     arquivo=custom_fuels_path().as_posix()))
 
-_TAB_FORM, _TAB_TABELA, _TAB_CSV = st.tabs(
-    [_("Cadastrar"), _("Combustíveis cadastrados"),
+st.info(tf("**Padrão das cargas de 45 % e 60 % do ensaio:** `{nome}` — "
+           "B10 comercial (90 % diesel + 10 % biodiesel em volume) com "
+           "propriedades MEDIDAS: PCI 39 191,3 kJ/kg, A/F 14,74, "
+           "816,36 kg/m³ a 24,4 °C (Queiroz et al., submetido, Tab. 2). "
+           "Misturas com etanol, CH4 etc. partem dele.",
+           nome=ENSAIO_PADRAO["fuel"]), icon=":material/local_gas_station:")
+
+_TAB_FORM, _TAB_MIST, _TAB_TABELA, _TAB_CSV = st.tabs(
+    [_("Cadastrar"), _("Misturas"), _("Combustíveis cadastrados"),
      _("Exportar / ler CSV")])
 
 
@@ -41,9 +51,9 @@ def _csv_bytes(specs) -> bytes:
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(_CAMPOS_CSV)
+    from wiebepy.cfd.fuels import _valor_csv
     for s in specs.values():
-        w.writerow([getattr(s, c) if getattr(s, c) is not None else ""
-                    for c in _CAMPOS_CSV])
+        w.writerow([_valor_csv(s, c) for c in _CAMPOS_CSV])
     return buf.getvalue().encode("utf-8-sig")
 
 # ------------------------------------------------------------------- form
@@ -79,6 +89,14 @@ with _TAB_FORM:
                                    "com ano"))
         mm = st.number_input(_("Massa molar [kg/kmol] *"), min_value=0.0,
                              key="fc_mm")
+        c7, c8 = st.columns(2)
+        dens = c7.number_input(
+            _("Massa específica [kg/m³] (líquidos)"), min_value=0.0,
+            key="fc_dens", help=_("Necessária para misturas em base "
+                                "volume. 0 = não informada."))
+        dens_src = c8.text_input(
+            _("Fonte e temperatura da massa específica"), key="fc_dens_src",
+            help=_("Obrigatória se a massa específica for informada"))
         observ = st.text_area(_("Observações científicas"), key="fc_observ",
                               height=80)
         validez = st.text_area(_("Faixa de validade / limitações"),
@@ -91,6 +109,7 @@ with _TAB_FORM:
             "LHV_kJ_per_kg": pci, "LHV_source": fonte,
             "stoich_AFR": afr, "molar_mass_kg_per_kmol": mm,
             "remarks": observ, "validity": validez, "mechanism": None,
+            "density_kg_per_m3": dens or None, "density_source": dens_src,
         }
         erros = save_custom_fuel(registro)
         if erros:
@@ -99,6 +118,86 @@ with _TAB_FORM:
         else:
             st.success(tf("Combustível “{nome}” gravado em `{arquivo}` "
                           "(permanente).", nome=nome.strip(),
+                          arquivo=custom_fuels_path().as_posix()))
+            st.rerun()
+
+# --------------------------------------------------------------- misturas
+with _TAB_MIST:
+    st.markdown(_(
+        "Uma **mistura** é declarada pelos percentuais dos combustíveis já "
+        "cadastrados, injetados pelo mesmo bico ou admitidos com o ar "
+        "(ex.: CH4 em dual-fuel). O programa converte para fração mássica e "
+        "calcula PCI, A/F estequiométrica e massa molar pelas regras de "
+        "mistura (PCI = Σ y_i·PCI_i). A mistura gravada aparece em todas as "
+        "listas de combustível."))
+    specs_m = {n: s_ for n, s_ in all_fuel_specs().items()
+               if not s_.is_blend}
+    nomes_m = list(specs_m)
+    base = st.radio(
+        _("Base do percentual"), list(BLEND_BASES), horizontal=True,
+        key="fm_base", format_func=lambda b: _(BLEND_BASIS_LABEL[b]),
+        help=_("Energia: fração da energia do ciclo (taxa de substituição, "
+             "usual na literatura). Massa: fração mássica. Volume: fração "
+             "volumétrica dos líquidos (ex.: B10, E10) — exige massa "
+             "específica com fonte."))
+    n_comp = st.number_input(_("Número de componentes"), min_value=2,
+                             max_value=5, value=2, step=1, key="fm_n")
+    comps = []
+    padroes = [ENSAIO_PADRAO["fuel"], "ethanol", "CH4", "diesel", "H2"]
+    for i in range(int(n_comp)):
+        c1, c2, c3 = st.columns([2, 1, 2])
+        ini = padroes[i] if padroes[i] in nomes_m else nomes_m[0]
+        fuel = c1.selectbox(tf("Componente {i}", i=i + 1), nomes_m,
+                            index=nomes_m.index(ini), key=f"fm_f{i}",
+                            format_func=lambda n: f"{n} — {specs_m[n].display}")
+        pct = c2.number_input(
+            _("Percentual [%]"), min_value=0.0, max_value=100.0,
+            value=(90.0, 10.0, 0.0, 0.0, 0.0)[i], step=1.0, key=f"fm_p{i}")
+        feed = c3.radio(_("Alimentação"), list(BLEND_FEEDS), horizontal=True,
+                        key=f"fm_a{i}",
+                        index=1 if specs_m[fuel].phase == "gas" else 0,
+                        format_func=lambda a: _(BLEND_FEED_LABEL[a]))
+        comps.append((fuel, pct, feed))
+    erros_m = validate_blend(comps, base, all_fuel_specs())
+    if erros_m:
+        st.warning("\n".join(f"• {e}" for e in erros_m))
+    else:
+        r = compute_blend(comps, base)
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric(_("PCI da mistura [kJ/kg]"), f"{r['LHV_kJ_per_kg']:.1f}")
+        k2.metric(_("A/F estequiométrica"), f"{r['stoich_AFR']:.3f}")
+        k3.metric(_("Massa molar [kg/kmol]"),
+                  f"{r['molar_mass_kg_per_kmol']:.2f}")
+        k4.metric(_("Massa específica [kg/m³]"),
+                  f"{r['density_kg_per_m3']:.1f}"
+                  if r["density_kg_per_m3"] else "—")
+        st.dataframe([{
+            _("componente"): c["fuel"],
+            _("alimentação"): _(BLEND_FEED_LABEL[c["feed"]]),
+            _("declarado [%]"): c["percent_declared"],
+            _("fração mássica"): round(c["mass_fraction"], 5),
+            _("fração de energia"): round(c["energy_fraction"], 5),
+            _("fração volumétrica"): (round(c["volume_fraction"], 5)
+                                      if c["volume_fraction"] is not None
+                                      else None)}
+            for c in r["components"]], hide_index=True,
+            use_container_width=True)
+    with st.form("form_mistura"):
+        c1, c2 = st.columns(2)
+        nome_m = c1.text_input(_("Nome (identificador) *"), key="fm_nome",
+                               help=_("Sem espaços — ex.: B10_E10vol"))
+        disp_m = c2.text_input(_("Nome de exibição *"), key="fm_display")
+        obs_m = st.text_area(_("Observações científicas"), key="fm_obs",
+                             height=70)
+        gravar_m = st.form_submit_button(_("Gravar mistura"), type="primary")
+    if gravar_m:
+        erros = save_custom_blend(nome_m, disp_m, comps, base, obs_m)
+        if erros:
+            st.error(_("Cadastro NÃO gravado:") + "\n"
+                     + "\n".join(f"• {e}" for e in erros))
+        else:
+            st.success(tf("Combustível “{nome}” gravado em `{arquivo}` "
+                          "(permanente).", nome=nome_m.strip(),
                           arquivo=custom_fuels_path().as_posix()))
             st.rerun()
 
@@ -117,10 +216,11 @@ with _TAB_TABELA:
         linhas.append({
             _("nome"): nome_f,
             _("tipo"): _("embutido") if nome_f in FUELS
-            else _("cadastrado"),
+            else _("mistura") if s.is_blend else _("cadastrado"),
             _("exibição"): s.display, _("composição"): s.formula,
             _("fase"): s.phase, _("PCI [kJ/kg]"): s.LHV_kJ_per_kg,
             _("A/F estq."): s.stoich_AFR,
+            _("massa esp. [kg/m³]"): s.density_kg_per_m3,
             _("fonte do PCI"): s.LHV_source,
         })
     st.dataframe(linhas, use_container_width=True, hide_index=True)
@@ -145,7 +245,9 @@ with _TAB_CSV:
         _("O CSV tem as colunas completas do cadastro "
         "(name, display, formula, phase, feed, LHV_kJ_per_kg, "
         "LHV_source, stoich_AFR, molar_mass_kg_per_kmol, remarks, "
-        "validity, mechanism) — serve como biblioteca portátil de "
+        "validity, mechanism, density_kg_per_m3, density_source, blend) — "
+        "a coluna blend traz a receita das misturas, ex.: "
+        "`energy | B10_ensaio:70:injected ; CH4:30:intake` — serve como biblioteca portátil de "
         "combustíveis: exporte, edite no Excel e leia de volta."))
     c1, c2 = st.columns(2)
     with c1:

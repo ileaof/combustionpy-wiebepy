@@ -13,3 +13,69 @@ fuels:
       via m_f·PCI.'
     validity: Referência de PCI a 25 °C.
     mechanism: null
+  B10_E10vol:
+    name: B10_E10vol
+    display: B10 do ensaio + 10 % etanol (volume)
+    formula: 'mistura (volume): 90 % B10_ensaio + 10 % ethanol'
+    phase: liquid
+    feed: injetado (mesmo bico)
+    LHV_kJ_per_kg: 37993.1395
+    LHV_source: 'calculado pela regra de mistura em base mássica (PCI = Σ y_i·PCI_i)
+      a partir de: B10_ensaio: Queiroz, Ferreira, Rocha, Mattos, Rodrigues (UFPA/LABMO),
+      manuscrito submetido — Tab. 2: PCS (43 133 kJ/kg) e análise elementar medidos;
+      PCI = PCS − calor de vaporização da água formada; ethanol: NIST WebBook / valor
+      usual 26,8 MJ/kg (LHV, 25 °C)'
+    stoich_AFR: 14.1832
+    molar_mass_kg_per_kmol: 91.6139
+    remarks: 'EXEMPLO de demonstração: percentual livre, não é condição ensaiada.
+      Etanol e diesel exigem cossolvente para não separar em fase. Massas específicas
+      em temperaturas diferentes (B10 24,4 °C; etanol 20 °C).'
+    validity: Mistura ideal (sem calor de mistura). No 0-D e no CFD prescrito entra
+      só via m_f·PCI; no modo reativo cada componente precisa estar no mecanismo e
+      ter campo inicial.
+    mechanism: null
+    density_kg_per_m3: 813.654
+    density_source: 'calculada (volumes aditivos) a partir de: B10_ensaio: Queiroz
+      et al. (submetido), Tab. 2: 816,36 kg/m³ a 24,4 °C; ethanol: CRC Handbook of
+      Chemistry and Physics: etanol anidro 0,7893 g/cm³ a 20 °C'
+    blend:
+      basis: volume
+      components:
+      - fuel: B10_ensaio
+        percent: 90.0
+        feed: injected
+      - fuel: ethanol
+        percent: 10.0
+        feed: injected
+  B10_CH4_30E:
+    name: B10_CH4_30E
+    display: 'Dual-fuel: B10 do ensaio + 30 % CH4 (energia)'
+    formula: 'mistura (energia): 70 % B10_ensaio + 30 % CH4 [admissão]'
+    phase: liquid
+    feed: 'dual: parte injetada + parte pela admissão'
+    LHV_kJ_per_kg: 41911.3114
+    LHV_source: 'calculado pela regra de mistura em base mássica (PCI = Σ y_i·PCI_i)
+      a partir de: B10_ensaio: Queiroz, Ferreira, Rocha, Mattos, Rodrigues (UFPA/LABMO),
+      manuscrito submetido — Tab. 2: PCS (43 133 kJ/kg) e análise elementar medidos;
+      PCI = PCS − calor de vaporização da água formada; CH4: NIST WebBook / valor
+      usual 50,0 MJ/kg (LHV, 25 °C)'
+    stoich_AFR: 15.3585
+    molar_mass_kg_per_kmol: 43.5261
+    remarks: 'EXEMPLO de demonstração: percentual livre, não é condição ensaiada.
+      CH4 pela admissão (desloca ar); B10 pelo bico. Base energia = taxa de substituição
+      energética usual na literatura dual-fuel.'
+    validity: Mistura ideal (sem calor de mistura). No 0-D e no CFD prescrito entra
+      só via m_f·PCI; no modo reativo cada componente precisa estar no mecanismo e
+      ter campo inicial.
+    mechanism: null
+    density_kg_per_m3: null
+    density_source: ''
+    blend:
+      basis: energy
+      components:
+      - fuel: B10_ensaio
+        percent: 70.0
+        feed: injected
+      - fuel: CH4
+        percent: 30.0
+        feed: intake

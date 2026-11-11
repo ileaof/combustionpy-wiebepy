@@ -286,14 +286,18 @@ EN = {
         "surrogate) appear in the CFD report.",
     "O CSV tem as colunas completas do cadastro (name, display, formula, "
     "phase, feed, LHV_kJ_per_kg, LHV_source, stoich_AFR, "
-    "molar_mass_kg_per_kmol, remarks, validity, mechanism) — serve como "
-    "biblioteca portátil de combustíveis: exporte, edite no Excel e leia "
-    "de volta.":
+    "molar_mass_kg_per_kmol, remarks, validity, mechanism, "
+    "density_kg_per_m3, density_source, blend) — a coluna blend traz a "
+    "receita das misturas, ex.: `energy | B10_ensaio:70:injected ; "
+    "CH4:30:intake` — serve como biblioteca portátil de combustíveis: "
+    "exporte, edite no Excel e leia de volta.":
         "The CSV holds the registry's full set of columns (name, display, "
         "formula, phase, feed, LHV_kJ_per_kg, LHV_source, stoich_AFR, "
-        "molar_mass_kg_per_kmol, remarks, validity, mechanism) — it works "
-        "as a portable fuel library: export it, edit it in Excel and read "
-        "it back.",
+        "molar_mass_kg_per_kmol, remarks, validity, mechanism, "
+        "density_kg_per_m3, density_source, blend) — the blend column holds "
+        "the recipe of blends, e.g. `energy | B10_ensaio:70:injected ; "
+        "CH4:30:intake` — it works as a portable fuel library: export it, "
+        "edit it in Excel and read it back.",
     "Nome (identificador) *": "Name (identifier) *",
     "Nome de exibição *": "Display name *",
     "Composição (fórmula ou surrogate) *":
@@ -2091,4 +2095,116 @@ EN = {
     "verifique a resolução temporal":
         "WARNING: max_delta_t_s exceeds the step equivalent to 0.1° of "
         "crank angle — check the time resolution",
+    # ------------------------------------------------ misturas (blends)
+    "Padrão das cargas de 45 % e 60 %: B10 do ensaio (PCI 39 191,3 kJ/kg). "
+    "Escolher outro combustível ou mistura preenche o PCI; no modo "
+    "prescrito só m_f·PCI entra no caso.":
+        "Default for the 45 % and 60 % loads: the test B10 (LHV "
+        "39 191.3 kJ/kg). Choosing another fuel or blend fills in the LHV; "
+        "in prescribed mode only m_f·LHV enters the case.",
+    "**Padrão das cargas de 45 % e 60 % do ensaio:** `{nome}` — B10 "
+    "comercial (90 % diesel + 10 % biodiesel em volume) com propriedades "
+    "MEDIDAS: PCI 39 191,3 kJ/kg, A/F 14,74, 816,36 kg/m³ a 24,4 °C "
+    "(Queiroz et al., submetido, Tab. 2). Misturas com etanol, CH4 etc. "
+    "partem dele.":
+        "**Default for the 45 % and 60 % test loads:** `{nome}` — "
+        "commercial B10 (90 % diesel + 10 % biodiesel by volume) with "
+        "MEASURED properties: LHV 39 191.3 kJ/kg, AFR 14.74, 816.36 kg/m³ "
+        "at 24.4 °C (Queiroz et al., submitted, Tab. 2). Blends with "
+        "ethanol, CH4 etc. start from it.",
+    "Misturas": "Blends",
+    "Uma **mistura** é declarada pelos percentuais dos combustíveis já "
+    "cadastrados, injetados pelo mesmo bico ou admitidos com o ar (ex.: "
+    "CH4 em dual-fuel). O programa converte para fração mássica e calcula "
+    "PCI, A/F estequiométrica e massa molar pelas regras de mistura "
+    "(PCI = Σ y_i·PCI_i). A mistura gravada aparece em todas as listas de "
+    "combustível.":
+        "A **blend** is declared by the percentages of fuels already "
+        "registered, injected through the same nozzle or inducted with the "
+        "air (e.g. CH4 in dual-fuel). The program converts to mass fraction "
+        "and computes LHV, stoichiometric AFR and molar mass by the mixing "
+        "rules (LHV = Σ y_i·LHV_i). The saved blend appears in every fuel "
+        "list.",
+    "Base do percentual": "Percentage basis",
+    "Energia: fração da energia do ciclo (taxa de substituição, usual na "
+    "literatura). Massa: fração mássica. Volume: fração volumétrica dos "
+    "líquidos (ex.: B10, E10) — exige massa específica com fonte.":
+        "Energy: share of the cycle energy (substitution ratio, usual in "
+        "the literature). Mass: mass fraction. Volume: volume fraction of "
+        "the liquids (e.g. B10, E10) — requires density with a source.",
+    "volume": "volume",
+    "Número de componentes": "Number of components",
+    "Componente {i}": "Component {i}",
+    "Percentual [%]": "Percentage [%]",
+    "Alimentação": "Feed",
+    "injetado (bico)": "injected (nozzle)",
+    "admissão (com o ar)": "intake (with the air)",
+    "PCI da mistura [kJ/kg]": "Blend LHV [kJ/kg]",
+    "A/F estequiométrica": "Stoichiometric AFR",
+    "Massa específica [kg/m³]": "Density [kg/m³]",
+    "componente": "component",
+    "declarado [%]": "declared [%]",
+    "fração mássica": "mass fraction",
+    "fração de energia": "energy fraction",
+    "fração volumétrica": "volume fraction",
+    "Sem espaços — ex.: B10_E10vol": "No spaces — e.g. B10_E10vol",
+    "Gravar mistura": "Save blend",
+    "mistura": "blend",
+    "massa esp. [kg/m³]": "density [kg/m³]",
+    "Massa específica [kg/m³] (líquidos)": "Density [kg/m³] (liquids)",
+    "Necessária para misturas em base volume. 0 = não informada.":
+        "Needed for blends on a volume basis. 0 = not given.",
+    "Fonte e temperatura da massa específica":
+        "Source and temperature of the density",
+    "Obrigatória se a massa específica for informada":
+        "Required if the density is given",
+    "Padrão do ensaio: carga {carga}": "Test default: load {carga}",
+    "**Padrão das cargas de 45 % e 60 %:** combustível **B10 do ensaio** "
+    "(PCI 39 191,3 kJ/kg, A/F 14,74; Queiroz et al., submetido, Tab. 2). "
+    "Carga 45 %: 3396,2 rpm e 9,4275 mg/ciclo; carga 60 %: 3311,0 rpm e "
+    "11,5833 mg/ciclo (rpm e m_f PROVISÓRIOS até o fechamento da bancada "
+    "AVL). Misturas (ex.: etanol ou CH4 com o B10) se escolhem em “Motor "
+    "(geometria e combustível)”.":
+        "**Default for the 45 % and 60 % loads:** fuel **test B10** (LHV "
+        "39 191.3 kJ/kg, AFR 14.74; Queiroz et al., submitted, Tab. 2). "
+        "45 % load: 3396.2 rpm and 9.4275 mg/cycle; 60 % load: 3311.0 rpm "
+        "and 11.5833 mg/cycle (rpm and m_f PROVISIONAL until the AVL bench "
+        "is closed). Blends (e.g. ethanol or CH4 with the B10) are chosen "
+        "under “Engine (geometry and fuel)”.",
+    "Combustível ou mistura": "Fuel or blend",
+    "Escolher preenche o PCI (que continua editável). Misturas se "
+    "cadastram na página Combustíveis.":
+        "Choosing fills in the LHV (which stays editable). Blends are "
+        "registered on the Fuels page.",
+    "O PCI digitado ({pci:.1f} kJ/kg) difere do cadastro de {nome} "
+    "({ref:.1f} kJ/kg): vale o digitado.":
+        "The LHV typed ({pci:.1f} kJ/kg) differs from the {nome} registry "
+        "({ref:.1f} kJ/kg): the typed value is used.",
+    "A massa informada é só a parte INJETADA (balança)":
+        "The mass given is only the INJECTED part (balance)",
+    "Dual-fuel: a balança mede o que passa pelo bico; o gás da admissão é "
+    "somado pela proporção da mistura.":
+        "Dual-fuel: the balance measures what goes through the nozzle; the "
+        "intake gas is added from the blend proportions.",
+    "massa [mg/ciclo]": "mass [mg/cycle]",
+    "energia [J/ciclo]": "energy [J/cycle]",
+    "Massa total da mistura {mt:.4f} mg/ciclo (injetada {mi:.4f} mg; "
+    "admissão {ma:.4f} mg); Q = m·PCI = {q:.1f} J/ciclo. Mesma massa NÃO é "
+    "mesma energia: para comparar com o B10 puro, declare o critério.":
+        "Total blend mass {mt:.4f} mg/cycle (injected {mi:.4f} mg; intake "
+        "{ma:.4f} mg); Q = m·LHV = {q:.1f} J/cycle. Same mass is NOT same "
+        "energy: to compare with plain B10, declare the criterion.",
+    "B10 do ensaio (BD-6500)": "Test B10 (BD-6500)",
+    "Combustível DO ENSAIO do BD-6500 (cargas de 45 % e 60 %): "
+    "propriedades medidas pelo grupo. A massa molar é a da fórmula "
+    "empírica normalizada (C7.13H15.62O0.07), não a da molécula média. A/F "
+    "estequiométrica com ar seco 21 % O2.":
+        "TEST fuel of the BD-6500 (45 % and 60 % loads): properties "
+        "measured by the group. The molar mass is that of the normalized "
+        "empirical formula (C7.13H15.62O0.07), not of the mean molecule. "
+        "Stoichiometric AFR with dry air at 21 % O2.",
+    "Lote do ensaio; citar o manuscrito como 'submitted' até a publicação.":
+        "Test batch; cite the manuscript as 'submitted' until publication.",
+    "receita da mistura": "blend recipe",
+    "massa injetada / admissão por ciclo": "injected / intake mass per cycle",
 }

@@ -24,6 +24,9 @@ import streamlit as st
 from ..core.core import multistage_wiebe
 from ..core.derivatives import multistage_wiebe_derivative
 from ..core.parameters import MAX_STAGES, Stage, as_stages, validate_stages
+from ..cfd.fuels import (ENSAIO_PADRAO, BLEND_FEED_LABEL, all_fuel_specs,
+                         blend_breakdown, blend_total_from_injected,
+                         fuel_names)
 from ..pressure.engine import EngineConfig
 from ..pressure.fit import (PRESSURE_FACTORS_KPA, PressureSettings,
                             compare_pressure, fit_pressure,
@@ -34,6 +37,29 @@ from ..i18n import t as _, tf
 
 G = math.pi / 180.0
 EXEMPLO = "ensaio_P_exp_carga3_45"
+
+
+# ------------------------------------------------------------ combustível
+def _comb_padrao() -> str:
+    return ENSAIO_PADRAO["fuel"]
+
+
+def _aplica_pci() -> None:
+    """Escolher um combustível/mistura preenche o PCI (que continua
+    editável)."""
+    f = all_fuel_specs().get(st.session_state.get("e_comb"))
+    if f is not None:
+        st.session_state["e_lhv"] = float(f.LHV_kJ_per_kg)
+
+
+def _aplica_carga(carga: str) -> None:
+    """Padrão do ensaio do BD-6500 para a carga: B10 do ensaio, rpm e m_f."""
+    c = ENSAIO_PADRAO["cargas"][carga]
+    st.session_state["e_rpm"] = float(c["rpm"])
+    st.session_state["e_mf"] = float(c["m_fuel_kg_per_cycle"])
+    st.session_state["e_comb"] = _comb_padrao()
+    st.session_state["e_mf_inj"] = False
+    _aplica_pci()
 
 
 def _exemplo_path():
@@ -102,12 +128,14 @@ def dados() -> None:
     # aqui, junto do arquivo, e não escondidas no editor do motor
     e_atual = st.session_state.engine
     c8, c9 = st.columns(2)
-    c8.number_input(_("Rotação [rpm]"), value=float(e_atual.rpm),
+    st.session_state.setdefault("e_rpm", float(e_atual.rpm))
+    st.session_state.setdefault("e_mf", float(e_atual.m_fuel))
+    c8.number_input(_("Rotação [rpm]"),
                     min_value=0.0, step=1.0, format="%.2f", key="e_rpm",
                     help=_("Rotação DESTE ensaio. O padrão é o da carga "
                          "45% (3396,20 rpm)."))
     c9.number_input(_("Massa de combustível [kg/ciclo]"),
-                    value=float(e_atual.m_fuel), min_value=0.0,
+                    min_value=0.0,
                     step=1e-7, format="%.6e", key="e_mf",
                     help=_("Massa injetada por ciclo NESTE ensaio; entra "
                          "no modelo só por Q_total = m_comb·PCI. O padrão "
@@ -115,6 +143,18 @@ def dados() -> None:
     st.caption(_("Rotação e massa de combustível mudam com a carga — "
                "troque-as ao carregar um ensaio de outra carga. O resto "
                "do motor fica em “Motor (geometria e combustível)”."))
+    with st.container(horizontal=True, vertical_alignment="center"):
+        for carga in ENSAIO_PADRAO["cargas"]:
+            st.button(tf("Padrão do ensaio: carga {carga}", carga=carga),
+                      key=f"p_padrao_{carga}", on_click=_aplica_carga,
+                      args=(carga,), icon=":material/local_gas_station:")
+    st.caption(_("**Padrão das cargas de 45 % e 60 %:** combustível "
+               "**B10 do ensaio** (PCI 39 191,3 kJ/kg, A/F 14,74; Queiroz "
+               "et al., submetido, Tab. 2). Carga 45 %: 3396,2 rpm e "
+               "9,4275 mg/ciclo; carga 60 %: 3311,0 rpm e 11,5833 mg/ciclo "
+               "(rpm e m_f PROVISÓRIOS até o fechamento da bancada AVL). "
+               "Misturas (ex.: etanol ou CH4 com o B10) se escolhem em "
+               "“Motor (geometria e combustível)”."))
     with st.container(horizontal=True, vertical_alignment="center"):
         exemplo = st.button(_("Carregar dados de exemplo"), key="p_exemplo",
                             icon=":material/science:",
@@ -232,9 +272,58 @@ def motor() -> EngineConfig:
                                   key="e_rod")
             rc = st.number_input(_("Rc (inicial/fixo)"), value=e.Rc,
                                  key="e_rc")
+        specs = all_fuel_specs()
+        nomes = fuel_names()
+        if st.session_state.get("e_comb") not in nomes:
+            st.session_state["e_comb"] = (_comb_padrao()
+                                          if _comb_padrao() in nomes
+                                          else nomes[0])
         with st.container(horizontal=True):
-            lhv = st.number_input(_("PCI [kJ/kg]"), value=e.LHV,
-                                  key="e_lhv")
+            comb = st.selectbox(
+                _("Combustível ou mistura"), nomes, key="e_comb",
+                on_change=_aplica_pci,
+                format_func=lambda n: f"{n} — {specs[n].display}",
+                help=_("Escolher preenche o PCI (que continua editável). "
+                     "Misturas se cadastram na página Combustíveis."))
+            st.session_state.setdefault("e_lhv", float(e.LHV))
+            lhv = st.number_input(_("PCI [kJ/kg]"), key="e_lhv")
+        f = specs[comb]
+        if abs(float(lhv) - f.LHV_kJ_per_kg) > 1e-6:
+            st.warning(tf("O PCI digitado ({pci:.1f} kJ/kg) difere do "
+                          "cadastro de {nome} ({ref:.1f} kJ/kg): vale o "
+                          "digitado.", pci=float(lhv), nome=comb,
+                          ref=f.LHV_kJ_per_kg), icon=":material/edit:")
+        st.caption(f.LHV_source)
+        mf_inj = False
+        if f.is_blend:
+            tem_admissao = any(c["feed"] == "intake"
+                               for c in f.blend["components"])
+            mf_inj = st.toggle(
+                _("A massa informada é só a parte INJETADA (balança)"),
+                key="e_mf_inj", disabled=not tem_admissao,
+                help=_("Dual-fuel: a balança mede o que passa pelo bico; o "
+                     "gás da admissão é somado pela proporção da mistura."))
+            mf_dig = float(st.session_state.get("e_mf", e.m_fuel))
+            mf_tot = (blend_total_from_injected(f, mf_dig, specs)
+                      if mf_inj and tem_admissao else mf_dig)
+            b = blend_breakdown(f, mf_tot, specs)
+            st.dataframe(pd.DataFrame([{
+                _("componente"): c["fuel"],
+                _("alimentação"): _(BLEND_FEED_LABEL[c["feed"]]),
+                _("massa [mg/ciclo]"): c["mass_kg"] * 1e6,
+                _("fração mássica"): c["mass_fraction"],
+                _("fração de energia"): c["energy_fraction"],
+                _("energia [J/ciclo]"): c["energy_J"]}
+                for c in b["components"]]), hide_index=True,
+                use_container_width=True)
+            st.caption(tf("Massa total da mistura {mt:.4f} mg/ciclo "
+                          "(injetada {mi:.4f} mg; admissão {ma:.4f} mg); "
+                          "Q = m·PCI = {q:.1f} J/ciclo. Mesma massa NÃO é "
+                          "mesma energia: para comparar com o B10 puro, "
+                          "declare o critério.",
+                          mt=mf_tot * 1e6, mi=b["m_injected_kg"] * 1e6,
+                          ma=b["m_intake_kg"] * 1e6, q=b["Q_cycle_J"]))
+        with st.container(horizontal=True):
             kap = st.number_input("κ", value=e.kappa, format="%.3f",
                                   key="e_k")
             t1 = st.number_input(_("T inicial [K]"), value=e.T1, key="e_t1")
@@ -248,6 +337,8 @@ def motor() -> EngineConfig:
     # atual nao os desenhou, vale o que ja esta no motor da sessao
     rpm = float(st.session_state.get("e_rpm", e.rpm))
     mf = float(st.session_state.get("e_mf", e.m_fuel))
+    if mf_inj and f.is_blend:
+        mf = blend_total_from_injected(f, mf, specs)
     novo = EngineConfig(bore=bore / 1e3, stroke=stroke / 1e3,
                         rod_length=rod / 1e3, rpm=rpm, Rc=rc, m_fuel=mf,
                         LHV=lhv, kappa=kap, T1=t1, Tw=tw, heat_transfer=ht)
